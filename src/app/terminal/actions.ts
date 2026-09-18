@@ -1,6 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { auth } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { computeGating, isRolePermitted, type GateRow } from "@/lib/routing-gating";
 
@@ -116,8 +117,31 @@ export async function getTerminalSupportData() {
 // ──────────────────────────────────────────────────────────────────────────────
 // SCAN IN
 // ──────────────────────────────────────────────────────────────────────────────
+/**
+ * The operator on a scan must be the signed-in user's own employee record. Admins and
+ * accounts with no linked employee keep the manual choice, matching the terminal UI.
+ */
+async function resolveOperatorEmployeeId(
+  requestedId: string,
+): Promise<{ ok: true; employeeId: string } | { ok: false; error: string }> {
+  const user = (await auth())?.user;
+  if (!user) return { ok: false, error: "Not signed in" };
+  if (user.role === "ADMIN") return { ok: true, employeeId: requestedId };
+
+  let ownId: string | null = user.employeeId ?? null;
+  if (!ownId && user.email) {
+    const match = await prisma.employee.findFirst({ where: { email: user.email }, select: { id: true } });
+    ownId = match?.id ?? null;
+  }
+  if (!ownId) return { ok: true, employeeId: requestedId };
+  if (requestedId !== ownId) return { ok: false, error: "You can only scan in and out as yourself" };
+  return { ok: true, employeeId: ownId };
+}
+
 export async function scanIn(input: { workOrderNo: string; inProcessId: string; mainProcessId: string; routingProcessProfileId: string; employeeId: string; machineCodes?: string }) {
   try {
+    const operator = await resolveOperatorEmployeeId(input.employeeId);
+    if (!operator.ok) return { success: false, error: operator.error };
     const wo = await prisma.workOrder.findUnique({
       where: { workOrderNo: input.workOrderNo },
     });
@@ -685,6 +709,9 @@ export async function scanOutQuick(input: {
   employeeId: string;
 }) {
   try {
+    const operator = await resolveOperatorEmployeeId(input.employeeId);
+    if (!operator.ok) return { success: false, error: operator.error };
+
     // Find active timesheet for this combination
     const activeTimesheets = await prisma.productionTimesheet.findMany({
       where: {

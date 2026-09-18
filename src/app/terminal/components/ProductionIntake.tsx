@@ -43,6 +43,13 @@ export default function ProductionIntake({ isOpen, onClose, support, onSuccess, 
 
   const allInProcesses = wo?.inProcesses ?? [];
 
+  // A signed-in operator who is linked to an employee always works as themselves.
+  // Accounts with no linked employee (e.g. admin) keep the manual picker.
+  const lockedEmployee = useMemo(
+    () => (loggedInEmployeeId ? support.employees.find((e) => e.id === loggedInEmployeeId) ?? null : null),
+    [support.employees, loggedInEmployeeId],
+  );
+
   const selectedEmployee = useMemo(() => {
     return support.employees.find(e => e.id === inForm.employeeId) || null;
   }, [support.employees, inForm.employeeId]);
@@ -135,7 +142,7 @@ export default function ProductionIntake({ isOpen, onClose, support, onSuccess, 
         const matchingRp = (chosenIp?.routingProcesses ?? []).find(
           (r: any) => r.routingProcess?.id === rp && r.mainProcessId === mp && visibleRowIds.has(r.id)
         );
-        if (matchingRp?.assignedEmployeeId) {
+        if (matchingRp?.assignedEmployeeId && !lockedEmployee) {
           employeeId = matchingRp.assignedEmployeeId;
         }
       }
@@ -502,16 +509,26 @@ export default function ProductionIntake({ isOpen, onClose, support, onSuccess, 
                 <label className="block text-[10px] md:text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5 md:mb-3">
                   2. Operator Login
                 </label>
-                <Select
-                  label="Employee"
-                  value={inForm.employeeId}
-                  onChange={(v) => setInForm({ ...inForm, employeeId: v })}
-                  dropdownPosition="top"
-                  options={support.employees.map((e) => ({
-                    id: e.id,
-                    label: `${e.name} (${e.code})`,
-                  }))}
-                />
+                {lockedEmployee ? (
+                  <div
+                    aria-readonly="true"
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm font-medium bg-slate-100 text-slate-900 flex items-center justify-between gap-3"
+                  >
+                    <span>{lockedEmployee.name} ({lockedEmployee.code})</span>
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Logged in</span>
+                  </div>
+                ) : (
+                  <Select
+                    label="Employee"
+                    value={inForm.employeeId}
+                    onChange={(v) => setInForm({ ...inForm, employeeId: v })}
+                    dropdownPosition="top"
+                    options={support.employees.map((e) => ({
+                      id: e.id,
+                      label: `${e.name} (${e.code})`,
+                    }))}
+                  />
+                )}
               </div>
 
               {/* Step 3 */}
