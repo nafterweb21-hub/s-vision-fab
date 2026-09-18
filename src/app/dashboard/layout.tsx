@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { Bell, Search, UserCircle } from "lucide-react";
 import GlobalSearch from "@/components/GlobalSearch";
 import AuthProvider from "@/components/AuthProvider";
+import PageTitle from "@/components/PageTitle";
 export default async function DashboardLayout({
   children,
 }: {
@@ -63,6 +64,7 @@ export default async function DashboardLayout({
         {/* Dynamic page contents scrollable */}
         <main className="flex-1 overflow-y-auto overflow-x-hidden relative z-10 w-full px-6 pt-16 pb-12 sm:px-8 md:px-12 lg:px-16">
           <div className="mx-auto max-w-7xl">
+            <PageTitle />
             <AuthProvider session={session}>{children}</AuthProvider>
           </div>
         </main>

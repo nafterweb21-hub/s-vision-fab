@@ -71,10 +71,10 @@ function formatValue(value: number, unit: KpiUnit): string {
       return `${value.toFixed(1)} d`;
     case "count":
       return Math.round(value).toLocaleString();
-    case "SGD":
-      if (value >= 1_000_000) return `SGD ${(value / 1_000_000).toFixed(2)}M`;
-      if (value >= 1_000) return `SGD ${(value / 1_000).toFixed(1)}K`;
-      return `SGD ${value.toFixed(0)}`;
+    case "INR":
+      if (value >= 1_000_000) return `INR ${(value / 1_000_000).toFixed(2)}M`;
+      if (value >= 1_000) return `INR ${(value / 1_000).toFixed(1)}K`;
+      return `INR ${value.toFixed(0)}`;
   }
 }
 

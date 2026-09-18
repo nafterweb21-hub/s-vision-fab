@@ -234,7 +234,7 @@ async function main() {
     {
       id: "mat-1779428038401",
       partNo: "MAT-001",
-      description: "NULL",
+      description: "Round bar 50MM",
       shape: "ROUND BAR",
       size: "50MM",
       categoryId: "cat-1779428007331",
@@ -246,7 +246,7 @@ async function main() {
     await prisma.materialProfile.upsert({
       where: { id: m.id },
       create: m,
-      update: { shape: m.shape, size: m.size, remark: m.remark, status: m.status },
+      update: { description: m.description, shape: m.shape, size: m.size, remark: m.remark, status: m.status },
     });
   }
   console.log(`  Materials: ${materials.length}`);
@@ -330,7 +330,7 @@ async function main() {
 
   // ---------- Welding Types ----------
   const weldingTypes = [
-    { id: "wt-smaw", type: "SMAW", remark: "NILLLL", status: "Active" },
+    { id: "wt-smaw", type: "SMAW", remark: "Shielded metal arc welding", status: "Active" },
   ];
   for (const w of weldingTypes) {
     await prisma.weldingTypeProfile.upsert({

@@ -527,7 +527,7 @@ const MASTER_CATEGORIES = [
         name: "Currency Profile",
         active: true,
         href: "/dashboard/profiles/currency",
-        desc: "Configures foreign currency conversion rates against SGD.",
+        desc: "Configures foreign currency conversion rates against INR.",
         rules: [
           "All transactions snap the latest rate at creation. Transaction date is irrelevant.",
           "If no rate is defined, system aborts transactions with a prompt.",

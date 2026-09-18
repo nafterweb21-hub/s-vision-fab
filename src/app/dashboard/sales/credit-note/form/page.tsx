@@ -98,6 +98,10 @@ export default function CreditNoteFormPage() {
         if (metaRes.data?.companies?.length > 0) {
           setFormData((p: any) => ({ ...p, companyId: metaRes.data.companies[0].id }));
         }
+        const defCurr = metaRes.data?.currencies?.find((c: any) => c.isDefault);
+        if (defCurr) {
+          setFormData((p: any) => ({ ...p, currencyId: defCurr.id, exchangeRate: Number(defCurr.exchangeRate) }));
+        }
       }
     } catch (err: any) {
       setErrorMsg(err.message);

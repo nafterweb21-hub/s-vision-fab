@@ -150,7 +150,6 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     title: 'FINANCE',
     items: [
-      { href: '/dashboard/sales/quotation', label: 'Quotations', icon: Clipboard, iconClass: 'text-slate-500', filled: true },
       { href: '/dashboard/sales/invoice', label: 'Invoicing', icon: Receipt, iconClass: 'text-slate-400' },
       { href: '/dashboard/sales/debit-note', label: 'Debit Note', icon: Receipt, iconClass: 'text-slate-400' },
       { href: '/dashboard/sales/credit-note', label: 'Credit Note', icon: Receipt, iconClass: 'text-slate-400' },

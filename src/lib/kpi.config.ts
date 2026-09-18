@@ -11,7 +11,7 @@
  * at month-to-date or the trailing year. Ratio targets (%, days) are absolute.
  */
 
-export type KpiUnit = '%' | 'SGD' | 'days' | 'count';
+export type KpiUnit = '%' | 'INR' | 'days' | 'count';
 
 /** `up` — higher than target is good. `down` — lower than target is good. */
 export type KpiDirection = 'up' | 'down';
@@ -47,7 +47,7 @@ export const KRAS: KraDef[] = [
       {
         code: 'ORDER_INTAKE',
         name: 'Order Intake',
-        unit: 'SGD',
+        unit: 'INR',
         target: 400_000,
         direction: 'up',
         scaling: 'monthly',
@@ -64,7 +64,7 @@ export const KRAS: KraDef[] = [
       {
         code: 'REVENUE_INVOICED',
         name: 'Revenue Invoiced',
-        unit: 'SGD',
+        unit: 'INR',
         target: 350_000,
         direction: 'up',
         scaling: 'monthly',
@@ -221,7 +221,7 @@ export const KRAS: KraDef[] = [
       {
         code: 'OVERDUE_AR',
         name: 'Overdue Receivables',
-        unit: 'SGD',
+        unit: 'INR',
         target: 50_000,
         direction: 'down',
         basis: 'Balance due on invoices past their due date, as of the period end',

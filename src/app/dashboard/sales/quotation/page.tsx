@@ -269,14 +269,14 @@ export default function QuotationListPage() {
 
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2 bg-white border border-blue-200 p-3 rounded-xl shadow-sm">
-        <ToolbarBtn icon={<Edit2 size={14} />} label="Edit" onClick={onEdit} disabled={!selected} />
+        <ToolbarBtn icon={<Edit2 size={14} />} label="Edit" onClick={onEdit} disabled={selected?.status !== "Draft"} />
         <ToolbarBtn icon={<Ban size={14} />} label="Void" onClick={onVoid} disabled={!selected} />
-        <ToolbarBtn icon={<Send size={14} />} label="Issue" onClick={onIssue} disabled={!selected} />
-        <ToolbarBtn icon={<CheckCircle2 size={14} />} label="Confirm" onClick={onConfirm} disabled={!selected} />
+        <ToolbarBtn icon={<Send size={14} />} label="Issue" onClick={onIssue} disabled={selected?.status !== "Draft"} />
+        <ToolbarBtn icon={<CheckCircle2 size={14} />} label="Confirm" onClick={onConfirm} disabled={selected?.status !== "Draft" && selected?.status !== "Issued"} />
         <ToolbarBtn icon={<GitBranch size={14} />} label="Revise" onClick={onRevise} disabled={!selected} />
         <ToolbarBtn icon={<History size={14} />} label="History" onClick={onHistory} disabled={!selected} />
-        <ToolbarBtn icon={<ArrowRightCircle size={14} />} label="Convert to SO" onClick={onConvertToSo} disabled={!selected} primary />
-        <ToolbarBtn icon={<ArrowRightCircle size={14} />} label="Convert to Invoice" onClick={onConvertToInvoice} disabled={!selected} primary />
+        <ToolbarBtn icon={<ArrowRightCircle size={14} />} label="Convert to SO" onClick={onConvertToSo} disabled={selected?.status !== "Confirmed"} primary />
+        <ToolbarBtn icon={<ArrowRightCircle size={14} />} label="Convert to Invoice" onClick={onConvertToInvoice} disabled={selected?.status !== "Confirmed"} primary />
         <ToolbarBtn icon={<Copy size={14} />} label="Copy" onClick={onCopy} disabled={!selected} />
         <ToolbarBtn icon={<Printer size={14} />} label="Print Quotation" onClick={onPrint} disabled={!selected} />
       </div>
@@ -334,25 +334,25 @@ export default function QuotationListPage() {
       ) : (
         <div className="bg-white border border-blue-200 rounded-xl shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left whitespace-nowrap">
+            <table className="w-full text-xs text-left">
               <thead className="text-xs text-blue-500 bg-blue-50/50 uppercase tracking-wider border-b border-blue-200">
                 <tr>
-                  <th className="px-3 py-3 w-10"></th>
-                  <th className="px-3 py-3">Status</th>
-                  <th className="px-3 py-3">Quotation No</th>
-                  <th className="px-3 py-3">Rev</th>
-                  <th className="px-3 py-3">Date</th>
-                  <th className="px-3 py-3">Prepared By</th>
-                  <th className="px-3 py-3">Customer Name</th>
-                  <th className="px-3 py-3">Ref No</th>
-                  <th className="px-3 py-3">Title</th>
-                  <th className="px-3 py-3">Currency</th>
-                  <th className="px-3 py-3">Tax</th>
-                  <th className="px-3 py-3 text-right">Amount</th>
-                  <th className="px-3 py-3 text-right">Lump Sum Disc</th>
-                  <th className="px-3 py-3 text-right">Tax Amount</th>
-                  <th className="px-3 py-3 text-right">Total Amount</th>
-                  <th className="px-3 py-3">Terms & Conditions</th>
+                  <th className="px-1.5 py-3 w-10"></th>
+                  <th className="px-1.5 py-3">Status</th>
+                  <th className="px-1.5 py-3">Quotation No</th>
+                  <th className="px-1.5 py-3">Rev</th>
+                  <th className="px-1.5 py-3">Date</th>
+                  <th className="px-1.5 py-3">Prepared By</th>
+                  <th className="px-1.5 py-3">Customer Name</th>
+                  <th className="px-1.5 py-3">Ref No</th>
+                  <th className="px-1.5 py-3">Title</th>
+                  <th className="px-1.5 py-3">Currency</th>
+                  <th className="px-1.5 py-3">Tax</th>
+                  <th className="px-1.5 py-3 text-right">Amount</th>
+                  <th className="px-1.5 py-3 text-right">Lump Sum Disc</th>
+                  <th className="px-1.5 py-3 text-right">Tax Amount</th>
+                  <th className="px-1.5 py-3 text-right">Total Amount</th>
+                  <th className="px-1.5 py-3">Terms & Conditions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-blue-100">
@@ -364,7 +364,7 @@ export default function QuotationListPage() {
                       selectedId === r.id ? "bg-amber-50/70" : "hover:bg-blue-50/50"
                     }`}
                   >
-                    <td className="px-3 py-3">
+                    <td className="px-1.5 py-3">
                       <input
                         type="radio"
                         checked={selectedId === r.id}
@@ -372,10 +372,10 @@ export default function QuotationListPage() {
                         className="accent-amber-500"
                       />
                     </td>
-                    <td className="px-3 py-3">
+                    <td className="px-1.5 py-3">
                       <StatusPill status={r.status} />
                     </td>
-                    <td className="px-3 py-3 font-bold text-blue-900">
+                    <td className="px-1.5 py-3 font-bold text-blue-900 whitespace-nowrap">
                       <Link
                         href={`/dashboard/sales/quotation/${r.id}`}
                         className="hover:text-amber-600"
@@ -384,35 +384,35 @@ export default function QuotationListPage() {
                         {r.quotationNo}
                       </Link>
                     </td>
-                    <td className="px-3 py-3 text-blue-700">{r.revision}</td>
-                    <td className="px-3 py-3 text-blue-700">
+                    <td className="px-1.5 py-3 text-blue-700">{r.revision}</td>
+                    <td className="px-1.5 py-3 text-blue-700 whitespace-nowrap">
                       {new Date(r.date).toLocaleDateString()}
                     </td>
-                    <td className="px-3 py-3 text-blue-700">{r.salesperson?.name || "—"}</td>
-                    <td className="px-3 py-3 font-medium text-blue-700">
+                    <td className="px-1.5 py-3 text-blue-700">{r.salesperson?.name || "—"}</td>
+                    <td className="px-1.5 py-3 font-medium text-blue-700">
                       {r.customer?.customerName || "—"}
                     </td>
-                    <td className="px-3 py-3 text-blue-700">{r.refNo || "—"}</td>
-                    <td className="px-3 py-3 text-blue-700 max-w-[220px] truncate" title={r.title}>
+                    <td className="px-1.5 py-3 text-blue-700">{r.refNo || "—"}</td>
+                    <td className="px-1.5 py-3 text-blue-700 max-w-[120px] truncate" title={r.title}>
                       {r.title}
                     </td>
-                    <td className="px-3 py-3 text-blue-700">{r.currency?.code || "—"}</td>
-                    <td className="px-3 py-3 text-blue-700">
+                    <td className="px-1.5 py-3 text-blue-700">{r.currency?.code || "—"}</td>
+                    <td className="px-1.5 py-3 text-blue-700">
                       {r.taxType ? `${r.taxType.taxType} (${r.taxType.taxRate}%)` : "—"}
                     </td>
-                    <td className="px-3 py-3 text-right font-mono text-blue-900">
+                    <td className="px-1.5 py-3 text-right whitespace-nowrap font-mono text-blue-900">
                       {Number(r.subTotal).toFixed(2)}
                     </td>
-                    <td className="px-3 py-3 text-right font-mono text-blue-700">
+                    <td className="px-1.5 py-3 text-right whitespace-nowrap font-mono text-blue-700">
                       {Number(r.lumpSumDisc || 0).toFixed(2)}
                     </td>
-                    <td className="px-3 py-3 text-right font-mono text-blue-700">
+                    <td className="px-1.5 py-3 text-right whitespace-nowrap font-mono text-blue-700">
                       {Number(r.taxAmount || 0).toFixed(2)}
                     </td>
-                    <td className="px-3 py-3 text-right font-mono font-semibold text-blue-900">
+                    <td className="px-1.5 py-3 text-right whitespace-nowrap font-mono font-semibold text-blue-900">
                       {Number(r.totalAmount).toFixed(2)}
                     </td>
-                    <td className="px-3 py-3 text-blue-700 max-w-[160px] truncate" title={r.termsAndConditions || ""}>
+                    <td className="px-1.5 py-3 text-blue-700 max-w-[100px] truncate" title={r.termsAndConditions || ""}>
                       {r.termsAndConditions || "—"}
                     </td>
                   </tr>

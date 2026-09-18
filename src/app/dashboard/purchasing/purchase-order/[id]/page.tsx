@@ -135,6 +135,11 @@ export default function PurchaseOrderEditPage() {
           // Defaults
           if (fd.companies?.length > 0) setCompanyId(fd.companies[0].id);
           if (fd.employees?.length > 0) setPurchaserId(fd.employees[0].id);
+          const defCurr = fd.currencies?.find((c: any) => c.isDefault);
+          if (defCurr) {
+            setCurrencyId(defCurr.id);
+            setExchangeRate(Number(defCurr.exchangeRate).toFixed(4));
+          }
           // Add default empty item
           setItems([{
             fromMaterialProfile: true,

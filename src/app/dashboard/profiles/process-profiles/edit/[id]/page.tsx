@@ -137,7 +137,7 @@ export default function EditProcessProfilePage() {
           </label>
         </div>
         <div>
-          <label className="block text-sm font-medium mb-1">Cost Per Minute (SGD)</label>
+          <label className="block text-sm font-medium mb-1">Cost Per Minute (INR)</label>
           <input
             type="number"
             step="0.01"

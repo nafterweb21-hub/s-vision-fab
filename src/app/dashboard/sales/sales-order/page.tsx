@@ -135,29 +135,29 @@ export default function SalesOrderListPage() {
             <table className="w-full text-xs sm:text-sm text-left whitespace-nowrap">
               <thead className="text-[10px] sm:text-xs text-blue-500 bg-blue-50/50 uppercase tracking-wider border-b border-blue-200 ">
                 <tr>
-                  <th className="px-2 sm:px-6 py-2 sm:py-4">Order No</th>
-                  <th className="px-2 sm:px-6 py-2 sm:py-4 hidden sm:table-cell">Date</th>
-                  <th className="px-2 sm:px-6 py-2 sm:py-4 hidden md:table-cell">Type</th>
-                  <th className="px-2 sm:px-6 py-2 sm:py-4">Customer</th>
-                  <th className="px-2 sm:px-6 py-2 sm:py-4 hidden lg:table-cell">Salesperson</th>
-                  <th className="px-2 sm:px-6 py-2 sm:py-4 text-right hidden sm:table-cell">Amount</th>
-                  <th className="px-2 sm:px-6 py-2 sm:py-4">Status</th>
-                  <th className="px-2 sm:px-6 py-2 sm:py-4 text-right">Action</th>
+                  <th className="px-2 sm:px-4 py-2 sm:py-4">Order No</th>
+                  <th className="px-2 sm:px-4 py-2 sm:py-4 hidden sm:table-cell">Date</th>
+                  <th className="px-2 sm:px-4 py-2 sm:py-4 hidden md:table-cell">Type</th>
+                  <th className="px-2 sm:px-4 py-2 sm:py-4">Customer</th>
+                  <th className="px-2 sm:px-4 py-2 sm:py-4 hidden lg:table-cell">Salesperson</th>
+                  <th className="px-2 sm:px-4 py-2 sm:py-4 text-right hidden sm:table-cell">Amount</th>
+                  <th className="px-2 sm:px-4 py-2 sm:py-4">Status</th>
+                  <th className="px-2 sm:px-4 py-2 sm:py-4 text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-blue-100 text-[10px] sm:text-sm">
                 {orders.map((order) => (
                   <tr key={order.id} className="hover:bg-blue-50/50 :bg-blue-800/20 transition-colors group">
-                    <td className="px-2 sm:px-6 py-2 sm:py-4 font-bold text-blue-900 ">
+                    <td className="px-2 sm:px-4 py-2 sm:py-4 font-bold text-blue-900 ">
                       <Link href={`/dashboard/sales/sales-order/${order.id}`} className="hover:text-indigo-600 :text-indigo-400 transition-colors">
                         {order.orderNo}
                         {order.revision > 0 && <span className="ml-1 text-[8px] sm:text-xs text-blue-500 font-normal">v{order.revision}</span>}
                       </Link>
                     </td>
-                    <td className="px-2 sm:px-6 py-2 sm:py-4 text-blue-700 hidden sm:table-cell">
+                    <td className="px-2 sm:px-4 py-2 sm:py-4 text-blue-700 hidden sm:table-cell">
                       {new Date(order.date).toLocaleDateString()}
                     </td>
-                    <td className="px-2 sm:px-6 py-2 sm:py-4 hidden md:table-cell">
+                    <td className="px-2 sm:px-4 py-2 sm:py-4 hidden md:table-cell">
                       <span className={`inline-flex px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[8px] sm:text-xs font-semibold border ${
                         order.orderType === "Sub-contract"
                           ? "bg-violet-50 text-violet-700 border-violet-200/60"
@@ -166,16 +166,16 @@ export default function SalesOrderListPage() {
                         {order.orderType || "Direct"}
                       </span>
                     </td>
-                    <td className="px-2 sm:px-6 py-2 sm:py-4 font-medium text-blue-700 truncate max-w-[100px] sm:max-w-none">
+                    <td className="px-2 sm:px-4 py-2 sm:py-4 font-medium text-blue-700 truncate max-w-[100px] sm:max-w-none">
                       {order.customer?.customerName || "—"}
                     </td>
-                    <td className="px-2 sm:px-6 py-2 sm:py-4 text-blue-700 hidden lg:table-cell">
+                    <td className="px-2 sm:px-4 py-2 sm:py-4 text-blue-700 hidden lg:table-cell">
                       {order.salesperson?.name || "—"}
                     </td>
-                    <td className="px-2 sm:px-6 py-2 sm:py-4 text-right font-mono font-semibold text-blue-900 hidden sm:table-cell">
+                    <td className="px-2 sm:px-4 py-2 sm:py-4 text-right font-mono font-semibold text-blue-900 hidden sm:table-cell">
                       {order.currency?.code} {Number(order.amountAfterTax || 0).toFixed(2)}
                     </td>
-                    <td className="px-2 sm:px-6 py-2 sm:py-4">
+                    <td className="px-2 sm:px-4 py-2 sm:py-4">
                       <span className={`inline-flex items-center gap-1 sm:gap-1.5 px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[8px] sm:text-xs font-semibold border ${
                         order.status === "Confirmed"
                           ? "bg-emerald-50 text-emerald-700 border-emerald-200/60 "
@@ -189,7 +189,7 @@ export default function SalesOrderListPage() {
                         {order.status}
                       </span>
                     </td>
-                    <td className="px-2 sm:px-6 py-2 sm:py-4 text-right">
+                    <td className="px-2 sm:px-4 py-2 sm:py-4 text-right">
                       <div className="flex flex-col sm:flex-row items-end sm:items-center justify-end gap-1 sm:gap-2">
                         {order.status === "Draft" && (
                           <>

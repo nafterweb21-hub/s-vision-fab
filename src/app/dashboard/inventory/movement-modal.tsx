@@ -104,7 +104,7 @@ export default function MovementModal({
                       <th className="px-3 py-3 text-right">PO Qty</th>
                       <th className="px-3 py-3 text-right">Internal Qty</th>
                       <th className="px-3 py-3 text-right">Unit Price</th>
-                      <th className="px-3 py-3 text-right">Amount (SGD)</th>
+                      <th className="px-3 py-3 text-right">Amount (INR)</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-blue-100">

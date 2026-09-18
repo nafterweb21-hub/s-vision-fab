@@ -205,7 +205,7 @@ export default function ApprovalLevelProfilePage() {
           <div className="overflow-hidden rounded-2xl border border-blue-200 bg-white shadow-sm ">
             <div className="border-b border-blue-100 bg-blue-50/50 px-6 py-4.5 ">
               <h3 className="text-sm font-bold text-blue-900 ">Active Value Bands</h3>
-              <p className="text-[11px] text-blue-500 ">Values are shown in local base currency (SGD)</p>
+              <p className="text-[11px] text-blue-500 ">Values are shown in local base currency (INR)</p>
             </div>
             
             {activeProfiles.length === 0 ? (
@@ -219,7 +219,7 @@ export default function ApprovalLevelProfilePage() {
                     <tr>
                       <th className="px-6 py-3.5">Module Type</th>
                       <th className="px-6 py-3.5">Approval Level</th>
-                      <th className="px-6 py-3.5">Value Range (SGD)</th>
+                      <th className="px-6 py-3.5">Value Range (INR)</th>
                       <th className="px-6 py-3.5">Authorized Approvers</th>
                       <th className="px-6 py-3.5 text-center">Status</th>
                       <th className="px-6 py-3.5 text-right">Actions</th>

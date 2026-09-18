@@ -19,7 +19,7 @@ export async function getFormData() {
       prisma.employee.findMany({ where: { status: RecordStatus.Active }, select: { id: true, name: true, code: true } }),
       prisma.customerProfile.findMany({ where: { status: "Active" }, select: { id: true, customerName: true, customerCode: true, contactPersons: true, addresses: true, isSez: true } }),
       prisma.paymentTermProfile.findMany({ where: { status: "Active" }, select: { id: true, name: true, days: true } }),
-      prisma.currency.findMany({ where: { status: "Active" }, select: { id: true, code: true, exchangeRate: true } }),
+      prisma.currency.findMany({ where: { status: "Active" }, select: { id: true, code: true, exchangeRate: true, isDefault: true } }),
       prisma.taxProfile.findMany({ where: { status: "Active" }, select: { id: true, taxType: true, taxRate: true } }),
       prisma.finishedGoodProfile.findMany({ where: { status: "Active" }, select: { id: true, partNo: true, description: true } }),
       prisma.uomProfile.findMany({ where: { status: "Active" }, select: { id: true, uomName: true } }),

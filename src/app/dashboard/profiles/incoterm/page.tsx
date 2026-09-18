@@ -143,7 +143,7 @@ export default function materialTypesPage() {
             Incoterm Configuration
           </h2>
           <p className="mt-1 text-xs text-blue-500 ">
-            Define and manage group types to classify material catalog records.
+            Define and manage the Incoterms (international commercial terms) used on sales and purchase documents.
           </p>
         </div>
         <button
@@ -178,8 +178,8 @@ export default function materialTypesPage() {
           {/* Main Table Card */}
           <div className="overflow-hidden rounded-2xl border border-blue-200 bg-white shadow-sm ">
             <div className="border-b border-blue-100 bg-blue-50/50 px-6 py-4.5 ">
-              <h3 className="text-sm font-bold text-blue-900 ">Active Material Categories</h3>
-              <p className="text-[11px] text-blue-500 ">Manage types configured across the ERP</p>
+              <h3 className="text-sm font-bold text-blue-900 ">Active Incoterms</h3>
+              <p className="text-[11px] text-blue-500 ">Manage incoterms configured across the ERP</p>
             </div>
             
             {activeCategories.length === 0 ? (

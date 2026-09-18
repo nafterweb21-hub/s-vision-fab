@@ -308,22 +308,22 @@ function SummaryView({ rows, loading, error, onOpenMovement, allowEdit, allowDel
   return (
     <div className="bg-white border border-blue-200 rounded-xl shadow-sm overflow-hidden">
       <div className="overflow-x-auto">
-        <table className="w-full text-sm text-left whitespace-nowrap">
+        <table className="w-full text-xs text-left">
           <thead className="text-xs text-blue-500 bg-blue-50/50 uppercase tracking-wider border-b border-blue-200">
             <tr>
-              <th className="px-4 py-3">SN</th>
-              <th className="px-4 py-3">Part No</th>
-              <th className="px-4 py-3">Description</th>
-              <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3 text-right" title="Stock held before any document was raised">Opening Stock</th>
-              <th className="px-4 py-3 text-right">On-Order Qty</th>
-              <th className="px-4 py-3 text-right">Net Received</th>
-              <th className="px-4 py-3 text-right">Consumed</th>
-              <th className="px-4 py-3 text-right" title="Requisitioned but not yet issued">Reserved</th>
-              <th className="px-4 py-3 text-right" title="On hand: opening stock plus net received, less consumed">Balance</th>
-              <th className="px-4 py-3 text-right" title="Balance less reserved">Available</th>
-              <th className="px-4 py-3 text-center">Open POs</th>
-              <th className="px-4 py-3">Action</th>
+              <th className="px-2 py-3">SN</th>
+              <th className="px-2 py-3">Part No</th>
+              <th className="px-2 py-3">Description</th>
+              <th className="px-2 py-3">Status</th>
+              <th className="px-2 py-3 text-right whitespace-nowrap" title="Stock held before any document was raised">Opening Stock</th>
+              <th className="px-2 py-3 text-right whitespace-nowrap">On-Order Qty</th>
+              <th className="px-2 py-3 text-right whitespace-nowrap">Net Received</th>
+              <th className="px-2 py-3 text-right whitespace-nowrap">Consumed</th>
+              <th className="px-2 py-3 text-right whitespace-nowrap" title="Requisitioned but not yet issued">Reserved</th>
+              <th className="px-2 py-3 text-right whitespace-nowrap" title="On hand: opening stock plus net received, less consumed">Balance</th>
+              <th className="px-2 py-3 text-right whitespace-nowrap" title="Balance less reserved">Available</th>
+              <th className="px-2 py-3 text-center">Open POs</th>
+              <th className="px-2 py-3">Action</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-blue-100">
@@ -335,36 +335,36 @@ function SummaryView({ rows, loading, error, onOpenMovement, allowEdit, allowDel
               </tr>
             ) : rows.map((r, i) => (
               <tr key={r.id} className="hover:bg-blue-50/30 transition-colors">
-                <td className="px-4 py-3 text-blue-500">{i + 1}</td>
-                <td className="px-4 py-3 font-bold text-blue-900">{r.partNo || "—"}</td>
-                <td className="px-4 py-3 text-blue-700 max-w-[200px] truncate" title={r.description}>{r.description}</td>
-                <td className="px-4 py-3">
+                <td className="px-2 py-3 text-blue-500">{i + 1}</td>
+                <td className="px-2 py-3 font-bold text-blue-900">{r.partNo || "—"}</td>
+                <td className="px-2 py-3 text-blue-700 max-w-[160px] truncate" title={r.description}>{r.description}</td>
+                <td className="px-2 py-3">
                   <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${
                     r.materialStatus === "Active" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-600 border-slate-200"
                   }`}>
                     {r.materialStatus}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-right text-blue-700">{r.openingStock.toFixed(2)} {r.internalUom}</td>
-                <td className="px-4 py-3 text-right text-blue-700">{r.onOrderQty.toFixed(2)} {r.internalUom}</td>
-                <td className="px-4 py-3 text-right text-emerald-700 font-medium">{r.netReceivedQty.toFixed(2)} {r.internalUom}</td>
-                <td className="px-4 py-3 text-right text-rose-700">{r.consumedQty.toFixed(2)} {r.internalUom}</td>
-                <td className="px-4 py-3 text-right text-amber-700">{r.reservedQty.toFixed(2)} {r.internalUom}</td>
-                <td className={`px-4 py-3 text-right font-bold ${r.balance < 0 ? "text-rose-600" : "text-blue-900"}`}>
+                <td className="px-2 py-3 text-right whitespace-nowrap text-blue-700">{r.openingStock.toFixed(2)} {r.internalUom}</td>
+                <td className="px-2 py-3 text-right whitespace-nowrap text-blue-700">{r.onOrderQty.toFixed(2)} {r.internalUom}</td>
+                <td className="px-2 py-3 text-right whitespace-nowrap text-emerald-700 font-medium">{r.netReceivedQty.toFixed(2)} {r.internalUom}</td>
+                <td className="px-2 py-3 text-right whitespace-nowrap text-rose-700">{r.consumedQty.toFixed(2)} {r.internalUom}</td>
+                <td className="px-2 py-3 text-right whitespace-nowrap text-amber-700">{r.reservedQty.toFixed(2)} {r.internalUom}</td>
+                <td className={`px-2 py-3 text-right whitespace-nowrap font-bold ${r.balance < 0 ? "text-rose-600" : "text-blue-900"}`}>
                   {r.balance.toFixed(2)} {r.internalUom}
                 </td>
-                <td className={`px-4 py-3 text-right font-medium ${r.available < 0 ? "text-rose-600" : "text-blue-700"}`}>
+                <td className={`px-2 py-3 text-right whitespace-nowrap font-medium ${r.available < 0 ? "text-rose-600" : "text-blue-700"}`}>
                   {r.available.toFixed(2)} {r.internalUom}
                 </td>
-                <td className="px-4 py-3 text-center text-blue-700">
+                <td className="px-2 py-3 text-center text-blue-700">
                   {r.openPoCount > 0 ? (
                     <span className="inline-flex items-center justify-center min-w-[24px] h-6 px-1.5 rounded-md bg-amber-100 text-amber-800 text-xs font-bold">
                       {r.openPoCount}
                     </span>
                   ) : "—"}
                 </td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-2">
+                <td className="px-2 py-3">
+                  <div className="flex flex-wrap items-center gap-1.5">
                     <button
                       onClick={() => onOpenMovement(r.id, r.description)}
                       className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold text-blue-600 border border-blue-200 hover:bg-blue-50 transition-all active:scale-95"
@@ -460,7 +460,7 @@ function WorkOrderView({ rows, loading, error }: { rows: WorkOrderSummary[], loa
                   <th className="px-4 py-2 text-right">PO Qty</th>
                   <th className="px-4 py-2 text-right">Received</th>
                   <th className="px-4 py-2 text-right">Outstanding</th>
-                  <th className="px-4 py-2 text-right">Total Cost (SGD)</th>
+                  <th className="px-4 py-2 text-right">Total Cost (INR)</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-blue-50">

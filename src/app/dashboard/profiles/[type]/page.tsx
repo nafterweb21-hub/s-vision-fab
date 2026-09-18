@@ -254,7 +254,7 @@ export default function ProfilePage({
 
             {/* Fields grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {fields.filter((f) => f.type !== "checkbox").map((field) => {
+              {fields.filter((f) => f.type !== "checkbox" && f.type !== "select").map((field) => {
                 const isImmutable = !!(editingId && meta.immutableFields.includes(field.name));
                 return (
                   <div key={field.name} className="space-y-2">

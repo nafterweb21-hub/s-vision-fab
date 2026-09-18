@@ -21,19 +21,19 @@ import { getDashboardMetrics } from "./dashboard.actions";
 
 const formatCurrency = (value: number) => {
   if (value >= 1000000) {
-    return `SGD ${(value / 1000000).toFixed(2)}M`;
+    return `INR ${(value / 1000000).toFixed(2)}M`;
   }
   if (value >= 1000) {
-    return `SGD ${(value / 1000).toFixed(2)}K`;
+    return `INR ${(value / 1000).toFixed(2)}K`;
   }
-  return `SGD ${value.toFixed(2)}`;
+  return `INR ${value.toFixed(2)}`;
 };
 
 export default function DashboardPage() {
   const { data: session } = useSession();
   const permissions = (session?.user as any)?.permissions || null;
   const role = session?.user?.role || null;
-  const [activeCompany, setActiveCompany] = useState("Vision One Pte Ltd");
+  const [storedCompany, setActiveCompany] = useState("");
   const [metrics, setMetrics] = useState({
     activeWorkOrders: { count: 0, pendingQc: 0, onHold: 0 },
     openSalesOrders: { count: 0, totalValue: 0 },
@@ -46,6 +46,12 @@ export default function DashboardPage() {
     woStatusDistribution: { total: 0, distribution: [] as any[] },
     companyProfiles: [] as any[]
   });
+
+  // Active company comes from real company profiles: the stored choice if it still exists, else the first profile.
+  const activeCompany =
+    metrics.companyProfiles.find(c => c.companyName === storedCompany)?.companyName ??
+    metrics.companyProfiles[0]?.companyName ??
+    "";
 
   useEffect(() => {
     const stored = localStorage.getItem("fitprise_company");
@@ -100,16 +106,18 @@ export default function DashboardPage() {
               <p className="text-[8px] sm:text-[10px] text-indigo-200 font-semibold uppercase tracking-wider">Active Company</p>
               <div className="flex items-center gap-1.5 sm:gap-2 mt-0.5 sm:mt-1">
                 <Building2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white" />
-                <p className="text-xs sm:text-base font-bold text-white">{activeCompany}</p>
+                <p className="text-xs sm:text-base font-bold text-white">{activeCompany || "No company configured"}</p>
               </div>
             </div>
             <div className="h-px w-full bg-white/10"></div>
             <div>
               <p className="text-[8px] sm:text-[10px] text-indigo-200 font-semibold uppercase tracking-wider">Purchasing Access</p>
               <p className="mt-0.5 sm:mt-1 text-[10px] sm:text-sm font-medium text-white/90">
-                {activeCompany === "Vision One Pte Ltd" 
-                  ? "Standard & Subcon PO (Full Access)" 
-                  : "Standard & Subcon PO (Restricted)"
+                {!activeCompany
+                  ? "—"
+                  : activeCompany === "Vision One Pte Ltd"
+                    ? "Standard & Subcon PO (Full Access)"
+                    : "Standard & Subcon PO (Restricted)"
                 }
               </p>
             </div>
@@ -360,7 +368,7 @@ export default function DashboardPage() {
                       </span>
                     </div>
                     <div className="flex items-center gap-2 mb-4 text-sm font-medium">
-                      <span className="text-slate-500">SGD <span className="text-slate-900 font-bold">{po.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></span>
+                      <span className="text-slate-500">INR <span className="text-slate-900 font-bold">{po.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></span>
                       <span className="text-slate-300">|</span>
                       <span className="text-slate-500">WO <span className="text-slate-900 font-bold">{po.workOrderNo}</span></span>
                     </div>
@@ -567,7 +575,7 @@ export default function DashboardPage() {
             </a>
 
             <a
-              href="/dashboard/profiles/employee"
+              href="/dashboard/master-profile/employee"
               className="group flex items-center gap-3 sm:gap-4 rounded-xl sm:rounded-2xl border border-slate-100 bg-slate-50/50 p-3 sm:p-5 transition-all hover:border-indigo-200 hover:bg-indigo-50/50 hover:shadow-sm"
             >
               <div className="flex h-10 w-10 sm:h-12 sm:w-12 shrink-0 items-center justify-center rounded-xl bg-white text-indigo-600 shadow-sm border border-slate-100 transition-transform group-hover:scale-110">
@@ -616,7 +624,7 @@ export default function DashboardPage() {
                     <div className="h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.8)]"></div>
                     <p className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider">Company Name</p>
                   </div>
-                  <p className="text-[11px] sm:text-sm font-bold text-slate-900">{activeCompany}</p>
+                  <p className="text-[11px] sm:text-sm font-bold text-slate-900">{activeCompany || "No company configured"}</p>
                 </div>
 
                 <div className="rounded-xl sm:rounded-2xl border border-slate-100 bg-slate-50 p-3 sm:p-4 transition-colors hover:bg-slate-100/50">
@@ -625,9 +633,11 @@ export default function DashboardPage() {
                     <p className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider">PO linkage to Work Orders</p>
                   </div>
                   <p className="text-[11px] sm:text-sm font-semibold text-emerald-600 bg-emerald-50 inline-flex px-1.5 py-0.5 sm:px-2 sm:py-1 rounded sm:rounded-md">
-                    {currentCompany?.allowPoForWo 
-                      ? "✓ Allowed (Standard)" 
-                      : "✗ Forbidden (Standalone)"
+                    {!currentCompany
+                      ? "—"
+                      : currentCompany.allowPoForWo
+                        ? "✓ Allowed (Standard)"
+                        : "✗ Forbidden (Standalone)"
                     }
                   </p>
                 </div>
@@ -638,9 +648,11 @@ export default function DashboardPage() {
                     <p className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider">AS9100 Certification Note</p>
                   </div>
                   <p className="text-[11px] sm:text-sm font-medium text-slate-700">
-                    {currentCompany?.as9100RequirementNote
-                      ? "Toggled on for PR, PO, Subcon forms."
-                      : "Not standard for this company profile."
+                    {!currentCompany
+                      ? "Create a company profile to configure this."
+                      : currentCompany.as9100RequirementNote
+                        ? "Toggled on for PR, PO, Subcon forms."
+                        : "Not standard for this company profile."
                     }
                   </p>
                 </div>

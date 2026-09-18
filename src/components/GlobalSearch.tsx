@@ -24,7 +24,6 @@ const PAGES = [
   { title: "Purchase Order Subcon", href: "/dashboard/purchasing/purchase-order-subcon" },
   { title: "Subcon Request Form", href: "/dashboard/purchasing/subcon-request-form" },
   { title: "Subcon Return Tracking", href: "/dashboard/purchasing/subcon-return-tracking" },
-  { title: "Quotations", href: "/dashboard/sales/quotation" },
   { title: "Invoicing", href: "/dashboard/sales/invoice" },
   { title: "Receipt / Payment Record", href: "/dashboard/sales/receipt" },
   { title: "NCR", href: "/dashboard/qc/ncr" },

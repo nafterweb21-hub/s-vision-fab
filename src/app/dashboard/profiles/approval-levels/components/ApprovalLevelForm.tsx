@@ -249,7 +249,7 @@ export default function ApprovalLevelForm({ editingProfile, users }: ApprovalLev
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-blue-700 uppercase tracking-wide">
-                Min Range (SGD)
+                Min Range (INR)
               </label>
               <input
                 type="number"
@@ -263,7 +263,7 @@ export default function ApprovalLevelForm({ editingProfile, users }: ApprovalLev
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-blue-700 uppercase tracking-wide">
-                Max Range (SGD)
+                Max Range (INR)
               </label>
               <input
                 type="number"

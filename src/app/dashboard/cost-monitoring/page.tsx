@@ -61,9 +61,9 @@ export default function CostMonitoringPage() {
   };
 
   const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat("en-SG", {
+    return new Intl.NumberFormat("en-IN", {
       style: "currency",
-      currency: "SGD",
+      currency: "INR",
       minimumFractionDigits: 2,
     }).format(val || 0);
   };

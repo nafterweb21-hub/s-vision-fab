@@ -123,7 +123,7 @@ export default async function QcApprovalRoutingPage({
                         )}
                       </div>
                       <div className="mt-1 text-xs text-slate-500 space-x-3">
-                        <span>Target: {new Date(ip.targetCompletionDate).toLocaleDateString()}</span>
+                        <span>Target: {new Date(ip.targetCompletionDate).toLocaleDateString("en-GB")}</span>
                         {ip.conditionalSn && (
                           <span>Precondition: SN {ip.conditionalSn.sn} ({ip.conditionalSn.description})</span>
                         )}

@@ -78,8 +78,8 @@ export default function CreditNoteListPage() {
 
   const onVoid = async () => {
     if (!selected) return;
-    if (selected.status === "Void" || selected.status === "Old Version") return hotToast.error("Cannot void this invoice");
-    if (!await customConfirm(`Void invoice ${selected.invoiceNo}?`)) return;
+    if (selected.status === "Void" || selected.status === "Old Version") return hotToast.error("Cannot void this credit note");
+    if (!await customConfirm(`Void credit note ${selected.invoiceNo}?`)) return;
     setActionLoading(true);
     await voidInvoice(selected.id);
     await fetchInvoicesList();
@@ -90,7 +90,7 @@ export default function CreditNoteListPage() {
   const onSubmit = async () => {
     if (!selected) return;
     if (selected.status !== "Draft") return hotToast.error("Only Draft can be submitted");
-    if (!await customConfirm(`Submit invoice ${selected.invoiceNo}?`)) return;
+    if (!await customConfirm(`Submit credit note ${selected.invoiceNo}?`)) return;
     setActionLoading(true);
     await submitInvoice(selected.id);
     await fetchInvoicesList();
@@ -100,12 +100,12 @@ export default function CreditNoteListPage() {
 
   const onRevise = async () => {
     if (!selected) return;
-    if (selected.status !== "Submitted") return hotToast.error("Only Submitted invoices can be revised");
+    if (selected.status !== "Submitted") return hotToast.error("Only Submitted credit notes can be revised");
     if (!await customConfirm(`Create a new revision of ${selected.invoiceNo}?`)) return;
     setActionLoading(true);
     const invRes = await getInvoice(selected.id);
     if (!invRes.success) {
-      hotToast.error("Failed to load invoice details");
+      hotToast.error("Failed to load credit note details");
       setActionLoading(false);
       return;
     }
@@ -113,18 +113,18 @@ export default function CreditNoteListPage() {
     if (res.success && res.data) {
       router.push(`/dashboard/sales/credit-note/form?id=${res.data.id}`);
     } else {
-      hotToast.error(res.error || "Failed to revise invoice");
+      hotToast.error(res.error || "Failed to revise credit note");
       setActionLoading(false);
     }
   };
 
   const onCopy = async () => {
     if (!selected) return;
-    if (!await customConfirm(`Copy invoice ${selected.invoiceNo}?`)) return;
+    if (!await customConfirm(`Copy credit note ${selected.invoiceNo}?`)) return;
     setActionLoading(true);
     const invRes = await getInvoice(selected.id);
     if (!invRes.success) {
-      hotToast.error("Failed to load invoice details");
+      hotToast.error("Failed to load credit note details");
       setActionLoading(false);
       return;
     }
@@ -141,21 +141,21 @@ export default function CreditNoteListPage() {
     if (res.success && res.data) {
       router.push(`/dashboard/sales/credit-note/form?id=${res.data.id}`);
     } else {
-      hotToast.error(res.error || "Failed to copy invoice");
+      hotToast.error(res.error || "Failed to copy credit note");
       setActionLoading(false);
     }
   };
 
   const onPrint = () => {
     if (!selected) return;
-    if (selected.status !== "Submitted" && selected.status !== "Draft") return hotToast.error("Only Submitted or Draft invoices can be printed");
+    if (selected.status !== "Submitted" && selected.status !== "Draft") return hotToast.error("Only Submitted or Draft credit notes can be printed");
     window.open(`/print/invoice/${selected.id}`, "_blank");
   };
 
   const onGenerateEInvoice = async () => {
     if (!selected) return;
-    if (selected.status !== "Submitted") return hotToast.error("Submit the invoice before generating an e-invoice");
-    if (selected.einvoiceStatus === "Generated") return hotToast.error("This invoice already has an IRN");
+    if (selected.status !== "Submitted") return hotToast.error("Submit the credit note before generating an e-invoice");
+    if (selected.einvoiceStatus === "Generated") return hotToast.error("This credit note already has an IRN");
     if (!(await customConfirm(`Generate GST e-invoice (IRN) for ${selected.invoiceNo}?`))) return;
     setActionLoading(true);
     const t = hotToast.loading("Reporting to the IRP…");
@@ -199,15 +199,15 @@ export default function CreditNoteListPage() {
             <span>/</span>
             <span className="text-blue-500">Sales</span>
             <span>/</span>
-            <span className="text-blue-500">Invoices</span>
+            <span className="text-blue-500">Credit Notes</span>
           </div>
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-500">
               <FileText size={20} />
             </div>
             <div>
-              <h2 className="text-2xl font-bold tracking-tight text-blue-900">Invoices</h2>
-              <p className="text-sm text-blue-500 mt-0.5">Manage customer invoices and billing.</p>
+              <h2 className="text-2xl font-bold tracking-tight text-blue-900">Credit Notes</h2>
+              <p className="text-sm text-blue-500 mt-0.5">Manage customer credit notes and billing adjustments.</p>
             </div>
           </div>
         </div>
@@ -227,7 +227,7 @@ export default function CreditNoteListPage() {
         <ToolbarBtn icon={<Send size={14} />} label="Submit" onClick={onSubmit} disabled={!selected || actionLoading} />
         <ToolbarBtn icon={<GitBranch size={14} />} label="Revise" onClick={onRevise} disabled={!selected || actionLoading} />
         <ToolbarBtn icon={<Copy size={14} />} label="Copy" onClick={onCopy} disabled={!selected || actionLoading} />
-        <ToolbarBtn icon={<Printer size={14} />} label="Print Invoice" onClick={onPrint} disabled={!selected || actionLoading} />
+        <ToolbarBtn icon={<Printer size={14} />} label="Print Credit Note" onClick={onPrint} disabled={!selected || actionLoading} />
         <ToolbarBtn icon={<QrCode size={14} />} label="Generate E-Invoice" onClick={onGenerateEInvoice} disabled={!selected || actionLoading} primary />
         <ToolbarBtn icon={<XCircle size={14} />} label="Cancel E-Invoice" onClick={onCancelEInvoice} disabled={!selected || actionLoading} />
       </div>
@@ -255,7 +255,7 @@ export default function CreditNoteListPage() {
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-blue-400" />
           <input
             type="text"
-            placeholder="Search by Invoice No or Customer Name..."
+            placeholder="Search by Credit Note No or Customer Name..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-9 pr-4 py-2 text-sm bg-blue-50 border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors"
@@ -267,7 +267,7 @@ export default function CreditNoteListPage() {
       {loading ? (
         <div className="h-64 flex flex-col items-center justify-center gap-2">
           <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
-          <p className="text-sm text-blue-500">Loading invoices...</p>
+          <p className="text-sm text-blue-500">Loading credit notes...</p>
         </div>
       ) : errorMsg ? (
         <div className="bg-rose-50 border border-rose-200 rounded-xl p-6 flex items-center gap-3 text-rose-700">
@@ -279,9 +279,9 @@ export default function CreditNoteListPage() {
           <div className="mx-auto w-12 h-12 rounded-full bg-indigo-500/10 flex items-center justify-center mb-4">
             <FileText size={22} className="text-indigo-500" />
           </div>
-          <p className="text-blue-600 font-semibold">No invoices found.</p>
+          <p className="text-blue-600 font-semibold">No credit notes found.</p>
           <p className="text-xs text-blue-400 mt-1">
-            Click &quot;New Credit Note&quot; to create your first invoice.
+            Click &quot;New Credit Note&quot; to create your first credit note.
           </p>
         </div>
       ) : (
@@ -292,7 +292,7 @@ export default function CreditNoteListPage() {
                 <tr>
                   <th className="px-3 py-3 w-10"></th>
                   <th className="px-3 py-3">Status</th>
-                  <th className="px-3 py-3">Invoice No</th>
+                  <th className="px-3 py-3">Credit Note No</th>
                   <th className="px-3 py-3">Date</th>
                   <th className="px-3 py-3">Customer</th>
                   <th className="px-3 py-3">Vehicle Number</th>

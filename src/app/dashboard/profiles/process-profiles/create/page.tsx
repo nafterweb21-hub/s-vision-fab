@@ -202,7 +202,7 @@ export default function CreateProcessProfilePage() {
             <div className="grid gap-6 sm:grid-cols-2">
               <div>
                 <label className="mb-1.5 block text-xs font-bold text-blue-700 ">
-                  Cost Per Minute (SGD) <span className="text-rose-500">*</span>
+                  Cost Per Minute (INR) <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="number"

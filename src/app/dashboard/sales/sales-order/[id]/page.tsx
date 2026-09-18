@@ -73,16 +73,27 @@ export default function SalesOrderFormPage() {
           setItems(
             orderData.items.map((item: any) => ({
               ...item,
-              batches: (item.batches || []).map((b: any) => ({
+              // Items without a delivery batch (e.g. converted from a quotation) get a visible
+              // one so the delivery date can be reviewed instead of silently defaulting server-side.
+              batches: (item.batches?.length ? item.batches : [{
+                quantity: item.quantity,
+                deliveryDate: new Date(),
+                noRoutingProcess: false,
+                remark: "",
+                uploadUrl: "",
+              }]).map((b: any) => ({
                 ...b,
                 deliveryDate: new Date(b.deliveryDate).toISOString().split("T")[0],
               }))
             }))
           );
+          // Header reference mirrors the items' quotation ref when they all agree.
+          const quotationRefs = new Set<string>(orderData.items.map((i: any) => i.internalQuotationNo).filter(Boolean));
+          setHeaderQuotationRef(quotationRefs.size === 1 ? [...quotationRefs][0] : "");
         } else {
           // Defaults
           if (data.currencies.length > 0) {
-            const defCurr = data.currencies.find((c: any) => c.code === "SGD") || data.currencies[0];
+            const defCurr = data.currencies.find((c: any) => c.isDefault) || data.currencies[0];
             setOrder((prev: any) => ({ ...prev, currencyId: defCurr.id, exchangeRate: defCurr.exchangeRate }));
           }
         }

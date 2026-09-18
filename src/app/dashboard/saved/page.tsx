@@ -42,7 +42,7 @@ function SavedPageContent() {
           Saved Successfully!
         </h1>
         <p className="text-slate-500 text-sm max-w-md mx-auto mb-8 leading-relaxed">
-          Your changes to the <span className="font-semibold text-indigo-600">{moduleName}</span> have been securey saved to the database.
+          Your changes to the <span className="font-semibold text-indigo-600">{moduleName}</span> have been securely saved to the database.
         </p>
 
         {/* Details Card */}
