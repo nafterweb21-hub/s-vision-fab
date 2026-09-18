@@ -432,6 +432,7 @@ export async function getAvailableSessions() {
                 targetCompletionDate: true,
                 mainProcess: { select: { process: true } },
                 routingProcess: { select: { routingProcess: true, allowedRoles: { select: { id: true } } } },
+                productionTimesheets: { select: { completedQty: true } },
               },
             },
           },
@@ -468,6 +469,9 @@ export async function getAvailableSessions() {
         if (!rp.mainProcessId || !rp.routingProcessId) continue;
         if (emp && rp.assignedEmployeeId && rp.assignedEmployeeId !== emp.id) continue;
         if (runningIds.has(rp.id)) continue;
+        // Full quantity already produced (the step is only waiting on parameter confirmation): nothing left to start.
+        const doneQty = rp.productionTimesheets.reduce((sum, t) => sum + (t.completedQty ? Number(t.completedQty) : 0), 0);
+        if (wo.quantity != null && doneQty >= Number(wo.quantity)) continue;
 
         out.push({
           key: rp.id,
