@@ -18,6 +18,7 @@ const fmtTime = (v?: string | null) =>
 
 const fmtMins = (m: number) => {
   const t = Math.round(m);
+  if (m > 0 && t < 1) return "<1m"; // a session under a minute is not "0m"
   const h = Math.floor(t / 60);
   return h ? `${h}h ${t % 60}m` : `${t}m`;
 };
