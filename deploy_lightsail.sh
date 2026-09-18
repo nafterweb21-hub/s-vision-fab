@@ -34,7 +34,7 @@ echo "==> Fixing Turbopack synthetic pg module bug..."
 # Turbopack in Next 15+ standalone mode sometimes mangles pg into a synthetic module (e.g. pg-587764f78a6c7a9c)
 # We need to find the hash and duplicate the pg folder so it can be resolved at runtime
 if [ -d ".next/standalone/node_modules/pg" ]; then
-  PG_SYNTHETIC=$(grep -r -o 'pg-[a-f0-9]*' .next/server/middleware.js.nft.json 2>/dev/null | head -1)
+  PG_SYNTHETIC=$(grep -h -o 'pg-[a-f0-9]\{5,\}' .next/server/middleware.js.nft.json 2>/dev/null | head -1)
   if [ -n "$PG_SYNTHETIC" ]; then
     echo "Found synthetic pg package requirement: $PG_SYNTHETIC"
     cp -r .next/standalone/node_modules/pg .next/standalone/node_modules/$PG_SYNTHETIC
@@ -48,8 +48,9 @@ mkdir -p .next/standalone/node_modules/@swc
 cp -r node_modules/@swc/helpers .next/standalone/node_modules/@swc/
 
 echo "==> Creating deployment archive..."
-# Archive the standalone folder locally
-tar -chzf deploy.tar.gz -C .next/standalone .
+# Archive the standalone folder locally.
+# Never ship the local .env: the server keeps its own (production DATABASE_URL etc.).
+tar -chzf deploy.tar.gz --exclude='./.env' -C .next/standalone .
 
 echo "==> Ensuring remote directories exist..."
 ssh $SSH_OPTS "$VPS_HOST" "mkdir -p $DEPLOY_PATH/public/uploads"
