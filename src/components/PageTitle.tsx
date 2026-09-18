@@ -26,11 +26,25 @@ function titleFor(pathname: string): string {
   return best ? `${best.label} | ${APP_NAME}` : APP_NAME;
 }
 
-/** Sets the browser tab title from the navigation label of the current page. */
+/**
+ * Sets the browser tab title from the navigation label of the current page.
+ *
+ * Next re-applies the static metadata title on hydration and after navigation, which
+ * would overwrite a one-off assignment, so the title is re-asserted whenever it changes.
+ */
 export default function PageTitle() {
   const pathname = usePathname();
   useEffect(() => {
-    document.title = titleFor(pathname);
+    const desired = titleFor(pathname);
+    const apply = () => {
+      if (document.title !== desired) document.title = desired;
+    };
+    apply();
+
+    // Watch <head> rather than the <title> node: React may swap the element, not just its text.
+    const observer = new MutationObserver(apply);
+    observer.observe(document.head, { childList: true, characterData: true, subtree: true });
+    return () => observer.disconnect();
   }, [pathname]);
   return null;
 }
