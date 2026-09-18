@@ -158,6 +158,12 @@ export default async function WorkOrderTimesheetsPage({
           <div className="border-b-2 border-blue-600 text-blue-600 py-4 px-1 text-sm font-medium">
             Timesheets & Parameters
           </div>
+          <Link
+            href={`/dashboard/production/work-order/${id}/files`}
+            className="border-b-2 border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 py-4 px-1 text-sm font-medium"
+          >
+            Files
+          </Link>
         </nav>
       </div>
 

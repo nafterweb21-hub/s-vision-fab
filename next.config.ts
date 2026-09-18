@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Removed standalone output to fix pm2 next start deployment issue
+  output: "standalone",
+  serverExternalPackages: ["pg"],
 };
 
 export default nextConfig;

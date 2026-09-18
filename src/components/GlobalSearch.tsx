@@ -30,6 +30,7 @@ const PAGES = [
   { title: "NCR", href: "/dashboard/qc/ncr" },
   { title: "Company Profile", href: "/dashboard/profiles/company" },
   { title: "Employee Profile", href: "/dashboard/master-profile/employee" },
+  { title: "File Category Profile", href: "/dashboard/master-profile/file-category" },
   { title: "Designation Profile", href: "/dashboard/master-profile/designation" },
   { title: "Approval Level Profile", href: "/dashboard/profiles/approval-levels" },
   { title: "Customer Profile", href: "/dashboard/admin/master-profile/customer" },

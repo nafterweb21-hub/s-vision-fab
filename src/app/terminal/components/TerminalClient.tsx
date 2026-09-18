@@ -149,7 +149,8 @@ export default function TerminalClient({ support, loggedInEmployee, initialSessi
   const previouslyCompleted = selectedSession 
     ? (selectedSession.routingProcess?.productionTimesheets?.reduce((acc: number, ts: any) => acc + (Number(ts.completedQty) || 0), 0) || 0)
     : 0;
-  const remainingQty = Math.max(0, targetQty - previouslyCompleted - (Number(producedCount) || 0));
+  const maxAllowedQty = Math.max(0, targetQty - previouslyCompleted);
+  const remainingQty = Math.max(0, maxAllowedQty - (Number(producedCount) || 0));
 
   function handleScanInSuccess() {
     closeScanInModal();
@@ -219,134 +220,109 @@ export default function TerminalClient({ support, loggedInEmployee, initialSessi
 
 
   return (
-    <div className="bg-white min-h-[calc(100vh-80px)] rounded-3xl p-6 font-sans text-slate-900 relative overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-200">
+    <div className="bg-white min-h-0 md:min-h-[calc(100vh-80px)] rounded-lg md:rounded-3xl p-1.5 md:p-6 font-sans text-slate-900 relative overflow-hidden shadow-sm md:shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-200">
       
       {/* TOP HEADER */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between bg-white border border-slate-200 shadow-sm rounded-3xl p-4 mb-8">
+      <div className="flex flex-col md:flex-row md:items-center justify-between bg-white border border-slate-200 shadow-sm rounded-lg md:rounded-3xl p-1.5 md:p-4 mb-2 md:mb-8">
         <div className="flex items-center gap-4">
-          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
+          <div className="bg-slate-50 p-3 md:p-4 rounded-2xl border border-slate-200 hidden sm:block">
             <Monitor className="text-cyan-600" size={28} />
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 md:gap-4">
             <div>
-              <div className="text-[10px] font-bold tracking-widest text-slate-500 uppercase mb-0.5">Terminal</div>
-              <div className="text-2xl font-bold text-slate-900 tracking-tight leading-none mb-1">
+              <div className="text-[9px] md:text-[10px] font-bold tracking-widest text-slate-500 uppercase mb-0 md:mb-0.5">Terminal</div>
+              <div className="text-lg md:text-2xl font-bold text-slate-900 tracking-tight leading-none mb-1">
                 Shared Production Terminal
               </div>
             </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-4 mt-4 md:mt-0">
-          <div className="bg-slate-50 border border-slate-200 rounded-2xl px-6 py-3 flex flex-col items-center justify-center">
-            <div className="text-[9px] font-bold tracking-widest text-slate-500 uppercase mb-1">Active Jobs</div>
-            <div className="flex items-center gap-2">
-              <span className="text-2xl font-bold text-slate-900 leading-none">{activeSessions.length}</span>
-              <span className="text-[9px] bg-cyan-100 text-cyan-800 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Running</span>
+        <div className="flex flex-row items-center gap-1.5 md:gap-4 mt-2 md:mt-0 w-full md:w-auto">
+          <div className="bg-slate-50 border border-slate-200 rounded-lg md:rounded-2xl px-1 py-1 md:px-6 md:py-3 flex flex-col items-center justify-center flex-1">
+            <div className="text-[7px] md:text-[9px] font-bold tracking-widest text-slate-500 uppercase mb-0 md:mb-1">Active Jobs</div>
+            <div className="flex items-center gap-1 md:gap-2">
+              <span className="text-sm md:text-2xl font-bold text-slate-900 leading-none">{activeSessions.length}</span>
+              <span className="text-[8px] md:text-[9px] bg-cyan-100 text-cyan-800 px-1.5 md:px-2 py-0.5 rounded-full font-bold uppercase tracking-wider hidden sm:inline">Running</span>
             </div>
           </div>
-          <div className="bg-slate-50 border border-slate-200 rounded-2xl px-6 py-3 flex flex-col items-center justify-center">
-            <div className="text-[9px] font-bold tracking-widest text-slate-500 uppercase mb-1">Total Produced</div>
-            <div className="text-2xl font-bold text-emerald-600 leading-none">
+          <div className="bg-slate-50 border border-slate-200 rounded-lg md:rounded-2xl px-1 py-1 md:px-6 md:py-3 flex flex-col items-center justify-center flex-1">
+            <div className="text-[7px] md:text-[9px] font-bold tracking-widest text-slate-500 uppercase mb-0 md:mb-1">Total Produced</div>
+            <div className="text-sm md:text-2xl font-bold text-emerald-600 leading-none">
               {recentCompletes.length}
             </div>
           </div>
           <button 
             onClick={openScanInModal}
-            className="font-bold rounded-2xl px-6 py-3 flex items-center gap-2 transition-colors h-full shadow-lg bg-cyan-500 hover:bg-cyan-400 text-white shadow-cyan-500/20"
+            className="font-bold rounded-lg md:rounded-2xl px-2 py-1.5 md:px-6 md:py-3 flex items-center justify-center gap-1 md:gap-2 transition-colors shadow-sm md:shadow-lg bg-cyan-500 hover:bg-cyan-400 text-white shadow-cyan-500/20 flex-1 md:w-auto text-[10px] md:text-base"
           >
-            <Plus size={20} strokeWidth={3} />
+            <Plus size={16} strokeWidth={3} className="md:w-[18px] md:h-[18px]" />
             Scan In
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 md:gap-8">
         
         {/* LEFT SIDEBAR */}
-        <div className="lg:col-span-4 space-y-8">
+        <div className="lg:col-span-4 space-y-3 md:space-y-8">
           
           <section>
-            <div className="flex items-center gap-2 mb-4 text-cyan-600">
-              <Zap size={16} fill="currentColor" />
-              <h3 className="text-xs font-bold tracking-widest uppercase text-slate-500">Active Sessions</h3>
+            <div className="flex items-center gap-1.5 md:gap-2 mb-2 md:mb-4 text-cyan-600">
+              <Zap size={14} className="md:w-4 md:h-4" fill="currentColor" />
+              <h3 className="text-[10px] md:text-xs font-bold tracking-widest uppercase text-slate-500">Active Sessions</h3>
             </div>
             
-            <div className="space-y-4 relative">
-              {/* Optional cyan border effect for the selected item container visually linking them */}
-              
+            <div className="space-y-2 md:space-y-4 relative">
               {activeSessions.length === 0 ? (
-                <div className="bg-slate-50 border border-slate-200 shadow-sm rounded-3xl p-6 text-center text-slate-500 text-sm">
+                <div className="bg-slate-50 border border-slate-200 shadow-sm rounded-xl md:rounded-3xl p-3 md:p-6 text-center text-slate-500 text-[10px] md:text-sm">
                   No active sessions.
                 </div>
               ) : (
-                activeSessions.map((session) => (
-                  <div 
-                    key={session.id}
-                    onClick={() => handleSelectSession(session)}
-                    className={`bg-white border-2 rounded-3xl p-5 cursor-pointer transition-all ${selectedSessionId === session.id ? 'border-cyan-500 shadow-[0_0_15px_rgba(6,182,212,0.15)] ring-1 ring-cyan-500/50' : 'border-slate-100 hover:border-slate-200 shadow-sm'}`}
-                  >
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex items-center gap-3">
-                        <div className="bg-cyan-50 p-2.5 rounded-xl text-cyan-500">
-                          <Box size={20} />
-                        </div>
-                        <div>
-                          <div className="text-[9px] font-bold text-slate-500 uppercase">{session.employee?.name || 'Unknown Operator'}</div>
-                          <div className="font-bold text-sm text-slate-900">{session.routingProcess?.inProcess?.workOrderNo || "Unknown WO"}</div>
-                          <div className="text-[9px] text-slate-400 font-bold tracking-wider uppercase mt-0.5">
-                            {session.routingProcess?.routingProcess?.routingProcess || "Unknown Process"}
-                          </div>
-                        </div>
-                      </div>
-                      {selectedSessionId === session.id && <ChevronRight size={18} className="text-cyan-500" />}
-                    </div>
-                    
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="bg-slate-50 rounded-xl p-2.5">
-                        <div className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mb-1">Done</div>
-                        <div className="font-bold text-sm text-slate-900">{session.id === selectedSessionId ? producedCount : 0}</div>
-                      </div>
-                      <div className="bg-slate-50 rounded-xl p-2.5">
-                        <div className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mb-1">Defects</div>
-                        <div className="font-bold text-sm text-slate-900">{session.id === selectedSessionId ? defectCount : 0}</div>
-                      </div>
-                    </div>
-                  </div>
-                ))
+                <SearchableSelect
+                  value={selectedSessionId || ""}
+                  onChange={(e) => {
+                    const session = activeSessions.find(s => s.id === e.target.value);
+                    if (session) handleSelectSession(session);
+                  }}
+                  className="w-full bg-white border border-slate-200 shadow-sm rounded-lg md:rounded-2xl px-2 py-1.5 md:px-4 md:py-4 text-[10px] md:text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 focus:border-cyan-500"
+                >
+                  <option value="" disabled>Select an Active Session...</option>
+                  {[...activeSessions]
+                    .sort((a, b) => new Date(b.timeIn || b.createdAt).getTime() - new Date(a.timeIn || a.createdAt).getTime())
+                    .map((session) => (
+                    <option key={session.id} value={session.id}>
+                      {session.routingProcess?.inProcess?.workOrderNo || "Unknown WO"} - {session.routingProcess?.routingProcess?.routingProcess || "Unknown"} ({session.employee?.name || "Unknown Operator"})
+                    </option>
+                  ))}
+                </SearchableSelect>
               )}
             </div>
           </section>
 
           <section>
-            <div className="flex items-center gap-2 mb-4 text-slate-400">
-              <Clock size={16} />
-              <h3 className="text-xs font-bold tracking-widest uppercase">Recent Completes</h3>
+            <div className="flex items-center gap-1.5 md:gap-2 mb-2 md:mb-4 text-slate-400">
+              <Clock size={14} className="md:w-4 md:h-4" />
+              <h3 className="text-[10px] md:text-xs font-bold tracking-widest uppercase">Recent Completes</h3>
             </div>
             
-            <div className="space-y-3">
+            <div className="space-y-2 md:space-y-3">
               {recentCompletes.length === 0 ? (
                 <div className="text-slate-400 text-xs italic ml-6">None recently</div>
               ) : (
-                recentCompletes.map((rc, idx) => (
-                  <div key={rc.id || idx} className="bg-white border-2 border-slate-100 shadow-sm rounded-2xl p-4 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="bg-emerald-50 p-1.5 rounded-full text-emerald-500 border border-emerald-100">
-                        <Check size={14} strokeWidth={3} />
-                      </div>
-                      <div>
-                        <div className="font-bold text-sm text-slate-900">{rc.routingProcess?.inProcess?.workOrderNo}</div>
-                        <div className="text-[9px] text-slate-400 font-bold tracking-wider uppercase mt-0.5">{rc.routingProcess?.routingProcess?.routingProcess}</div>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-xs font-bold text-emerald-500">+1</div>
-                      <div className="text-[9px] text-slate-400 font-mono mt-0.5">
-                        {rc.timeIn ? new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: false}) : "--:--"}
-                      </div>
-                    </div>
-                  </div>
-                ))
+                <SearchableSelect 
+                  className="w-full bg-white border border-slate-200 shadow-sm rounded-lg md:rounded-2xl px-2 py-1.5 md:px-4 md:py-4 text-[10px] md:text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 focus:border-cyan-500"
+                  defaultValue=""
+                >
+                  <option value="" disabled>View Recent Completes...</option>
+                  {[...recentCompletes]
+                    .sort((a, b) => new Date(b.timeOut || b.timeIn || b.createdAt).getTime() - new Date(a.timeOut || a.timeIn || a.createdAt).getTime())
+                    .map((rc, idx) => (
+                    <option key={rc.id || idx} value={rc.id || idx}>
+                      {rc.routingProcess?.inProcess?.workOrderNo} - {rc.routingProcess?.routingProcess?.routingProcess} ({rc.timeOut ? new Date(rc.timeOut).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: false}) : "--:--"})
+                    </option>
+                  ))}
+                </SearchableSelect>
               )}
             </div>
           </section>
@@ -355,7 +331,7 @@ export default function TerminalClient({ support, loggedInEmployee, initialSessi
 
         {/* MAIN AREA */}
         <div className="lg:col-span-8">
-          <div className="bg-white border border-slate-200 shadow-sm rounded-3xl p-8 min-h-[600px] flex flex-col relative overflow-hidden">
+          <div className="bg-white border border-slate-200 shadow-sm rounded-lg md:rounded-3xl p-1.5 md:p-8 min-h-[200px] lg:min-h-[600px] flex flex-col relative overflow-hidden">
             
             {/* Background decorative element */}
             <div className="absolute right-0 top-1/2 -translate-y-1/2 opacity-5 pointer-events-none">
@@ -372,26 +348,26 @@ export default function TerminalClient({ support, loggedInEmployee, initialSessi
             ) : (
               <>
                 {/* Session Header */}
-                <div className="flex items-start justify-between mb-10 relative z-10">
+                <div className="flex flex-col md:flex-row md:items-start justify-between gap-3 md:gap-0 mb-4 md:mb-10 relative z-10">
                   <div>
-                    <div className="inline-block bg-cyan-50 text-cyan-600 text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-widest mb-3">
+                    <div className="inline-block bg-cyan-50 text-cyan-600 text-[9px] md:text-[10px] font-bold px-2 py-0.5 md:px-3 md:py-1 rounded-full uppercase tracking-widest mb-1.5 md:mb-3">
                       Active Session
                     </div>
-                    <h2 className="text-4xl font-bold tracking-tight mb-2 text-slate-900">
+                    <h2 className="text-xl md:text-4xl font-bold tracking-tight mb-1 md:mb-2 text-slate-900">
                       {selectedSession.routingProcess?.routingProcess?.routingProcess || "Unknown Process"}
                     </h2>
-                    <div className="text-slate-400 font-bold tracking-widest text-sm uppercase">
+                    <div className="text-slate-400 font-bold tracking-widest text-[10px] md:text-sm uppercase">
                       {selectedSession.routingProcess?.inProcess?.workOrderNo}
                     </div>
                   </div>
                   
-                  <div className="flex gap-4">
-                    <div className="bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 flex flex-col items-center justify-center min-w-[100px]">
-                      <div className="text-[9px] font-bold text-slate-400 tracking-widest uppercase mb-1">Station</div>
-                      <div className="text-cyan-500 font-bold uppercase tracking-wider text-sm">DEFAULT</div>
+                  <div className="flex gap-2 md:gap-4 mt-2 md:mt-0">
+                    <div className="bg-slate-50 border border-slate-200 rounded-lg md:rounded-2xl px-2 py-1 md:px-6 md:py-4 flex flex-col items-center justify-center min-w-[60px] md:min-w-[100px]">
+                      <div className="text-[7px] md:text-[9px] font-bold text-slate-400 tracking-widest uppercase mb-0 md:mb-1">Station</div>
+                      <div className="text-cyan-500 font-bold uppercase tracking-wider text-[10px] md:text-sm">DEFAULT</div>
                     </div>
-                    <div className="bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 flex flex-col items-center justify-center min-w-[100px]">
-                      <div className="text-[9px] font-bold text-slate-400 tracking-widest uppercase mb-1">Started</div>
+                    <div className="bg-slate-50 border border-slate-200 rounded-lg md:rounded-2xl px-2 py-1 md:px-6 md:py-4 flex flex-col items-center justify-center min-w-[60px] md:min-w-[100px]">
+                      <div className="text-[7px] md:text-[9px] font-bold text-slate-400 tracking-widest uppercase mb-0 md:mb-1">Started</div>
                       <div className="text-slate-900 font-bold tracking-wider text-sm">
                         {selectedSession.timeIn ? new Date(selectedSession.timeIn).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: false}) : "--:--"}
                       </div>
@@ -418,21 +394,21 @@ export default function TerminalClient({ support, loggedInEmployee, initialSessi
                 </div>
 
                 {/* Action Bar */}
-                <div className="flex gap-4 mb-8 relative z-10">
+                <div className="flex flex-col sm:flex-row flex-wrap gap-2 md:gap-4 mb-4 md:mb-8 relative z-10">
                   <button
                     onClick={() => setPendingAction(selectedSession.isPaused ? "resume" : "pause")}
                     disabled={isPending}
-                    className={`px-6 py-3 rounded-xl font-bold transition-colors shadow-sm text-sm border flex items-center gap-2 ${selectedSession.isPaused ? 'bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-200' : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'}`}
+                    className={`px-3 md:px-6 py-2 md:py-3 rounded-xl font-bold transition-colors shadow-sm text-xs md:text-sm border flex items-center justify-center gap-1.5 md:gap-2 flex-1 sm:min-w-[150px] ${selectedSession.isPaused ? 'bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-200' : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'}`}
                   >
                     {selectedSession.isPaused ? "▶ Resume Job" : "⏸ Pause Job"}
                   </button>
                   <button
                     onClick={handleCompleteSession}
                     disabled={isPending}
-                    className="px-6 py-3 bg-emerald-500 hover:bg-emerald-400 text-white rounded-xl font-bold transition-colors shadow-sm text-sm flex items-center gap-2"
+                    className="px-3 md:px-6 py-2 md:py-3 bg-emerald-500 hover:bg-emerald-400 text-white rounded-xl font-bold transition-colors shadow-sm text-xs md:text-sm flex items-center justify-center gap-1.5 md:gap-2 flex-1 sm:min-w-[150px]"
                   >
-                    <CheckCircle2 size={18} />
-                    Complete Job
+                    <CheckCircle2 size={16} className="md:w-[18px] md:h-[18px]" />
+                    Complete Job / Scan Out
                   </button>
                   {selectedSession.isPaused && (
                     <div className="flex items-center text-amber-600 text-sm font-medium">
@@ -449,11 +425,11 @@ export default function TerminalClient({ support, loggedInEmployee, initialSessi
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                     <div>
                       <div className="text-xs text-slate-500 font-medium mb-1">Drawing Number</div>
-                      <div className="font-semibold text-slate-900">DWG-{selectedSession.routingProcess?.inProcess?.workOrderNo?.split('-').pop() || '0000'}</div>
+                      <div className="font-semibold text-slate-900 text-xs md:text-sm">DWG-{selectedSession.routingProcess?.inProcess?.workOrderNo?.split('-').pop() || '0000'}</div>
                     </div>
                     <div>
                       <div className="text-xs text-slate-500 font-medium mb-1">Machine No.</div>
-                      <div className="font-semibold text-slate-900">{selectedSession.machineCodes || 'N/A'}</div>
+                      <div className="font-semibold text-slate-900 text-xs md:text-sm">{selectedSession.machineCodes || 'N/A'}</div>
                     </div>
                     <div className="col-span-2">
                       <div className="text-xs text-slate-500 font-medium mb-1">Work Instructions</div>
@@ -475,11 +451,11 @@ export default function TerminalClient({ support, loggedInEmployee, initialSessi
                 </div>
 
                 {/* Counters Area */}
-                <div className="grid grid-cols-1 md:grid-cols-[1.5fr_1fr] gap-6 mb-8 relative z-10">
+                <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-3 md:gap-6 mb-4 md:mb-8 relative z-10">
                   
                   {/* TOTAL PRODUCED */}
-                  <div className="bg-slate-50 border border-slate-200 rounded-[2rem] p-8 flex flex-col items-center justify-center shadow-inner relative group">
-                    <div className="absolute top-6 right-6 transition-opacity">
+                  <div className="bg-slate-50 border border-slate-200 rounded-2xl md:rounded-[2rem] p-3 md:p-8 flex flex-col items-center justify-center shadow-inner relative group">
+                    <div className="absolute top-2 right-2 md:top-6 md:right-6 transition-opacity">
                       <button
                         onClick={() => {
                           setIsManualProduced(true);
@@ -488,16 +464,16 @@ export default function TerminalClient({ support, loggedInEmployee, initialSessi
                         className={`p-2 rounded-xl transition-colors ${isManualProduced ? 'bg-cyan-100 text-cyan-600' : 'bg-white text-slate-400 hover:text-cyan-500 shadow-sm border border-slate-200'}`}
                         title="Manual Typing"
                       >
-                        <Keyboard size={20} />
+                        <Keyboard size={16} className="md:w-5 md:h-5" />
                       </button>
                     </div>
-                    <div className="text-[10px] font-bold text-cyan-600 tracking-widest uppercase mb-8">Total Produced</div>
-                    <div className="flex items-center justify-center gap-8 w-full">
+                    <div className="text-[9px] md:text-[10px] font-bold text-cyan-600 tracking-widest uppercase mb-2 md:mb-8 mt-1 md:mt-0">Total Produced</div>
+                    <div className="flex items-center justify-center gap-2 md:gap-8 w-full">
                       <button 
                         onClick={() => setProducedCount(Math.max(0, (Number(producedCount) || 0) - 1))}
-                        className="w-16 h-16 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center hover:bg-slate-200 transition-colors shrink-0"
+                        className="w-10 h-10 md:w-16 md:h-16 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center hover:bg-slate-200 transition-colors shrink-0"
                       >
-                        <Minus size={24} className="text-slate-500" />
+                        <Minus size={20} className="md:w-6 md:h-6 text-slate-500" />
                       </button>
                       <input 
                         ref={producedInputRef}
@@ -511,23 +487,28 @@ export default function TerminalClient({ support, loggedInEmployee, initialSessi
                             setProducedCount("");
                           } else {
                             const val = parseInt(e.target.value, 10);
-                            setProducedCount(isNaN(val) ? "" : Math.max(0, val));
+                            setProducedCount(isNaN(val) ? "" : Math.min(maxAllowedQty, Math.max(0, val)));
                           }
                         }}
-                        className={`text-[2rem] leading-none font-bold tracking-tighter w-48 text-center outline-none focus:ring-0 p-2 m-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none transition-all ${isManualProduced ? 'text-cyan-600 bg-white border-2 border-cyan-500 rounded-2xl shadow-[0_0_0_4px_rgba(6,182,212,0.15)]' : 'text-slate-900 cursor-default border-2 border-transparent bg-transparent'}`}
+                        className={`text-2xl md:text-[2rem] leading-none font-bold tracking-tighter w-16 md:w-48 text-center outline-none focus:ring-0 p-1 md:p-2 m-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none transition-all ${isManualProduced ? 'text-cyan-600 bg-white border-2 border-cyan-500 rounded-xl md:rounded-2xl shadow-[0_0_0_4px_rgba(6,182,212,0.15)]' : 'text-slate-900 cursor-default border-2 border-transparent bg-transparent'}`}
                       />
                       <button 
-                        onClick={() => setProducedCount((Number(producedCount) || 0) + 1)}
-                        className="w-16 h-16 rounded-full bg-cyan-500 flex items-center justify-center hover:bg-cyan-400 transition-colors shadow-lg shadow-cyan-500/30 text-white"
+                        onClick={() => setProducedCount(Math.min(maxAllowedQty, (Number(producedCount) || 0) + 1))}
+                        disabled={(Number(producedCount) || 0) >= maxAllowedQty}
+                        className={`w-10 h-10 md:w-16 md:h-16 rounded-full flex items-center justify-center transition-colors shadow-lg text-white shrink-0 ${
+                          (Number(producedCount) || 0) >= maxAllowedQty 
+                            ? 'bg-cyan-300 cursor-not-allowed shadow-none' 
+                            : 'bg-cyan-500 hover:bg-cyan-400 shadow-cyan-500/30'
+                        }`}
                       >
-                        <Plus size={24} strokeWidth={3} />
+                        <Plus size={20} className="md:w-6 md:h-6" strokeWidth={3} />
                       </button>
                     </div>
                   </div>
 
                   {/* QUALITY FAILURES */}
-                  <div className="bg-rose-50/50 border border-rose-100 rounded-[2rem] p-8 flex flex-col shadow-inner relative group">
-                    <div className="absolute top-6 right-6 transition-opacity">
+                  <div className="bg-rose-50/50 border border-rose-100 rounded-2xl md:rounded-[2rem] p-3 md:p-8 flex flex-col shadow-inner relative group">
+                    <div className="absolute top-2 right-2 md:top-6 md:right-6 transition-opacity">
                       <button
                         onClick={() => {
                           setIsManualDefect(true);
@@ -536,20 +517,20 @@ export default function TerminalClient({ support, loggedInEmployee, initialSessi
                         className={`p-2 rounded-xl transition-colors ${isManualDefect ? 'bg-rose-100 text-rose-600' : 'bg-white text-rose-400 hover:text-rose-500 shadow-sm border border-rose-200'}`}
                         title="Manual Typing"
                       >
-                        <Keyboard size={20} />
+                        <Keyboard size={16} className="md:w-5 md:h-5" />
                       </button>
                     </div>
-                    <div className="flex items-center gap-2 mb-8">
-                      <AlertCircle size={16} className="text-rose-500" />
-                      <div className="text-[10px] font-bold text-rose-500 tracking-widest uppercase">Quality Failures</div>
+                    <div className="flex items-center gap-1.5 md:gap-2 mb-2 md:mb-8 mt-1 md:mt-0">
+                      <AlertCircle size={14} className="md:w-4 md:h-4 text-rose-500" />
+                      <div className="text-[9px] md:text-[10px] font-bold text-rose-500 tracking-widest uppercase">Quality Failures</div>
                     </div>
                     
-                    <div className="flex items-center justify-between mb-8">
+                    <div className="flex items-center justify-center gap-2 md:justify-between md:gap-0 mb-3 md:mb-8">
                       <button 
                         onClick={() => setDefectCount(Math.max(0, (Number(defectCount) || 0) - 1))}
-                        className="w-14 h-14 rounded-2xl bg-white border border-rose-200 flex items-center justify-center hover:bg-rose-50 transition-colors shrink-0"
+                        className="w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-white border border-rose-200 flex items-center justify-center hover:bg-rose-50 transition-colors shrink-0"
                       >
-                        <Minus size={20} className="text-rose-400" />
+                        <Minus size={18} className="md:w-5 md:h-5 text-rose-400" />
                       </button>
                       <input
                         ref={defectInputRef}
@@ -566,21 +547,21 @@ export default function TerminalClient({ support, loggedInEmployee, initialSessi
                             setDefectCount(isNaN(val) ? "" : Math.max(0, val));
                           }
                         }}
-                        className={`text-[2rem] font-bold tracking-tighter w-24 text-center outline-none focus:ring-0 p-2 m-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none transition-all ${isManualDefect ? 'text-rose-500 bg-white border-2 border-rose-400 rounded-2xl shadow-[0_0_0_4px_rgba(244,63,94,0.15)]' : 'text-slate-900 cursor-default border-2 border-transparent bg-transparent'}`}
+                        className={`text-2xl md:text-[2rem] font-bold tracking-tighter w-14 md:w-24 text-center outline-none focus:ring-0 p-1 md:p-2 m-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none transition-all ${isManualDefect ? 'text-rose-500 bg-white border-2 border-rose-400 rounded-xl md:rounded-2xl shadow-[0_0_0_4px_rgba(244,63,94,0.15)]' : 'text-slate-900 cursor-default border-2 border-transparent bg-transparent'}`}
                       />
                       <button 
                         onClick={() => setDefectCount((Number(defectCount) || 0) + 1)}
-                        className="w-14 h-14 rounded-2xl bg-rose-500 flex items-center justify-center hover:bg-rose-400 transition-colors text-white shadow-md shadow-rose-500/20"
+                        className="w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-rose-500 flex items-center justify-center hover:bg-rose-400 transition-colors text-white shadow-md shadow-rose-500/20 shrink-0"
                       >
-                        <Plus size={20} />
+                        <Plus size={18} className="md:w-5 md:h-5" />
                       </button>
                     </div>
                     
-                    <div className="relative mt-auto">
+                    <div className="relative mt-2 md:mt-auto">
                       <SearchableSelect 
                         value={defectReason}
                         onChange={(e) => setDefectReason(e.target.value)}
-                        className="w-full appearance-none bg-white border border-slate-200 text-slate-700 text-sm font-medium rounded-xl px-4 py-3.5 outline-none focus:border-rose-400 focus:ring-2 focus:ring-rose-500/20 shadow-sm cursor-pointer"
+                        className="w-full appearance-none bg-white border border-slate-200 text-slate-700 text-[10px] md:text-sm font-medium rounded-lg md:rounded-xl px-2 py-1.5 md:px-4 md:py-3.5 outline-none focus:border-rose-400 focus:ring-2 focus:ring-rose-500/20 shadow-sm cursor-pointer"
                       >
                         <option value="">Reason for defect...</option>
                         <option value="scratch">Surface Scratch</option>

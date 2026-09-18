@@ -211,25 +211,32 @@ export default function ProductionIntake({ isOpen, onClose, support, onSuccess, 
     <div className="fixed inset-0 z-50 bg-slate-50 flex flex-col font-sans text-slate-900 overflow-hidden h-screen">
       
       {/* TOP HEADER */}
-      <div className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4 sticky top-0 z-10 shadow-sm">
-        <div className="flex items-center gap-6">
-          <button 
-            onClick={onClose}
-            className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200 transition-colors"
-          >
-            <ArrowLeft size={20} className="text-slate-600" />
-          </button>
+      <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-200 bg-white px-3 py-2 md:px-6 md:py-4 sticky top-0 z-10 shadow-sm gap-2 md:gap-0">
+        <div className="flex items-center justify-between w-full md:w-auto">
+          <div className="flex items-center gap-2 md:gap-6">
+            <button 
+              onClick={onClose}
+              className="w-8 h-8 md:w-10 md:h-10 flex items-center justify-center rounded-lg md:rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200 transition-colors"
+            >
+              <ArrowLeft size={20} className="text-slate-600" />
+            </button>
           
-          <div className="flex items-center gap-3">
-            <h1 className="text-xl font-black italic tracking-tighter text-slate-900">PRODUCTION INTAKE</h1>
-            <div className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-widest ml-4">
-              <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-              Scan Node #012 • Active
+            <div className="flex items-center gap-2 md:gap-3">
+              <h1 className="text-base md:text-xl font-black italic tracking-tighter text-slate-900 leading-none">PRODUCTION INTAKE</h1>
+              <div className="hidden sm:flex items-center gap-2 text-[10px] md:text-xs font-bold text-slate-500 uppercase tracking-widest ml-2 md:ml-4">
+                <div className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-emerald-500"></div>
+                Scan Node #012
+              </div>
             </div>
           </div>
+          
+          <button onClick={onClose} className="md:hidden flex items-center gap-1.5 px-2 py-1 rounded-md border border-slate-200 text-[10px] font-bold text-slate-600 hover:bg-slate-50">
+            <Monitor size={12} />
+            DASHBOARD
+          </button>
         </div>
 
-        <div className="flex items-center gap-8">
+        <div className="hidden md:flex items-center gap-8">
           <button onClick={onClose} className="flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 text-sm font-bold text-slate-600 hover:bg-slate-50 transition-colors">
             <Monitor size={16} />
             LIVE DASHBOARD
@@ -255,22 +262,22 @@ export default function ProductionIntake({ isOpen, onClose, support, onSuccess, 
         </div>
       </div>
 
-      <div className="flex-1 p-6 md:p-8 max-w-5xl mx-auto w-full grid grid-cols-1 md:grid-cols-2 gap-8 min-h-0 overflow-y-auto items-start">
+      <div className="flex-1 p-2 md:p-8 max-w-5xl mx-auto w-full grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-8 min-h-0 overflow-y-auto items-start">
         
         {/* LEFT PANEL: WORK ORDER CAPTURE */}
-        <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm flex flex-col min-h-0">
-          <div className="flex items-center justify-between mb-6">
+        <div className="bg-white border border-slate-200 rounded-xl md:rounded-3xl p-3 md:p-6 shadow-sm flex flex-col min-h-[300px] md:min-h-0 h-full">
+          <div className="flex items-center justify-between mb-3 md:mb-6">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-slate-50 border border-slate-200 rounded-lg">
                 <QrCode size={20} className="text-emerald-600" />
               </div>
               <h2 className="text-sm font-bold tracking-widest uppercase text-slate-900">Work Order Capture</h2>
             </div>
-            <Camera size={32} className="text-slate-200" />
+            <Camera size={24} className="md:w-8 md:h-8 text-slate-200" />
           </div>
 
-          <div className="flex-1 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col items-center justify-center relative min-h-0 overflow-hidden mb-6">
-            <div className="absolute top-4 right-4 w-8 h-8 rounded-full bg-black/5 flex items-center justify-center text-xs font-bold text-slate-400 z-10">
+          <div className="flex-1 bg-slate-50 border border-slate-200 rounded-lg md:rounded-2xl flex flex-col items-center justify-center relative min-h-0 overflow-hidden mb-3 md:mb-6 min-h-[150px] md:min-h-[200px]">
+            <div className="absolute top-2 right-2 md:top-4 md:right-4 w-6 h-6 md:w-8 md:h-8 rounded-full bg-black/5 flex items-center justify-center text-[10px] md:text-xs font-bold text-slate-400 z-10">
               i
             </div>
             
@@ -286,11 +293,11 @@ export default function ProductionIntake({ isOpen, onClose, support, onSuccess, 
                 />
               </div>
             ) : (
-              <div className="flex flex-col items-center text-center p-8">
-                <div className="w-16 h-16 border-2 border-slate-300 rounded-xl mb-6 relative">
-                  <div className="absolute inset-2 border-2 border-slate-400 rounded-lg border-dashed"></div>
-                  <div className="absolute bottom-[-10px] right-[-10px] bg-slate-50 p-1">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-500">
+              <div className="flex flex-col items-center text-center p-4 md:p-8">
+                <div className="w-10 h-10 md:w-16 md:h-16 border-2 border-slate-300 rounded-lg md:rounded-xl mb-3 md:mb-6 relative">
+                  <div className="absolute inset-1.5 md:inset-2 border-2 border-slate-400 rounded-md md:rounded-lg border-dashed"></div>
+                  <div className="absolute bottom-[-6px] right-[-6px] md:bottom-[-10px] md:right-[-10px] bg-slate-50 p-0.5 md:p-1">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-500 w-4 h-4 md:w-6 md:h-6">
                       <path d="M18 20V6a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v14"></path>
                       <path d="M2 20h20"></path>
                       <path d="M14 12v.01"></path>
@@ -299,7 +306,7 @@ export default function ProductionIntake({ isOpen, onClose, support, onSuccess, 
                 </div>
                 <button 
                   onClick={() => setIsCameraOpen(true)}
-                  className="text-lg font-bold text-slate-900 mb-2 hover:text-cyan-600 transition-colors cursor-pointer"
+                  className="font-bold text-sm md:text-base text-slate-900 mb-1"
                 >
                   Request Camera Permissions
                 </button>
@@ -327,7 +334,7 @@ export default function ProductionIntake({ isOpen, onClose, support, onSuccess, 
                       }
                     }}
                   />
-                  <span className="text-sm font-bold text-slate-500 underline decoration-slate-300 hover:text-slate-700">
+                  <span className="text-[10px] md:text-sm font-medium text-slate-500 underline decoration-slate-300 hover:text-slate-700">
                     Scan an Image File
                   </span>
                 </label>
@@ -341,24 +348,27 @@ export default function ProductionIntake({ isOpen, onClose, support, onSuccess, 
           <div>
             <div className="text-[10px] font-bold tracking-widest uppercase text-slate-500 mb-3">Manual ID Entry</div>
             <div className="relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+              <Search className="absolute left-3 md:left-4 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 md:w-5 md:h-5" />
               <input 
                 value={woNo}
                 onChange={(e) => setWoNo(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && lookup()}
                 type="text" 
-                placeholder="Type Work Order Number..." 
-                className="w-full pl-12 pr-4 py-4 bg-white border border-slate-200 rounded-xl text-slate-900 font-medium placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all shadow-sm"
+                placeholder="WO Number..." 
+                className="w-full bg-white border-2 border-slate-200 rounded-lg md:rounded-xl py-2 md:py-4 pl-8 md:pl-12 pr-16 md:pr-24 text-xs md:text-base font-bold text-slate-900 focus:outline-none focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/10 shadow-sm"
               />
               <button 
                 onClick={() => lookup()}
                 disabled={isPending || !woNo.trim()}
-                className="absolute right-2 top-1/2 -translate-y-1/2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm rounded-lg transition-colors disabled:opacity-50"
+                className="absolute right-1.5 md:right-2 top-1/2 -translate-y-1/2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 md:px-4 py-1 md:py-2 rounded-md md:rounded-lg text-[10px] md:text-sm font-bold transition-colors disabled:opacity-50"
               >
                 Search
               </button>
             </div>
             {error && <div className="mt-3 text-sm text-rose-600 bg-rose-50 border border-rose-200 p-3 rounded-lg">{error}</div>}
+            <p className="text-center text-[10px] md:text-sm text-slate-500 font-medium mt-2 md:mt-3">
+              Enter or scan a Work Order to begin...
+            </p>
           </div>
         </div>
 
@@ -371,20 +381,20 @@ export default function ProductionIntake({ isOpen, onClose, support, onSuccess, 
             <h2 className="text-sm font-bold tracking-widest uppercase text-slate-900">Production Selection</h2>
           </div>
 
-          <div className="grid grid-cols-2 gap-4 mb-8">
-            <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50">
-              <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">
-                <Calendar size={12} /> Date
+          <div className="grid grid-cols-2 gap-2 md:gap-4 mb-3 md:mb-6">
+            <div className="border border-slate-200 rounded-lg md:rounded-xl p-2 md:p-4 text-center">
+              <div className="flex items-center justify-center gap-1.5 md:gap-2 text-[9px] md:text-xs font-bold text-slate-400 uppercase tracking-widest mb-0.5 md:mb-1">
+                <Calendar size={12} className="md:w-4 md:h-4" /> Date
               </div>
-              <div className="text-sm font-bold text-slate-900">
+              <div className="text-xs md:text-sm font-bold text-slate-900">
                 {time.toLocaleDateString('en-GB')}
               </div>
             </div>
-            <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50">
-              <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">
-                <Clock size={12} /> Capture
+            <div className="border border-slate-200 rounded-lg md:rounded-xl p-2 md:p-4 text-center">
+              <div className="flex items-center justify-center gap-1.5 md:gap-2 text-[9px] md:text-xs font-bold text-slate-400 uppercase tracking-widest mb-0.5 md:mb-1">
+                <Clock size={12} className="md:w-4 md:h-4" /> Capture
               </div>
-              <div className="text-sm font-bold text-slate-900">
+              <div className="text-xs md:text-sm font-bold text-slate-900 font-mono">
                 {time.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: false})}
               </div>
             </div>
@@ -415,6 +425,7 @@ export default function ProductionIntake({ isOpen, onClose, support, onSuccess, 
               </div>
             ) : (
                 <div className="relative">
+                  <Search className="absolute left-3 md:left-4 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 md:w-5 md:h-5" />
                   <input 
                     value={woNo}
                     onChange={(e) => setWoNo(e.target.value)}
@@ -424,9 +435,15 @@ export default function ProductionIntake({ isOpen, onClose, support, onSuccess, 
                       }
                     }}
                     type="text" 
-                    placeholder="Enter or scan a Work Order to begin..." 
-                    className="w-full px-4 py-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 focus:border-cyan-500 transition-all shadow-sm"
+                    placeholder="Enter or scan WO..." 
+                    className="w-full pl-8 md:pl-12 pr-16 md:pr-24 py-2.5 md:py-4 bg-white border-2 border-slate-200 rounded-lg md:rounded-xl text-xs md:text-sm font-bold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-cyan-500/10 focus:border-cyan-500 transition-all shadow-sm"
                   />
+                  <button 
+                    onClick={() => lookup()}
+                    className="absolute right-1.5 md:right-2 top-1/2 -translate-y-1/2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 md:px-4 py-1.5 md:py-2 rounded-md md:rounded-lg text-[10px] md:text-sm font-bold transition-colors"
+                  >
+                    Search
+                  </button>
                 </div>
             )}
           </div>
@@ -438,38 +455,53 @@ export default function ProductionIntake({ isOpen, onClose, support, onSuccess, 
           )}
 
           {wo && (
-            <div className="grid grid-cols-2 gap-4 mb-6 flex-1 overflow-visible pr-2 content-start">
-              <div className="col-span-2 sm:col-span-1">
-                <Select
-                  label="In-Process"
-                  value={inForm.inProcessId}
-                  onChange={(v) =>
-                    setInForm({ inProcessId: v, mainProcessId: "", routingProcessProfileId: "", employeeId: inForm.employeeId, machineCodes: inForm.machineCodes })
-                  }
-                  options={inProcessOptions.map((ip: any) => ({ id: ip.id, label: `${ip.sn}. ${ip.description}` }))}
-                />
+            <div className="space-y-4 md:space-y-8 relative mb-6">
+              
+              {/* Step 1 */}
+              <div className="relative">
+                <div className="absolute left-[-16px] md:left-[-24px] top-1.5 md:top-2 w-1.5 md:w-2 h-1.5 md:h-2 rounded-full bg-cyan-500 ring-4 ring-cyan-500/20"></div>
+                <label className="block text-[10px] md:text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5 md:mb-3">
+                  1. Select Next Operation
+                </label>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="col-span-2 sm:col-span-1">
+                    <Select
+                      label="In-Process"
+                      value={inForm.inProcessId}
+                      onChange={(v) =>
+                        setInForm({ inProcessId: v, mainProcessId: "", routingProcessProfileId: "", employeeId: inForm.employeeId, machineCodes: inForm.machineCodes })
+                      }
+                      options={inProcessOptions.map((ip: any) => ({ id: ip.id, label: `${ip.sn}. ${ip.description}` }))}
+                    />
+                  </div>
+                  <div className="col-span-2 sm:col-span-1">
+                    <Select
+                      label="Main Process"
+                      value={inForm.mainProcessId}
+                      onChange={(v) => setInForm({ ...inForm, mainProcessId: v, routingProcessProfileId: "" })}
+                      options={mainProcessOptions}
+                      disabled={!inForm.inProcessId}
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <Select
+                      label="Routing Process"
+                      value={inForm.routingProcessProfileId}
+                      onChange={(v) => setInForm({ ...inForm, routingProcessProfileId: v })}
+                      options={routingProcessOptions}
+                      disabled={!inForm.mainProcessId}
+                      dropdownPosition="top"
+                    />
+                  </div>
+                </div>
               </div>
-              <div className="col-span-2 sm:col-span-1">
-                <Select
-                  label="Main Process"
-                  value={inForm.mainProcessId}
-                  onChange={(v) => setInForm({ ...inForm, mainProcessId: v, routingProcessProfileId: "" })}
-                  options={mainProcessOptions}
-                  disabled={!inForm.inProcessId}
-                />
-              </div>
-              <div className="col-span-2 sm:col-span-1">
-                <Select
-                  label="Routing Process"
-                  value={inForm.routingProcessProfileId}
-                  onChange={(v) => setInForm({ ...inForm, routingProcessProfileId: v })}
-                  options={routingProcessOptions}
-                  disabled={!inForm.mainProcessId}
-                  dropdownPosition="top"
-                />
-              </div>
-              <div className="col-span-2 sm:col-span-1">
-                {/* Employee Pre-filled Option */}
+
+              {/* Step 2 */}
+              <div className="relative">
+                <div className="absolute left-[-16px] md:left-[-24px] top-1.5 md:top-2 w-1.5 md:w-2 h-1.5 md:h-2 rounded-full bg-indigo-500 ring-4 ring-indigo-500/20"></div>
+                <label className="block text-[10px] md:text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5 md:mb-3">
+                  2. Operator Login
+                </label>
                 <Select
                   label="Employee"
                   value={inForm.employeeId}
@@ -481,8 +513,13 @@ export default function ProductionIntake({ isOpen, onClose, support, onSuccess, 
                   }))}
                 />
               </div>
-              <div className="col-span-2">
-                <label className="text-xs font-bold text-slate-500 tracking-wider uppercase mb-1.5 block">Machine No.</label>
+
+              {/* Step 3 */}
+              <div className="relative">
+                <div className="absolute left-[-16px] md:left-[-24px] top-1.5 md:top-2 w-1.5 md:w-2 h-1.5 md:h-2 rounded-full bg-amber-500 ring-4 ring-amber-500/20"></div>
+                <label className="block text-[10px] md:text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5 md:mb-3">
+                  3. Machine Assignment <span className="text-slate-400 font-normal normal-case ml-1">(Optional)</span>
+                </label>
                 <input
                   type="text"
                   value={inForm.machineCodes}
@@ -494,8 +531,7 @@ export default function ProductionIntake({ isOpen, onClose, support, onSuccess, 
             </div>
           )}
 
-          <div className="mt-auto pt-4 border-t border-slate-100 flex gap-4">
-
+          <div className="mt-auto flex flex-col sm:flex-row gap-2 md:gap-4">
             <button 
               onClick={doScanIn}
               disabled={isPending || !wo || !inForm.employeeId || !inForm.routingProcessProfileId}
@@ -504,10 +540,8 @@ export default function ProductionIntake({ isOpen, onClose, support, onSuccess, 
               <Send size={18} />
               {isPending ? "Starting..." : "SCAN IN"}
             </button>
-          </div>
-
         </div>
-
+        </div>
       </div>
     </div>
   );

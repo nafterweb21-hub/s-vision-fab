@@ -321,10 +321,10 @@ Branch: ${bank.branchCode || ""}`;
     setErrorMsg("");
     try {
       if (isEdit) {
-        const res = await updateDebitNote(id!, payload);
+        const res = await updateInvoice(id!, payload);
         if (!res.success) throw new Error(res.error || "Failed to update debit note");
       } else {
-        const res = await createDebitNote(payload);
+        const res = await createInvoice(payload);
         if (!res.success) throw new Error(res.error || "Failed to create debit note");
       }
       router.push("/dashboard/sales/invoice");

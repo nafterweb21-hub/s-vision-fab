@@ -150,7 +150,17 @@ export default async function WorkOrderRoutingPage({
       else if (statuses.some((s: string) => s === "WIP" || s === "Completed")) derived = "WIP";
       else derived = "New";
     }
-    return { ...ip, derivedStatus: derived };
+    
+    if (workOrder.status === "Completed") {
+      derived = "Completed";
+    }
+
+    const overriddenRoutingProcesses = (ip?.routingProcesses || []).map((r: any) => ({
+      ...r,
+      status: workOrder.status === "Completed" ? "Completed" : r.status
+    }));
+
+    return { ...ip, derivedStatus: derived, routingProcesses: overriddenRoutingProcesses };
   })));
 
   return (
@@ -186,6 +196,12 @@ export default async function WorkOrderRoutingPage({
             className="border-b-2 border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 py-4 px-1 text-sm font-medium"
           >
             Timesheets & Parameters
+          </Link>
+          <Link
+            href={`/dashboard/production/work-order/${id}/files`}
+            className="border-b-2 border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 py-4 px-1 text-sm font-medium"
+          >
+            Files
           </Link>
         </nav>
       </div>

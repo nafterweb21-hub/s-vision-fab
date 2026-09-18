@@ -96,7 +96,7 @@ export async function getTerminalSupportData() {
       prisma.workOrder.findMany({
         where: { status: { in: ["Proceed", "WIP"] } },
         select: { workOrderNo: true },
-        orderBy: { date: "desc" },
+        orderBy: { createdAt: "desc" },
         take: 50,
       }),
     ]);
@@ -141,8 +141,7 @@ export async function scanIn(input: { workOrderNo: string; inProcessId: string; 
     }
     let target = candidates.find((c: any) => c.status !== "Completed");
     if (!target) {
-      // Allow scanning into the last completed process for rework purposes
-      target = candidates[candidates.length - 1];
+      return { success: false, error: "This process has already been completed." };
     }
 
     // ── Sequence + role enforcement ─────────────────────────────────────────
@@ -451,7 +450,25 @@ export async function scanOut(payload: ScanOutPayload) {
 
     const wo = ts.routingProcess.inProcess.workOrder;
 
+    // Validate overproduction
+    if (wo.quantity != null) {
+      const existingTimesheets = await prisma.productionTimesheet.findMany({
+        where: { routingProcessId: ts.routingProcessId, id: { not: ts.id } }
+      });
+      const previousGood = existingTimesheets.reduce(
+        (acc: number, t: any) => acc + (t.completedQty ? Number(t.completedQty) : 0),
+        0
+      );
+      const newGood = payload.completedQty ? Number(payload.completedQty) : 0;
+      const combinedGood = previousGood + newGood;
 
+      if (combinedGood > Number(wo.quantity)) {
+        return { 
+          success: false, 
+          error: `Overproduction error: The target is ${wo.quantity} pieces. You have already completed ${previousGood} pieces. You cannot submit ${newGood} pieces now.`
+        };
+      }
+    }
 
     const timeOut = new Date();
     const totalMinutes =
@@ -464,6 +481,8 @@ export async function scanOut(payload: ScanOutPayload) {
         timeOut,
         totalMinutes,
         completedQty: payload.completedQty,
+        rejectedQty: payload.rejectedQty || null,
+        rejectReason: payload.rejectReason || null,
         completed: true,
         machineCodes: payload.machineCodes || null,
       },

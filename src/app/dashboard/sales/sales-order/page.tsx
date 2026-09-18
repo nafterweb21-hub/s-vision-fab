@@ -115,13 +115,13 @@ export default function SalesOrderListPage() {
           <p className="text-sm text-blue-500">Loading orders...</p>
         </div>
       ) : errorMsg ? (
-        <div className="bg-rose-50 border border-rose-200 rounded-xl p-6 flex items-center gap-3 text-rose-700 ">
+        <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 sm:p-6 flex items-center gap-3 text-rose-700 ">
           <AlertCircle size={18} />
           <p className="text-sm font-medium">{errorMsg}</p>
         </div>
       ) : orders.length === 0 ? (
-        <div className="bg-white border border-blue-200 rounded-xl p-12 text-center shadow-sm">
-          <div className="mx-auto w-12 h-12 rounded-full bg-indigo-500/10 flex items-center justify-center mb-4">
+        <div className="bg-white border border-blue-200 rounded-xl p-6 sm:p-12 text-center shadow-sm">
+          <div className="mx-auto w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-indigo-500/10 flex items-center justify-center mb-4">
             <ShoppingCart size={22} className="text-indigo-500" />
           </div>
           <p className="text-blue-600 font-semibold">No sales orders found.</p>
@@ -132,33 +132,33 @@ export default function SalesOrderListPage() {
       ) : (
         <div className="bg-white border border-blue-200 rounded-xl shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left whitespace-nowrap">
-              <thead className="text-xs text-blue-500 bg-blue-50/50 uppercase tracking-wider border-b border-blue-200 ">
+            <table className="w-full text-xs sm:text-sm text-left whitespace-nowrap">
+              <thead className="text-[10px] sm:text-xs text-blue-500 bg-blue-50/50 uppercase tracking-wider border-b border-blue-200 ">
                 <tr>
-                  <th className="px-6 py-4">Order No</th>
-                  <th className="px-6 py-4">Date</th>
-                  <th className="px-6 py-4">Type</th>
-                  <th className="px-6 py-4">Customer</th>
-                  <th className="px-6 py-4">Salesperson</th>
-                  <th className="px-6 py-4 text-right">Amount</th>
-                  <th className="px-6 py-4">Status</th>
-                  <th className="px-6 py-4 text-right">Action</th>
+                  <th className="px-2 sm:px-6 py-2 sm:py-4">Order No</th>
+                  <th className="px-2 sm:px-6 py-2 sm:py-4 hidden sm:table-cell">Date</th>
+                  <th className="px-2 sm:px-6 py-2 sm:py-4 hidden md:table-cell">Type</th>
+                  <th className="px-2 sm:px-6 py-2 sm:py-4">Customer</th>
+                  <th className="px-2 sm:px-6 py-2 sm:py-4 hidden lg:table-cell">Salesperson</th>
+                  <th className="px-2 sm:px-6 py-2 sm:py-4 text-right hidden sm:table-cell">Amount</th>
+                  <th className="px-2 sm:px-6 py-2 sm:py-4">Status</th>
+                  <th className="px-2 sm:px-6 py-2 sm:py-4 text-right">Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-blue-100 ">
+              <tbody className="divide-y divide-blue-100 text-[10px] sm:text-sm">
                 {orders.map((order) => (
                   <tr key={order.id} className="hover:bg-blue-50/50 :bg-blue-800/20 transition-colors group">
-                    <td className="px-6 py-4 font-bold text-blue-900 ">
+                    <td className="px-2 sm:px-6 py-2 sm:py-4 font-bold text-blue-900 ">
                       <Link href={`/dashboard/sales/sales-order/${order.id}`} className="hover:text-indigo-600 :text-indigo-400 transition-colors">
                         {order.orderNo}
-                        {order.revision > 0 && <span className="ml-1 text-xs text-blue-500 font-normal">v{order.revision}</span>}
+                        {order.revision > 0 && <span className="ml-1 text-[8px] sm:text-xs text-blue-500 font-normal">v{order.revision}</span>}
                       </Link>
                     </td>
-                    <td className="px-6 py-4 text-blue-700 ">
+                    <td className="px-2 sm:px-6 py-2 sm:py-4 text-blue-700 hidden sm:table-cell">
                       {new Date(order.date).toLocaleDateString()}
                     </td>
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-semibold border ${
+                    <td className="px-2 sm:px-6 py-2 sm:py-4 hidden md:table-cell">
+                      <span className={`inline-flex px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[8px] sm:text-xs font-semibold border ${
                         order.orderType === "Sub-contract"
                           ? "bg-violet-50 text-violet-700 border-violet-200/60"
                           : "bg-slate-50 text-slate-700 border-slate-200"
@@ -166,54 +166,54 @@ export default function SalesOrderListPage() {
                         {order.orderType || "Direct"}
                       </span>
                     </td>
-                    <td className="px-6 py-4 font-medium text-blue-700 ">
+                    <td className="px-2 sm:px-6 py-2 sm:py-4 font-medium text-blue-700 truncate max-w-[100px] sm:max-w-none">
                       {order.customer?.customerName || "—"}
                     </td>
-                    <td className="px-6 py-4 text-blue-700 ">
+                    <td className="px-2 sm:px-6 py-2 sm:py-4 text-blue-700 hidden lg:table-cell">
                       {order.salesperson?.name || "—"}
                     </td>
-                    <td className="px-6 py-4 text-right font-mono font-semibold text-blue-900 ">
+                    <td className="px-2 sm:px-6 py-2 sm:py-4 text-right font-mono font-semibold text-blue-900 hidden sm:table-cell">
                       {order.currency?.code} {Number(order.amountAfterTax || 0).toFixed(2)}
                     </td>
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${
+                    <td className="px-2 sm:px-6 py-2 sm:py-4">
+                      <span className={`inline-flex items-center gap-1 sm:gap-1.5 px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[8px] sm:text-xs font-semibold border ${
                         order.status === "Confirmed"
                           ? "bg-emerald-50 text-emerald-700 border-emerald-200/60 "
                           : order.status === "Closed"
                           ? "bg-blue-100 text-blue-600 border-blue-200 "
                           : "bg-amber-50 text-amber-700 border-amber-200/60 "
                       }`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${
+                        <span className={`w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full ${
                           order.status === "Confirmed" ? "bg-emerald-500" : order.status === "Closed" ? "bg-blue-400" : "bg-amber-500"
                         }`} />
                         {order.status}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
+                    <td className="px-2 sm:px-6 py-2 sm:py-4 text-right">
+                      <div className="flex flex-col sm:flex-row items-end sm:items-center justify-end gap-1 sm:gap-2">
                         {order.status === "Draft" && (
                           <>
-                            <Link href={`/dashboard/sales/sales-order/${order.id}`} className="px-2.5 py-1.5 text-xs font-semibold text-blue-700 bg-blue-100 rounded-lg hover:bg-blue-200 transition-colors">Save</Link>
-                            <Link href={`/dashboard/sales/sales-order/${order.id}`} className="px-2.5 py-1.5 text-xs font-semibold text-blue-700 bg-blue-100 rounded-lg hover:bg-blue-200 transition-colors">Edit</Link>
-                            <Link href={`/dashboard/sales/sales-order/${order.id}`} className="px-2.5 py-1.5 text-xs font-semibold text-white bg-indigo-600 rounded-lg hover:bg-indigo-500 transition-colors">Confirm</Link>
-                            <Link href={`/dashboard/sales/sales-order/${order.id}`} className="px-2.5 py-1.5 text-xs font-semibold text-rose-700 bg-rose-100 rounded-lg hover:bg-rose-200 transition-colors">Void</Link>
+                            <Link href={`/dashboard/sales/sales-order/${order.id}`} className="px-1.5 sm:px-2.5 py-0.5 sm:py-1.5 text-[10px] sm:text-xs font-semibold text-blue-700 bg-blue-100 rounded sm:rounded-lg hover:bg-blue-200 transition-colors">Save</Link>
+                            <Link href={`/dashboard/sales/sales-order/${order.id}`} className="px-1.5 sm:px-2.5 py-0.5 sm:py-1.5 text-[10px] sm:text-xs font-semibold text-blue-700 bg-blue-100 rounded sm:rounded-lg hover:bg-blue-200 transition-colors">Edit</Link>
+                            <Link href={`/dashboard/sales/sales-order/${order.id}`} className="px-1.5 sm:px-2.5 py-0.5 sm:py-1.5 text-[10px] sm:text-xs font-semibold text-white bg-indigo-600 rounded sm:rounded-lg hover:bg-indigo-500 transition-colors">Confirm</Link>
+                            <Link href={`/dashboard/sales/sales-order/${order.id}`} className="px-1.5 sm:px-2.5 py-0.5 sm:py-1.5 text-[10px] sm:text-xs font-semibold text-rose-700 bg-rose-100 rounded sm:rounded-lg hover:bg-rose-200 transition-colors">Void</Link>
                           </>
                         )}
                         {order.status === "Confirmed" && (
                           <>
-                            <Link href={`/dashboard/sales/sales-order/${order.id}`} className="px-2.5 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors">View</Link>
-                            <Link href={`/dashboard/sales/sales-order/${order.id}`} className="px-2.5 py-1.5 text-xs font-semibold text-amber-700 bg-amber-100 rounded-lg hover:bg-amber-200 transition-colors">Revise</Link>
-                            <Link href={`/dashboard/sales/sales-order/${order.id}`} className="px-2.5 py-1.5 text-xs font-semibold text-rose-700 bg-rose-100 rounded-lg hover:bg-rose-200 transition-colors">Stop Purchase</Link>
+                            <Link href={`/dashboard/sales/sales-order/${order.id}`} className="px-1.5 sm:px-2.5 py-0.5 sm:py-1.5 text-[10px] sm:text-xs font-semibold text-slate-700 bg-slate-100 rounded sm:rounded-lg hover:bg-slate-200 transition-colors">View</Link>
+                            <Link href={`/dashboard/sales/sales-order/${order.id}`} className="px-1.5 sm:px-2.5 py-0.5 sm:py-1.5 text-[10px] sm:text-xs font-semibold text-amber-700 bg-amber-100 rounded sm:rounded-lg hover:bg-amber-200 transition-colors">Revise</Link>
+                            <Link href={`/dashboard/sales/sales-order/${order.id}`} className="px-1.5 sm:px-2.5 py-0.5 sm:py-1.5 text-[10px] sm:text-xs font-semibold text-rose-700 bg-rose-100 rounded sm:rounded-lg hover:bg-rose-200 transition-colors hidden sm:inline-flex">Stop Purchase</Link>
                           </>
                         )}
                         {order.status === "Revised" && (
                           <>
-                            <Link href={`/dashboard/sales/sales-order/${order.id}`} className="px-2.5 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors">View</Link>
-                            <Link href={`/dashboard/sales/sales-order/${order.id}`} className="px-2.5 py-1.5 text-xs font-semibold text-white bg-indigo-600 rounded-lg hover:bg-indigo-500 transition-colors">Confirm</Link>
+                            <Link href={`/dashboard/sales/sales-order/${order.id}`} className="px-1.5 sm:px-2.5 py-0.5 sm:py-1.5 text-[10px] sm:text-xs font-semibold text-slate-700 bg-slate-100 rounded sm:rounded-lg hover:bg-slate-200 transition-colors">View</Link>
+                            <Link href={`/dashboard/sales/sales-order/${order.id}`} className="px-1.5 sm:px-2.5 py-0.5 sm:py-1.5 text-[10px] sm:text-xs font-semibold text-white bg-indigo-600 rounded sm:rounded-lg hover:bg-indigo-500 transition-colors">Confirm</Link>
                           </>
                         )}
                         {(order.status === "Closed" || order.status === "Void" || order.status === "Old Revise") && (
-                          <Link href={`/dashboard/sales/sales-order/${order.id}`} className="px-2.5 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors">View Only</Link>
+                          <Link href={`/dashboard/sales/sales-order/${order.id}`} className="px-1.5 sm:px-2.5 py-0.5 sm:py-1.5 text-[10px] sm:text-xs font-semibold text-slate-700 bg-slate-100 rounded sm:rounded-lg hover:bg-slate-200 transition-colors">View Only</Link>
                         )}
                       </div>
                     </td>

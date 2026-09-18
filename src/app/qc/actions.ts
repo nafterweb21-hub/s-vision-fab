@@ -184,6 +184,7 @@ export async function submitWorkOrderQc(
   } else if (qcAcceptance === "Rejected") {
     updateData.acceptedQty = Number(wo?.acceptedQty || 0) + (acceptedQty || 0);
     updateData.rejectedQty = Number(wo?.rejectedQty || 0) + (rejectedQty || 0);
+    updateData.finalApprovedQty = Number(wo?.finalApprovedQty || 0) + (acceptedQty || 0);
   }
 
   await prisma.workOrder.update({

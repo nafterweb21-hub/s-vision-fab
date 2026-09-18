@@ -49,18 +49,18 @@ export function LoginForm() {
   return (
     <div className="w-full max-w-md space-y-8">
       <div>
-        <h2 className="mt-6 text-3xl font-extrabold tracking-tight text-gray-900">
+        <h2 className="mt-1 md:mt-6 text-2xl md:text-3xl font-extrabold tracking-tight text-gray-900">
           Welcome back
         </h2>
-        <p className="mt-2 text-sm text-gray-600">
+        <p className="mt-2 text-xs md:text-sm text-gray-600">
           Please sign in to your account to continue.
         </p>
       </div>
 
-      <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-        <div className="space-y-4 rounded-md shadow-sm">
+      <form className="mt-6 md:mt-8 space-y-4 md:space-y-6" onSubmit={handleSubmit}>
+        <div className="space-y-3 md:space-y-4 rounded-md shadow-sm">
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+            <label htmlFor="email" className="block text-xs md:text-sm font-medium text-gray-700">
               Email address
             </label>
             <div className="mt-1">
@@ -72,14 +72,14 @@ export function LoginForm() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="block w-full appearance-none rounded-xl border border-gray-300 px-4 py-3 placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-indigo-500 sm:text-sm transition-colors"
+                className="block w-full appearance-none rounded-xl border border-gray-300 px-3 py-2 md:px-4 md:py-3 placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-indigo-500 sm:text-sm transition-colors"
                 placeholder="you@company.com"
               />
             </div>
           </div>
 
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+            <label htmlFor="password" className="block text-xs md:text-sm font-medium text-gray-700">
               Password
             </label>
             <div className="relative mt-1">
@@ -91,7 +91,7 @@ export function LoginForm() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="block w-full appearance-none rounded-xl border border-gray-300 px-4 py-3 pr-10 placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-indigo-500 sm:text-sm transition-colors"
+                className="block w-full appearance-none rounded-xl border border-gray-300 px-3 py-2 md:px-4 md:py-3 pr-10 placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-indigo-500 sm:text-sm transition-colors"
                 placeholder="••••••••"
               />
               <button
@@ -105,7 +105,7 @@ export function LoginForm() {
           </div>
         </div>
 
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-0">
           <div className="flex items-center">
             <input
               id="remember-me"
@@ -115,12 +115,12 @@ export function LoginForm() {
               onChange={(e) => setRememberMe(e.target.checked)}
               className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 transition-colors"
             />
-            <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-900">
+            <label htmlFor="remember-me" className="ml-2 block text-xs md:text-sm text-gray-900">
               Remember me
             </label>
           </div>
 
-          <div className="text-sm">
+          <div className="text-xs md:text-sm">
             <a href="#" className="font-medium text-indigo-600 hover:text-indigo-500 transition-colors">
               Forgot your password?
             </a>

@@ -11,11 +11,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No file uploaded." }, { status: 400 });
     }
 
-    // Validate type (PDF/Image)
-    const allowedTypes = ["application/pdf", "image/png", "image/jpeg", "image/jpg", "image/gif"];
-    if (!allowedTypes.includes(file.type)) {
+    // Basic generic file validation
+    if (file.size === 0) {
       return NextResponse.json(
-        { error: "Invalid file type. Only PDF and Image files are allowed." },
+        { error: "File is empty." },
         { status: 400 }
       );
     }

@@ -22,6 +22,7 @@ export default function SalesOrderFormPage() {
   const [errorMsg, setErrorMsg] = useState("");
   const [showValidationModal, setShowValidationModal] = useState(false);
   const [formDataCache, setFormDataCache] = useState<any>(null);
+  const [headerQuotationRef, setHeaderQuotationRef] = useState("");
 
   // Form State
   const [order, setOrder] = useState<any>({
@@ -144,6 +145,11 @@ export default function SalesOrderFormPage() {
     });
   };
 
+  const handleHeaderQuotationChange = (val: string) => {
+    setHeaderQuotationRef(val);
+    setItems((prev) => prev.map(item => ({ ...item, internalQuotationNo: val })));
+  };
+
   const handleBatchChange = (itemIndex: number, batchIndex: number, field: string, value: any) => {
     setItems((prev) => {
       const newItems = [...prev];
@@ -165,7 +171,7 @@ export default function SalesOrderFormPage() {
       ...prev,
       {
         partId: "",
-        internalQuotationNo: "",
+        internalQuotationNo: headerQuotationRef,
         vendorMaterialNo: "",
         materialSpecification: "",
         estimateNo: "",
@@ -476,6 +482,16 @@ export default function SalesOrderFormPage() {
                   ))}
                 </SearchableSelect>
               </div>
+              <div>
+                <label className="block text-sm font-medium text-blue-700 mb-1">Quotation Reference</label>
+                <input
+                  type="text"
+                  placeholder="Auto-fill items Int. Quotation"
+                  value={headerQuotationRef}
+                  onChange={(e) => handleHeaderQuotationChange(e.target.value)}
+                  className="w-full px-3 py-2 text-sm bg-blue-50 border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 placeholder-blue-300"
+                />
+              </div>
               <div className="sm:col-span-2">
                 <ProfileOrFreeText
                   label="Customer"
@@ -573,7 +589,7 @@ export default function SalesOrderFormPage() {
                           </SearchableSelect>
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-blue-500 mb-1">Int. Quotation <span className="text-red-500">*</span></label>
+                          <label className="block text-xs font-medium text-blue-500 mb-1">Int. Quotation</label>
                           <input
                             type="text"
                             value={item.internalQuotationNo || ""}

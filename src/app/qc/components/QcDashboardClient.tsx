@@ -153,80 +153,77 @@ export default function QcDashboardClient({ initialAwaiting, initialWorkOrders, 
       <div className="absolute -top-48 -right-48 w-96 h-96 bg-blue-300/30 rounded-full blur-3xl pointer-events-none"></div>
 
       {/* HEADER */}
-      <div className="flex items-center justify-between mb-8 pb-6 border-b border-blue-200/50 relative z-10">
-        <div className="flex items-center gap-4">
-          <button onClick={() => router.push("/")} className="p-2.5 bg-white/80 backdrop-blur-md border border-white shadow-sm rounded-xl hover:bg-white transition-colors">
-            <ArrowLeft size={20} className="text-blue-900" />
+      <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 md:mb-8 pb-4 md:pb-6 border-b border-blue-200/50 relative z-10 gap-4 md:gap-0">
+        <div className="flex items-center gap-3 md:gap-4 w-full md:w-auto">
+          <button onClick={() => router.push("/")} className="p-2 md:p-2.5 bg-white/80 backdrop-blur-md border border-white shadow-sm rounded-lg md:rounded-xl hover:bg-white transition-colors flex-shrink-0">
+            <ArrowLeft size={20} className="text-blue-900 w-4 h-4 md:w-5 md:h-5" />
           </button>
-          <div>
-            <h1 className="text-3xl font-black italic tracking-tighter text-blue-950 flex items-center gap-3 drop-shadow-sm">
-              <div className="bg-gradient-to-b from-blue-500 to-blue-600 p-2 rounded-xl shadow-md shadow-blue-500/20 border border-blue-400">
-                <ClipboardCheck className="text-white" size={24} />
+          <div className="flex-1 min-w-0">
+            <h1 className="text-base md:text-3xl font-black italic tracking-tighter text-blue-950 flex items-center gap-2 md:gap-3 drop-shadow-sm leading-tight md:leading-none truncate">
+              <div className="bg-gradient-to-b from-blue-500 to-blue-600 p-1.5 md:p-2 rounded-lg md:rounded-xl shadow-md shadow-blue-500/20 border border-blue-400 flex-shrink-0">
+                <ClipboardCheck className="text-white w-4 h-4 md:w-6 md:h-6" />
               </div>
-              QC WORKFLOW DASHBOARD
+              <span className="truncate">QC WORKFLOW DASHBOARD</span>
             </h1>
-            <div className="text-xs font-bold text-blue-500/80 uppercase tracking-widest mt-1.5 ml-2">
+            <div className="text-[9px] md:text-xs font-bold text-blue-500/80 uppercase tracking-widest mt-1 md:mt-1.5 ml-1 md:ml-2">
               Inspector View • Real-time
             </div>
           </div>
         </div>
         
-        <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between md:justify-end gap-2 md:gap-3 w-full md:w-auto mt-2 md:mt-0">
           <button 
             onClick={handleRefresh}
-            className={`flex items-center gap-2 px-5 py-2.5 bg-white/80 backdrop-blur-md border border-white shadow-sm rounded-xl text-sm font-bold text-blue-900 hover:bg-white transition-colors ${isRefreshing ? 'opacity-50' : ''}`}
+            className={`flex-1 md:flex-none flex items-center justify-center gap-1.5 md:gap-2 px-3 py-2 md:px-5 md:py-2.5 bg-white/80 backdrop-blur-md border border-slate-200 shadow-sm rounded-xl text-[10px] md:text-sm font-bold text-blue-900 hover:bg-white transition-colors ${isRefreshing ? 'opacity-50' : ''}`}
           >
-            <RefreshCw size={16} className={isRefreshing ? 'animate-spin' : ''} />
+            <RefreshCw size={14} className={`md:w-4 md:h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
             REFRESH
           </button>
           <button 
             onClick={() => router.push('/')}
-            className="flex items-center gap-2 px-5 py-2.5 bg-white/80 backdrop-blur-md border border-white shadow-sm rounded-xl text-sm font-bold text-rose-600 hover:bg-rose-50 transition-colors"
+            className="flex-1 md:flex-none flex items-center justify-center gap-1.5 md:gap-2 px-3 py-2 md:px-5 md:py-2.5 bg-white/80 backdrop-blur-md border border-slate-200 shadow-sm rounded-xl text-[10px] md:text-sm font-bold text-rose-600 hover:bg-rose-50 transition-colors"
           >
-            <LogOut size={16} />
+            <LogOut size={14} className="md:w-4 md:h-4" />
             LOGOUT
           </button>
         </div>
       </div>
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_350px_350px] lg:grid-cols-[1fr_300px_300px] gap-6 relative z-10">
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_350px_350px] lg:grid-cols-[1fr_300px_300px] gap-4 md:gap-6 relative z-10">
         
         {/* LEFT COLUMN: WORK ORDER INFORMATION */}
-        <div className="bg-white/60 backdrop-blur-xl border border-white shadow-xl shadow-blue-900/5 rounded-3xl overflow-hidden flex flex-col">
-          <div className="p-6 border-b border-blue-100/50 bg-white/50 flex items-center justify-between">
-            <h2 className="text-sm font-bold tracking-widest uppercase text-blue-950 flex items-center gap-2">
-              <FileText size={18} className="text-blue-500" />
+        <div className="bg-white/60 backdrop-blur-xl border border-white shadow-xl shadow-blue-900/5 rounded-2xl md:rounded-3xl overflow-hidden flex flex-col">
+          <div className="p-4 md:p-6 border-b border-blue-100/50 bg-white/50 flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-0">
+            <h2 className="text-xs md:text-sm font-bold tracking-widest uppercase text-blue-950 flex items-center gap-2">
+              <FileText size={16} className="text-blue-500 md:w-[18px] md:h-[18px]" />
               Work Order Information
             </h2>
-            <div className="flex items-center gap-4">
-              <div className="px-4 py-2 bg-emerald-50 text-emerald-700 text-xs font-bold rounded-lg border border-emerald-200">
+            <div className="flex items-center gap-2 md:gap-4">
+              <div className="px-3 md:px-4 py-1.5 md:py-2 bg-emerald-50 text-emerald-700 text-[10px] md:text-xs font-bold rounded-md md:rounded-lg border border-emerald-200 whitespace-nowrap">
                 {workOrders.length} ORDERS
               </div>
-              <div className="relative">
-                <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-blue-400" />
+              <div className="relative flex-1">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-400 md:w-4 md:h-4" />
                 <input 
                   type="text" 
-                  placeholder="Search Work Orders..."
+                  placeholder="Search..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 pr-4 py-2.5 text-sm bg-white/80 border border-blue-100 rounded-xl outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all w-64 font-medium text-blue-950 placeholder:text-blue-300 shadow-inner"
+                  className="w-full md:w-64 pl-8 md:pl-10 pr-3 md:pr-4 py-1.5 md:py-2.5 text-xs md:text-sm bg-white/80 border border-blue-100 rounded-lg md:rounded-xl outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all font-medium text-blue-950 placeholder:text-blue-300 shadow-inner"
                 />
               </div>
             </div>
           </div>
           
-          <div className="overflow-x-auto flex-1 custom-scrollbar">
-            <table className="w-full text-left border-collapse min-w-[650px]">
-              <thead>
-                <tr className="bg-blue-50/50 border-b border-blue-100/50 text-[10px] uppercase tracking-widest text-blue-700 font-bold">
-                  <th className="px-4 py-3 pl-6 whitespace-nowrap">Date</th>
-                  <th className="px-4 py-3 whitespace-nowrap">Work Order</th>
-                  <th className="px-4 py-3 whitespace-nowrap">Project / Job</th>
-                  <th className="px-4 py-3 whitespace-nowrap">Team / Dept</th>
-                  <th className="px-4 py-3 whitespace-nowrap">QC Status</th>
-                  <th className="px-4 py-3 pr-6 text-right whitespace-nowrap">Action</th>
+          <div className="overflow-x-auto flex-1 custom-scrollbar p-2 md:p-0">
+            <table className="w-full text-left border-collapse block md:table">
+              <thead className="hidden md:table-header-group">
+                <tr className="bg-blue-50/50 border-b border-blue-100/50 text-[9px] md:text-[10px] uppercase tracking-widest text-blue-700 font-bold">
+                  <th className="px-2 md:px-4 py-2 md:py-3 pl-4 md:pl-6 whitespace-nowrap">Work Order</th>
+                  <th className="px-2 md:px-4 py-2 md:py-3 whitespace-nowrap hidden md:table-cell">Project / Job</th>
+                  <th className="px-2 md:px-4 py-2 md:py-3 pr-4 md:pr-6 whitespace-nowrap">QC Status / Action</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="block md:table-row-group">
                 {filteredWorkOrders.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="p-12 text-center text-sm font-medium text-blue-400">
@@ -235,24 +232,19 @@ export default function QcDashboardClient({ initialAwaiting, initialWorkOrders, 
                   </tr>
                 ) : (
                   filteredWorkOrders.map((wo) => (
-                    <tr key={wo.workOrderNo} className="border-b border-blue-50 hover:bg-white/80 transition-colors group">
-                      
-                      {/* DATE */}
-                      <td suppressHydrationWarning className="px-4 py-4 pl-6 text-sm font-medium text-slate-500 whitespace-nowrap">
-                        {new Date(wo.date).toLocaleDateString('en-GB')}
-                      </td>
+                    <tr key={wo.workOrderNo} className="block md:table-row border border-slate-100 md:border-0 md:border-b md:border-blue-50 hover:bg-white/80 transition-colors group mb-3 md:mb-0 rounded-xl md:rounded-none bg-white md:bg-transparent shadow-sm md:shadow-none p-3 md:p-0">
                       
                       {/* WORK ORDER */}
-                      <td className="px-4 py-4 whitespace-nowrap">
+                      <td className="block md:table-cell px-4 py-2 md:py-4 pl-4 md:pl-6 border-b border-slate-50 md:border-0">
                         <div className="flex items-center gap-3">
-                          <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg border border-emerald-100">
-                            <FileText size={16} />
+                          <div className="p-2 md:p-2 bg-gradient-to-br from-emerald-50 to-emerald-100 text-emerald-600 rounded-lg md:rounded-lg border border-emerald-200/50 shadow-inner flex-shrink-0">
+                            <FileText size={16} className="md:w-[16px] md:h-[16px]" />
                           </div>
-                          <div>
-                            <div className="font-black text-blue-950 text-base tracking-wide">
+                          <div className="flex-1 min-w-0">
+                            <div className="font-black text-blue-950 text-sm md:text-base tracking-wide truncate">
                               {wo.workOrderNo}
                             </div>
-                            <div className="text-[9px] uppercase font-bold tracking-widest text-blue-400 mt-0.5">
+                            <div className="text-[9px] uppercase font-bold tracking-widest text-slate-500 mt-0.5">
                               {Number(wo.totalQty || 0)} UNITS
                             </div>
                             {wo.rejectedQty > 0 && (
@@ -265,84 +257,77 @@ export default function QcDashboardClient({ initialAwaiting, initialWorkOrders, 
                       </td>
                       
                       {/* PROJECT / JOB */}
-                      <td className="px-4 py-4 whitespace-nowrap">
-                        <div className="font-bold text-blue-900 text-sm">
+                      <td className="px-4 py-4 whitespace-nowrap hidden md:table-cell max-w-[150px] xl:max-w-[180px]">
+                        <div className="font-bold text-blue-900 text-sm truncate">
                           {wo.jobDescription || "Standard Production"}
                         </div>
                         <div className="text-[10px] uppercase font-bold tracking-widest text-slate-500 mt-1 flex items-center gap-1">
-                          <Briefcase size={10} className="text-blue-400" />
-                          CLIENT: {wo.customer?.customerName || "N/A"}
-                        </div>
-                      </td>
-
-                      {/* TEAM / DEPT */}
-                      <td className="px-4 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-2 text-sm font-medium text-slate-600">
-                          <User size={14} className="text-blue-400" />
-                          Operations
+                          <Briefcase size={10} className="text-blue-400 shrink-0" />
+                          <span className="truncate">CLIENT: {wo.customer?.customerName || "N/A"}</span>
                         </div>
                       </td>
 
                       {/* QC STATUS */}
-                      <td className="px-4 py-4 whitespace-nowrap">
-                        <div className="flex items-center justify-between gap-3 min-w-[130px]">
+                      <td className="flex md:table-cell px-2 md:px-4 py-3 md:py-4 pr-4 md:pr-6 justify-between items-center w-full">
+                        <div className="flex flex-row items-center justify-between w-full md:min-w-[130px]">
                           <div>
-                            <div suppressHydrationWarning className="font-bold text-blue-950 text-sm">
+                            <div suppressHydrationWarning className="font-bold text-blue-950 text-xs md:text-sm">
                               {new Date(wo.date).toLocaleDateString('en-GB')}
                             </div>
-                            <div suppressHydrationWarning className="text-[10px] uppercase font-bold tracking-widest text-slate-500 mt-1">
+                            <div suppressHydrationWarning className="text-[9px] md:text-[10px] uppercase font-bold tracking-widest text-slate-400 mt-0.5 md:mt-1">
                               DUE: {wo.deliveryDate ? new Date(wo.deliveryDate).toLocaleDateString('en-GB') : "TBD"}
                             </div>
                           </div>
-                          <div>
-                          <div 
-                            onClick={() => {
-                              if (wo.status !== 'Completed' && wo.qcAcceptance !== 'Approved') {
-                                openWorkOrderInspection(wo);
-                              }
-                            }}
-                            className={wo.status !== 'Completed' && wo.qcAcceptance !== 'Approved' ? "cursor-pointer hover:opacity-80 transition-opacity" : ""}
-                          >
-                            {wo.status === 'Completed' || wo.qcAcceptance === 'Approved' ? (
-                              <span className="px-3 py-1 text-[9px] uppercase tracking-widest font-bold rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200 shadow-sm">
-                                APPROVED
-                              </span>
-                            ) : wo.qcAcceptance === 'Rejected' ? (
-                              <span className="px-3 py-1 text-[9px] uppercase tracking-widest font-bold rounded-full bg-rose-50 text-rose-600 border border-rose-200 shadow-sm">
-                                REJECTED
-                              </span>
-                            ) : wo.qcAcceptance === 'Pending' || wo.status === 'Pending for QC' ? (
-                              <span className="px-3 py-1 text-[9px] uppercase tracking-widest font-bold rounded-full bg-amber-50 text-amber-600 border border-amber-200 shadow-sm">
-                                PENDING
-                              </span>
-                            ) : (
-                              <span className="px-3 py-1 text-[9px] uppercase tracking-widest font-bold rounded-full bg-slate-50 text-slate-500 border border-slate-200 shadow-sm">
-                                IN-PROGRESS
-                              </span>
-                            )}
-                          </div>
+                          <div className="flex flex-col items-end gap-2">
+                            <div 
+                              onClick={() => {
+                                if (wo.status !== 'Completed' && wo.qcAcceptance !== 'Approved') {
+                                  openWorkOrderInspection(wo);
+                                }
+                              }}
+                              className={wo.status !== 'Completed' && wo.qcAcceptance !== 'Approved' ? "cursor-pointer hover:opacity-80 transition-opacity" : ""}
+                            >
+                              {wo.status === 'Completed' || wo.qcAcceptance === 'Approved' ? (
+                                <span className="px-3 py-1 text-[9px] md:text-[9px] uppercase tracking-widest font-bold rounded-lg md:rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200 shadow-sm w-fit inline-block">
+                                  APPROVED
+                                </span>
+                              ) : wo.qcAcceptance === 'Rejected' ? (
+                                <span className="px-3 py-1 text-[9px] md:text-[9px] uppercase tracking-widest font-bold rounded-lg md:rounded-full bg-rose-50 text-rose-600 border border-rose-200 shadow-sm w-fit inline-block">
+                                  REJECTED
+                                </span>
+                              ) : wo.qcAcceptance === 'Pending' || wo.status === 'Pending for QC' ? (
+                                <span className="px-3 py-1 text-[9px] md:text-[9px] uppercase tracking-widest font-bold rounded-lg md:rounded-full bg-amber-50 text-amber-600 border border-amber-200 shadow-sm w-fit inline-block">
+                                  PENDING
+                                </span>
+                              ) : (
+                                <span className="px-3 py-1 text-[9px] md:text-[9px] uppercase tracking-widest font-bold rounded-lg md:rounded-full bg-slate-50 text-slate-500 border border-slate-200 shadow-sm w-fit inline-block">
+                                  IN-PROGRESS
+                                </span>
+                              )}
+                            </div>
+
+                            {/* ACTION BUTTON */}
+                            <div className="mt-2 md:mt-3">
+                              {wo.qcAcceptance === 'Rejected' ? (
+                                <button 
+                                  onClick={() => handleSendBack(wo.workOrderNo)}
+                                  className="px-4 py-2 bg-gradient-to-b from-amber-500 to-amber-600 text-white border border-amber-400 text-[9px] font-bold tracking-widest uppercase rounded-lg shadow-sm active:scale-95 transition-transform"
+                                  disabled={isPending}
+                                >
+                                  SEND BACK
+                                </button>
+                              ) : wo.status !== 'Completed' && wo.qcAcceptance !== 'Approved' && (
+                                <button 
+                                  onClick={() => openWorkOrderInspection(wo)}
+                                  className="px-4 py-2 bg-gradient-to-b from-emerald-500 to-emerald-600 text-white border border-emerald-400 text-[9px] font-bold tracking-widest uppercase rounded-lg shadow-sm active:scale-95 transition-transform"
+                                  disabled={isPending}
+                                >
+                                  INSPECT
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </td>
-                      
-                      <td className="px-4 py-4 pr-6 text-right whitespace-nowrap">
-                        {wo.qcAcceptance === 'Rejected' ? (
-                          <button 
-                            onClick={() => handleSendBack(wo.workOrderNo)}
-                            className="px-4 py-2 bg-gradient-to-b from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-white border border-amber-400 text-xs font-bold tracking-wider rounded-xl transition-all shadow-[0_4px_10px_rgba(245,158,11,0.3)] hover:shadow-[0_6px_15px_rgba(245,158,11,0.4)]"
-                            disabled={isPending}
-                          >
-                            SEND BACK TO PROD
-                          </button>
-                        ) : wo.status !== 'Completed' && wo.qcAcceptance !== 'Approved' && (
-                          <button 
-                            onClick={() => openWorkOrderInspection(wo)}
-                            className="px-4 py-2 bg-gradient-to-b from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white border border-emerald-400 text-xs font-bold tracking-wider rounded-xl transition-all shadow-[0_4px_10px_rgba(16,185,129,0.3)] hover:shadow-[0_6px_15px_rgba(16,185,129,0.4)]"
-                            disabled={isPending}
-                          >
-                            INSPECT
-                          </button>
-                        )}
                       </td>
                     </tr>
                   ))
@@ -353,18 +338,18 @@ export default function QcDashboardClient({ initialAwaiting, initialWorkOrders, 
         </div>
 
         {/* RIGHT COLUMN: AWAITING INSPECTION */}
-        <div className="bg-white/60 backdrop-blur-xl border border-white shadow-xl shadow-blue-900/5 rounded-3xl flex flex-col min-h-[700px]">
-          <div className="p-6 border-b border-blue-100/50 bg-white/50 flex items-center justify-between">
-            <h2 className="text-sm font-bold tracking-widest uppercase text-blue-950 flex items-center gap-2">
-              <AlertCircle size={18} className="text-rose-500" />
+        <div className="bg-white/60 backdrop-blur-xl border border-white shadow-xl shadow-blue-900/5 rounded-2xl md:rounded-3xl flex flex-col min-h-[400px] md:min-h-[700px]">
+          <div className="p-4 md:p-6 border-b border-blue-100/50 bg-white/50 flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-0">
+            <h2 className="text-xs md:text-sm font-bold tracking-widest uppercase text-blue-950 flex items-center gap-2">
+              <AlertCircle size={16} className="text-rose-500 md:w-[18px] md:h-[18px]" />
               Awaiting Inspection
             </h2>
-            <span className="px-3 py-1 bg-rose-50 border border-rose-100 text-rose-600 shadow-sm text-xs font-bold rounded-full">
+            <span className="px-3 py-1 bg-rose-50 border border-rose-100 text-rose-600 shadow-sm text-[10px] md:text-xs font-bold rounded-full w-fit">
               {awaiting.length} Items
             </span>
           </div>
 
-          <div className="p-5 flex-1 overflow-y-auto custom-scrollbar">
+          <div className="p-3 md:p-5 flex-1 overflow-y-auto custom-scrollbar">
             {awaiting.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-blue-400 p-8 text-center">
                 <div className="p-4 bg-emerald-50 rounded-full mb-4 border border-emerald-100 shadow-inner">
@@ -380,39 +365,39 @@ export default function QcDashboardClient({ initialAwaiting, initialWorkOrders, 
                   const processName = ts.routingProcess?.routingProcess ? Object.keys(ts.routingProcess.routingProcess).find(k => ts.routingProcess.routingProcess[k] === true && k !== 'id' && k !== 'routingProcessId')?.toUpperCase() : "UNKNOWN";
                   
                   return (
-                    <div key={ts.id} className="bg-white/80 border border-white rounded-2xl p-5 shadow-sm hover:shadow-lg shadow-blue-900/5 transition-all relative overflow-hidden group">
-                      <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b from-rose-400 to-rose-600 shadow-[2px_0_8px_rgba(225,29,72,0.3)]"></div>
+                    <div key={ts.id} className="bg-white/80 border border-white rounded-xl md:rounded-2xl p-3 md:p-5 shadow-sm hover:shadow-lg shadow-blue-900/5 transition-all relative overflow-hidden group">
+                      <div className="absolute left-0 top-0 bottom-0 w-1 md:w-1.5 bg-gradient-to-b from-rose-400 to-rose-600 shadow-[2px_0_8px_rgba(225,29,72,0.3)]"></div>
                       
-                      <div className="flex justify-between items-start mb-3">
+                      <div className="flex justify-between items-start mb-2 md:mb-3">
                         <div>
-                          <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1.5 flex items-center gap-2">
+                          <div className="text-[8px] md:text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1 md:mb-1.5 flex items-center gap-1.5 md:gap-2">
                             <span suppressHydrationWarning className="text-slate-500">{new Date(ts.timeOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span> 
                             <span className="w-1 h-1 rounded-full bg-slate-300"></span> 
                             {ts.employee?.name || "Unknown"}
                           </div>
-                          <div className="font-bold text-blue-950 text-base tracking-wide">
+                          <div className="font-bold text-blue-950 text-xs md:text-base tracking-wide truncate">
                             {wo?.workOrderNo || "Unknown WO"}
                           </div>
                         </div>
-                        <span className="px-2.5 py-1 bg-blue-50 text-blue-700 text-[9px] uppercase font-bold tracking-widest rounded-lg border border-blue-100 shadow-inner">
+                        <span className="px-1.5 md:px-2.5 py-0.5 md:py-1 bg-blue-50 text-blue-700 text-[7px] md:text-[9px] uppercase font-bold tracking-widest rounded-md md:rounded-lg border border-blue-100 shadow-inner shrink-0">
                           {processName}
                         </span>
                       </div>
                       
-                      <div className="flex gap-6 mt-4 pt-4 border-t border-slate-100">
+                      <div className="flex gap-3 md:gap-6 mt-2 md:mt-4 pt-2 md:pt-4 border-t border-slate-100">
                         <div>
-                          <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Completed</div>
-                          <div className="text-sm font-bold text-blue-900">{Number(ts.completedQty)}</div>
+                          <div className="text-[7px] md:text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5 md:mb-1">Completed</div>
+                          <div className="text-xs md:text-sm font-bold text-blue-900">{Number(ts.completedQty)}</div>
                         </div>
                         <div>
-                          <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Client</div>
-                          <div className="text-sm font-bold text-blue-900 truncate max-w-[150px]">{wo?.customer?.customerName || "N/A"}</div>
+                          <div className="text-[7px] md:text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5 md:mb-1">Client</div>
+                          <div className="text-xs md:text-sm font-bold text-blue-900 truncate max-w-[100px] md:max-w-[150px]">{wo?.customer?.customerName || "N/A"}</div>
                         </div>
                       </div>
 
                       <button 
                         onClick={() => openProcessInspection(ts)}
-                        className="w-full mt-5 py-3 bg-white hover:bg-rose-50 text-rose-600 text-xs font-bold tracking-widest rounded-xl border border-rose-200 transition-all shadow-sm hover:shadow-md"
+                        className="w-full mt-3 md:mt-5 py-2 md:py-3 bg-white hover:bg-rose-50 text-rose-600 text-[9px] md:text-xs font-bold tracking-widest rounded-lg md:rounded-xl border border-rose-200 transition-all shadow-sm hover:shadow-md"
                       >
                         START INSPECTION
                       </button>
@@ -425,18 +410,18 @@ export default function QcDashboardClient({ initialAwaiting, initialWorkOrders, 
         </div>
 
         {/* THIRD COLUMN: REWORK RE-INSPECTION */}
-        <div className="bg-white/60 backdrop-blur-xl border border-white shadow-xl shadow-blue-900/5 rounded-3xl flex flex-col min-h-[700px]">
-          <div className="p-6 border-b border-blue-100/50 bg-white/50 flex items-center justify-between">
-            <h2 className="text-sm font-bold tracking-widest uppercase text-blue-950 flex items-center gap-2">
-              <RefreshCw size={18} className="text-indigo-500" />
+        <div className="bg-white/60 backdrop-blur-xl border border-white shadow-xl shadow-blue-900/5 rounded-2xl md:rounded-3xl flex flex-col min-h-[400px] md:min-h-[700px]">
+          <div className="p-4 md:p-6 border-b border-blue-100/50 bg-white/50 flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-0">
+            <h2 className="text-xs md:text-sm font-bold tracking-widest uppercase text-blue-950 flex items-center gap-2">
+              <RefreshCw size={16} className="text-indigo-500 md:w-[18px] md:h-[18px]" />
               Rework Re-inspection
             </h2>
-            <span className="px-3 py-1 bg-indigo-50 border border-indigo-100 text-indigo-600 shadow-sm text-xs font-bold rounded-full">
+            <span className="px-3 py-1 bg-indigo-50 border border-indigo-100 text-indigo-600 shadow-sm text-[10px] md:text-xs font-bold rounded-full w-fit">
               {reworks.length} Items
             </span>
           </div>
 
-          <div className="p-5 flex-1 overflow-y-auto custom-scrollbar">
+          <div className="p-3 md:p-5 flex-1 overflow-y-auto custom-scrollbar">
             {reworks.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-blue-400 p-8 text-center">
                 <div className="p-4 bg-indigo-50 rounded-full mb-4 border border-indigo-100 shadow-inner">
@@ -450,39 +435,39 @@ export default function QcDashboardClient({ initialAwaiting, initialWorkOrders, 
                 {reworks.map((rwk) => {
                   const wo = rwk.workOrder;
                   return (
-                    <div key={rwk.id} className="bg-white/80 border border-white rounded-2xl p-5 shadow-sm hover:shadow-lg shadow-blue-900/5 transition-all relative overflow-hidden group">
-                      <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b from-indigo-400 to-indigo-600 shadow-[2px_0_8px_rgba(99,102,241,0.3)]"></div>
+                    <div key={rwk.id} className="bg-white/80 border border-white rounded-xl md:rounded-2xl p-3 md:p-5 shadow-sm hover:shadow-lg shadow-blue-900/5 transition-all relative overflow-hidden group">
+                      <div className="absolute left-0 top-0 bottom-0 w-1 md:w-1.5 bg-gradient-to-b from-indigo-400 to-indigo-600 shadow-[2px_0_8px_rgba(99,102,241,0.3)]"></div>
                       
-                      <div className="flex justify-between items-start mb-3">
+                      <div className="flex justify-between items-start mb-2 md:mb-3">
                         <div>
-                          <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1.5 flex items-center gap-2">
+                          <div className="text-[8px] md:text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1 md:mb-1.5 flex items-center gap-1.5 md:gap-2">
                             <span suppressHydrationWarning className="text-slate-500">{new Date(rwk.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span> 
                             <span className="w-1 h-1 rounded-full bg-slate-300"></span> 
                             {rwk.reworkNo}
                           </div>
-                          <div className="font-bold text-blue-950 text-base tracking-wide">
+                          <div className="font-bold text-blue-950 text-xs md:text-base tracking-wide truncate">
                             {wo?.workOrderNo || "Unknown WO"}
                           </div>
                         </div>
-                        <span className="px-2.5 py-1 bg-indigo-50 text-indigo-700 text-[9px] uppercase font-bold tracking-widest rounded-lg border border-indigo-100 shadow-inner">
+                        <span className="px-1.5 md:px-2.5 py-0.5 md:py-1 bg-indigo-50 text-indigo-700 text-[7px] md:text-[9px] uppercase font-bold tracking-widest rounded-md md:rounded-lg border border-indigo-100 shadow-inner shrink-0">
                           REWORK
                         </span>
                       </div>
                       
-                      <div className="flex gap-6 mt-4 pt-4 border-t border-slate-100">
+                      <div className="flex gap-3 md:gap-6 mt-2 md:mt-4 pt-2 md:pt-4 border-t border-slate-100">
                         <div>
-                          <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Reworked Qty</div>
-                          <div className="text-sm font-bold text-blue-900">{Number(rwk.reworkedQty)}</div>
+                          <div className="text-[7px] md:text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5 md:mb-1">Reworked Qty</div>
+                          <div className="text-xs md:text-sm font-bold text-blue-900">{Number(rwk.reworkedQty)}</div>
                         </div>
                         <div>
-                          <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Client</div>
-                          <div className="text-sm font-bold text-blue-900 truncate max-w-[150px]">{wo?.customer?.customerName || "N/A"}</div>
+                          <div className="text-[7px] md:text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5 md:mb-1">Client</div>
+                          <div className="text-xs md:text-sm font-bold text-blue-900 truncate max-w-[100px] md:max-w-[150px]">{wo?.customer?.customerName || "N/A"}</div>
                         </div>
                       </div>
 
                       <button 
                         onClick={() => openReworkInspection(rwk)}
-                        className="w-full mt-5 py-3 bg-white hover:bg-indigo-50 text-indigo-600 text-xs font-bold tracking-widest rounded-xl border border-indigo-200 transition-all shadow-sm hover:shadow-md"
+                        className="w-full mt-3 md:mt-5 py-2 md:py-3 bg-white hover:bg-indigo-50 text-indigo-600 text-[9px] md:text-xs font-bold tracking-widest rounded-lg md:rounded-xl border border-indigo-200 transition-all shadow-sm hover:shadow-md"
                       >
                         RE-INSPECT
                       </button>

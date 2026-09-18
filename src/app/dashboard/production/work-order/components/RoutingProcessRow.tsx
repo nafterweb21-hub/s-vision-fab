@@ -169,16 +169,8 @@ export default function RoutingProcessRow({
               }))}
             />
           )}
-          {editable && rp?.status === "New" && (
-            <button
-              onClick={() => setStatus("WIP")}
-              disabled={isPending}
-              className="text-xs px-2 py-1 rounded bg-amber-100 text-amber-700 hover:bg-amber-200 disabled:opacity-50"
-            >
-              Start
-            </button>
-          )}
-          {editable && rp?.status === "WIP" && (
+
+          {editable && rp?.status !== "Completed" && (
             <button
               onClick={() => setStatus("Completed")}
               disabled={isPending}

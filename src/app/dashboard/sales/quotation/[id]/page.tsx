@@ -10,15 +10,17 @@ type FormData = {
     id: string;
     customerName: string;
     customerCode: string;
+    isSez?: boolean;
     contactPersons: { id: string; contactPersonName: string; email: string | null; telNo: string | null; faxNo: string | null; isDefault: boolean }[];
     addresses: { id: string; address: string; isDefault: boolean }[];
   }[];
   paymentTerms: { id: string; name: string; days: number }[];
-  currencies: { id: string; code: string; exchangeRate: number; isDefault: boolean }[];
+  currencies: { id: string; code: string; exchangeRate: number; isDefault: boolean; roundingMode?: string }[];
   taxes: { id: string; taxType: string; taxRate: number }[];
   finishedGoods: { id: string; partNo: string | null; description: string }[];
   uoms: { id: string; uomName: string }[];
   termsAndConditionProfiles: { id: string; name: string; content: string }[];
+  companies?: { id: string; sezTaxRate: number | null }[];
 };
 
 type Item = {
@@ -57,6 +59,7 @@ export default function QuotationEditPage() {
   const [exchangeRate, setExchangeRate] = useState("1.000");
   const [taxTypeId, setTaxTypeId] = useState("");
   const [lumpSumDisc, setLumpSumDisc] = useState("0.00");
+  const [isRoundOff, setIsRoundOff] = useState(false);
   const [termsAndConditions, setTermsAndConditions] = useState("");
   const [termsPresetId, setTermsPresetId] = useState("");
   const [remark, setRemark] = useState("");
@@ -90,6 +93,7 @@ export default function QuotationEditPage() {
           setExchangeRate(String(q.exchangeRate));
           setTaxTypeId(q.taxTypeId || "");
           setLumpSumDisc(String(q.lumpSumDisc ?? 0));
+          setIsRoundOff(q.isRoundOff || false);
           setTermsAndConditions(q.termsAndConditions || "");
           setRemark(q.remark || "");
           setItems(
@@ -168,13 +172,17 @@ export default function QuotationEditPage() {
     const taxAmount = +(afterDisc * (taxRate / 100)).toFixed(2);
     
     let total = afterDisc + taxAmount;
-    const currency = data?.currencies.find((c) => c.id === currencyId);
-    if (currency?.roundingMode === "UP") {
-      total = Math.ceil(total);
-    } else if (currency?.roundingMode === "DOWN") {
-      total = Math.floor(total);
+    if (isRoundOff) {
+      total = Math.round(total);
     } else {
-      total = +total.toFixed(2);
+      const currency = data?.currencies.find((c) => c.id === currencyId);
+      if (currency?.roundingMode === "UP") {
+        total = Math.ceil(total);
+      } else if (currency?.roundingMode === "DOWN") {
+        total = Math.floor(total);
+      } else {
+        total = +total.toFixed(2);
+      }
     }
 
     return {
@@ -184,7 +192,7 @@ export default function QuotationEditPage() {
       taxAmount,
       total,
     };
-  }, [items, lumpSumDisc, taxTypeId, data, currencyId]);
+  }, [items, lumpSumDisc, taxTypeId, data, currencyId, isRoundOff]);
 
   function updateItem(idx: number, patch: Partial<Item>) {
     setItems((cur) => cur.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
@@ -202,7 +210,7 @@ export default function QuotationEditPage() {
   async function onSave() {
     setError("");
     if (!salespersonId) return setError("Salesperson is required");
-    if (!customerSelection || (customerSelection.type === "profile" && !customerSelection.profileId) || (customerSelection.type === "freetext" && !customerSelection.freeTextPayload?.customerName)) {
+    if (!customerId) {
       return setError("Customer is required");
     }
     if (!currencyId) return setError("Currency is required");
@@ -218,7 +226,7 @@ export default function QuotationEditPage() {
       const payload = {
         date,
         salespersonId,
-        
+        customerId,
         contactPersonId: contactPersonId || null,
         customerPoRef,
         refNo,
@@ -230,6 +238,7 @@ export default function QuotationEditPage() {
         currencyId,
         exchangeRate: Number(exchangeRate) || 1,
         lumpSumDisc: Number(lumpSumDisc) || 0,
+        isRoundOff,
         taxTypeId: customer?.isSez ? null : (taxTypeId || null),
         termsAndConditions,
         remark,
@@ -671,6 +680,23 @@ export default function QuotationEditPage() {
             label={`Add${totals.taxRate ? ` (${totals.taxRate}%)` : ""}`}
             value={totals.taxAmount}
           />
+          <div className="flex items-center justify-between text-blue-700">
+            <span>Round Off Total</span>
+            <button
+              type="button"
+              disabled={readOnly}
+              onClick={() => setIsRoundOff(!isRoundOff)}
+              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500/40 focus:ring-offset-1 ${
+                isRoundOff ? "bg-amber-500" : "bg-slate-300"
+              } ${readOnly ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+            >
+              <span
+                className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
+                  isRoundOff ? "translate-x-5" : "translate-x-1"
+                }`}
+              />
+            </button>
+          </div>
           <div className="pt-3 border-t border-blue-200 flex items-center justify-between text-base">
             <span className="font-bold text-blue-900">Total Amount</span>
             <span className="font-bold text-blue-900">{totals.total.toFixed(2)}</span>

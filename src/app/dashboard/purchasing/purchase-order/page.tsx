@@ -296,8 +296,8 @@ export default function PurchaseOrderListPage() {
           <p className="text-sm font-medium">{errorMsg}</p>
         </div>
       ) : rows.length === 0 ? (
-        <div className="bg-white border border-blue-200 rounded-xl p-12 text-center shadow-sm">
-          <div className="mx-auto w-12 h-12 rounded-full bg-blue-500/10 flex items-center justify-center mb-4">
+        <div className="bg-white border border-blue-200 rounded-xl p-6 sm:p-12 text-center shadow-sm">
+          <div className="mx-auto w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-blue-500/10 flex items-center justify-center mb-4">
             <FileText size={22} className="text-blue-600" />
           </div>
           <p className="text-blue-600 font-semibold">No purchase orders found.</p>
@@ -306,20 +306,20 @@ export default function PurchaseOrderListPage() {
       ) : (
         <div className="bg-white border border-blue-200 rounded-xl shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left whitespace-nowrap">
-              <thead className="text-xs text-blue-500 bg-blue-50/50 uppercase tracking-wider border-b border-blue-200">
+            <table className="w-full text-[10px] sm:text-sm text-left whitespace-nowrap">
+              <thead className="text-[10px] sm:text-xs text-blue-500 bg-blue-50/50 uppercase tracking-wider border-b border-blue-200">
                 <tr>
-                  <th className="px-4 py-3 w-10"></th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">PO No</th>
-                  <th className="px-4 py-3">Rev</th>
-                  <th className="px-4 py-3">Date</th>
-                  <th className="px-4 py-3">Supplier</th>
-                  <th className="px-4 py-3">Work Order No</th>
-                  <th className="px-4 py-3">Work Description</th>
-                  <th className="px-4 py-3">Purchaser</th>
-                  <th className="px-4 py-3">Receive Status</th>
-                  <th className="px-4 py-3">Remark</th>
+                  <th className="px-1.5 sm:px-4 py-2 sm:py-3 w-8 sm:w-10"></th>
+                  <th className="px-1.5 sm:px-4 py-2 sm:py-3">Status</th>
+                  <th className="px-1.5 sm:px-4 py-2 sm:py-3">PO No</th>
+                  <th className="px-1.5 sm:px-4 py-2 sm:py-3 hidden sm:table-cell">Rev</th>
+                  <th className="px-1.5 sm:px-4 py-2 sm:py-3 hidden md:table-cell">Date</th>
+                  <th className="px-1.5 sm:px-4 py-2 sm:py-3">Supplier</th>
+                  <th className="px-1.5 sm:px-4 py-2 sm:py-3 hidden lg:table-cell">Work Order No</th>
+                  <th className="px-1.5 sm:px-4 py-2 sm:py-3 hidden xl:table-cell">Work Description</th>
+                  <th className="px-1.5 sm:px-4 py-2 sm:py-3 hidden md:table-cell">Purchaser</th>
+                  <th className="px-1.5 sm:px-4 py-2 sm:py-3 hidden lg:table-cell">Receive Status</th>
+                  <th className="px-1.5 sm:px-4 py-2 sm:py-3 hidden xl:table-cell">Remark</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-blue-100">
@@ -331,40 +331,40 @@ export default function PurchaseOrderListPage() {
                       selectedId === r.id ? "bg-blue-50/70" : "hover:bg-blue-50/30"
                     }`}
                   >
-                    <td className="px-4 py-3">
+                    <td className="px-1.5 sm:px-4 py-2 sm:py-3">
                       <input
                         type="radio"
                         checked={selectedId === r.id}
                         onChange={() => setSelectedId(r.id)}
-                        className="accent-blue-600"
+                        className="accent-blue-600 scale-75 sm:scale-100"
                       />
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-1.5 sm:px-4 py-2 sm:py-3">
                       <StatusPill status={r.status} />
                     </td>
-                    <td className="px-4 py-3 font-bold text-blue-900">
+                    <td className="px-1.5 sm:px-4 py-2 sm:py-3 font-bold text-blue-900">
                       <Link
                         href={`/dashboard/purchasing/purchase-order/${r.id}`}
                         className="hover:text-blue-600"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        {r.poNo}-R{r.revision}
+                        {r.poNo}<span className="hidden sm:inline">-R{r.revision}</span>
                       </Link>
                     </td>
-                    <td className="px-4 py-3 text-blue-700">{r.revision}</td>
-                    <td className="px-4 py-3 text-blue-700">
+                    <td className="px-1.5 sm:px-4 py-2 sm:py-3 text-blue-700 hidden sm:table-cell">{r.revision}</td>
+                    <td className="px-1.5 sm:px-4 py-2 sm:py-3 text-blue-700 hidden md:table-cell">
                       {new Date(r.date).toLocaleDateString()}
                     </td>
-                    <td className="px-4 py-3 text-blue-700 font-medium">{r.supplier?.supplierName}</td>
-                    <td className="px-4 py-3 text-blue-700 font-mono">{r.workOrderNo || "—"}</td>
-                    <td className="px-4 py-3 text-blue-700 max-w-[200px] truncate" title={r.workOrder?.jobDescription || ""}>
+                    <td className="px-1.5 sm:px-4 py-2 sm:py-3 text-blue-700 font-medium truncate max-w-[120px] sm:max-w-none">{r.supplier?.supplierName}</td>
+                    <td className="px-1.5 sm:px-4 py-2 sm:py-3 text-blue-700 font-mono hidden lg:table-cell">{r.workOrderNo || "—"}</td>
+                    <td className="px-1.5 sm:px-4 py-2 sm:py-3 text-blue-700 max-w-[200px] truncate hidden xl:table-cell" title={r.workOrder?.jobDescription || ""}>
                       {r.workOrder?.jobDescription || "—"}
                     </td>
-                    <td className="px-4 py-3 text-blue-700">{r.purchaser?.name}</td>
-                    <td className="px-4 py-3">
+                    <td className="px-1.5 sm:px-4 py-2 sm:py-3 text-blue-700 hidden md:table-cell">{r.purchaser?.name}</td>
+                    <td className="px-1.5 sm:px-4 py-2 sm:py-3 hidden lg:table-cell">
                       <POStatusPill status={r.receiveStatus} />
                     </td>
-                    <td className="px-4 py-3 text-blue-700 max-w-[150px] truncate" title={r.remark || ""}>
+                    <td className="px-1.5 sm:px-4 py-2 sm:py-3 text-blue-700 max-w-[150px] truncate hidden xl:table-cell" title={r.remark || ""}>
                       {r.remark || "—"}
                     </td>
                   </tr>
@@ -480,7 +480,7 @@ function StatusPill({ status }: { status: string }) {
       ? "bg-slate-100 text-slate-600 border-slate-200"
       : "bg-blue-50 text-blue-700 border-blue-200";
   return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${cls}`}>
+    <span className={`inline-flex items-center gap-0.5 sm:gap-1.5 px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[8px] sm:text-xs font-semibold border ${cls}`}>
       {status}
     </span>
   );
@@ -496,7 +496,7 @@ function POStatusPill({ status }: { status: string }) {
       ? "bg-rose-50 text-rose-700 border-rose-200"
       : "bg-slate-100 text-slate-600 border-slate-200";
   return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${cls}`}>
+    <span className={`inline-flex items-center gap-0.5 sm:gap-1.5 px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[8px] sm:text-xs font-semibold border ${cls}`}>
       {status}
     </span>
   );

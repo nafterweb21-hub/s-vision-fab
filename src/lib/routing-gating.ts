@@ -64,7 +64,7 @@ export function computeGating(
     const available = !completed && r.id === frontId;
     const locked = !completed && !available;
     const permitted = isRolePermitted(r.allowedRoleIds, roleId);
-    const visible = permitted && (available || completed);
+    const visible = permitted && available;
     return { ...r, completed, available, locked, permitted, visible };
   });
 }

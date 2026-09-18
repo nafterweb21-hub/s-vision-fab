@@ -44,7 +44,7 @@ export default function Sidebar({ userEmail, userRole, userPermissions }: Sideba
 
   const linkClass = (href: string) => {
     const active = isActivePath(pathname, href);
-    return `flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 ${
+    return `flex items-center gap-3 px-3 py-2 md:py-2.5 text-[11px] md:text-sm font-medium rounded-lg transition-all duration-200 ${
       active
         ? "bg-indigo-600 text-white shadow-md shadow-slate-500/20 translate-x-1"
         : "text-indigo-600 hover:bg-slate-50 hover:text-indigo-700"
@@ -55,8 +55,8 @@ export default function Sidebar({ userEmail, userRole, userPermissions }: Sideba
     <>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`fixed top-3 z-50 rounded-xl border border-slate-200 bg-white p-2.5 text-slate-600 shadow-sm transition-all duration-300 hover:bg-slate-50 ${
-          isOpen ? "left-[19rem]" : "left-6"
+        className={`fixed top-3 z-50 rounded-xl border border-slate-200 bg-white p-2 md:p-2.5 text-slate-600 shadow-sm transition-all duration-300 hover:bg-slate-50 ${
+          isOpen ? "right-4 md:right-auto md:left-[19rem]" : "left-4 md:left-6"
         }`}
         aria-label="Toggle Navigation"
       >
@@ -71,7 +71,7 @@ export default function Sidebar({ userEmail, userRole, userPermissions }: Sideba
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex w-72 transform flex-col border-r border-slate-200 bg-white/95 shadow-2xl shadow-slate-900/10 backdrop-blur-xl transition-transform duration-300 ${
+        className={`fixed inset-y-0 left-0 z-40 flex w-1/2 sm:w-64 md:w-72 transform flex-col overflow-hidden border-r border-slate-200 bg-white/95 shadow-2xl shadow-slate-900/10 backdrop-blur-xl transition-transform duration-300 ${
           isOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
@@ -93,7 +93,7 @@ export default function Sidebar({ userEmail, userRole, userPermissions }: Sideba
             </div>
             <input
               type="text"
-              className="block w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-10 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-colors"
+              className="block w-full rounded-xl border border-slate-200 bg-slate-50 py-1.5 md:py-2 pl-9 md:pl-10 pr-3 text-xs md:text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-colors"
               placeholder="Search menu..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -160,7 +160,7 @@ export default function Sidebar({ userEmail, userRole, userPermissions }: Sideba
           )}
           <button
             onClick={() => signOut({ callbackUrl: "/" })}
-            className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-indigo-700 hover:bg-slate-200"
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-indigo-700 hover:bg-slate-200 active:scale-95 transition-transform"
           >
             <LogOut size={14} />
             Sign out

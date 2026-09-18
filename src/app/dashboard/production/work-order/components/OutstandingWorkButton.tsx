@@ -53,9 +53,9 @@ export default function OutstandingWorkButton() {
     <>
       <button
         onClick={open}
-        className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+        className="flex items-center gap-1.5 sm:gap-2 bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors whitespace-nowrap"
       >
-        <ClipboardList size={16} />
+        <ClipboardList className="w-4 h-4 sm:w-5 sm:h-5" />
         Outstanding Work
       </button>
 

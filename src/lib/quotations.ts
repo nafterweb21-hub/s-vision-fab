@@ -30,6 +30,7 @@ export function computeTotals(opts: {
   items: ItemInput[];
   lumpSumDisc: number | string;
   taxRate?: number | null;
+  isRoundOff?: boolean;
 }) {
   const subTotal = opts.items.reduce(
     (acc, it) => acc + Number(it.unitPrice || 0) * Number(it.quantity || 0),
@@ -39,7 +40,12 @@ export function computeTotals(opts: {
   const afterDisc = Math.max(0, subTotal - disc);
   const taxRate = opts.taxRate ?? 0;
   const taxAmount = +(afterDisc * (taxRate / 100)).toFixed(2);
-  const totalAmount = +(afterDisc + taxAmount).toFixed(2);
+  let totalAmount = afterDisc + taxAmount;
+  if (opts.isRoundOff) {
+    totalAmount = Math.round(totalAmount);
+  } else {
+    totalAmount = +totalAmount.toFixed(2);
+  }
 
   return {
     subTotal: +subTotal.toFixed(2),
@@ -68,6 +74,7 @@ export type QuotationInput = {
   termsAndConditions?: string | null;
   remark?: string | null;
   uploadUrl?: string | null;
+  isRoundOff?: boolean;
   items: ItemInput[];
 };
 
@@ -76,7 +83,7 @@ const cleanStr = (v: any) => (v == null || v === "" ? null : String(v));
 
 export async function createQuotation(input: QuotationInput) {
   if (!input.salespersonId) throw new Error("Salesperson is required");
-  if (!input.customerSelection && !input.customerId) throw new Error("Customer is required");
+  if (!input.customerId) throw new Error("Customer is required");
   if (!input.currencyId) throw new Error("Currency is required");
   if (!input.title?.trim()) throw new Error("Title is required");
   if (!input.items?.length) throw new Error("At least one line item is required");
@@ -88,16 +95,10 @@ export async function createQuotation(input: QuotationInput) {
   // The number is taken and the quotation written in one transaction: the
   // counter's row lock only holds for as long as the transaction does.
   return prisma.$transaction(async (tx) => {
-    const { finalCustomerId, finalContactPersonId } = await processCustomerSelection(
-      tx as any,
-      input.customerSelection,
-      {
-        customerId: input.customerId,
-        contactPersonId: cleanId(input.contactPersonId),
-      }
-    );
+    const finalCustomerId = input.customerId;
+    const finalContactPersonId = cleanId(input.contactPersonId);
 
-    if (!finalCustomerId) throw new Error("Customer resolution failed");
+    if (!finalCustomerId) throw new Error("Customer is required");
 
     const customer = await tx.customerProfile.findUnique({ where: { id: finalCustomerId } });
     const company = await tx.companyProfile.findFirst({ where: { status: "Active" } });
@@ -108,6 +109,7 @@ export async function createQuotation(input: QuotationInput) {
       items: input.items,
       lumpSumDisc: input.lumpSumDisc ?? 0,
       taxRate,
+      isRoundOff: input.isRoundOff,
     });
 
     const quotationNo = await nextDocumentNo(tx as any, "QUOTATION", {
@@ -134,6 +136,7 @@ export async function createQuotation(input: QuotationInput) {
       exchangeRate: new Prisma_Decimal(input.exchangeRate),
       subTotal: new Prisma_Decimal(totals.subTotal),
       lumpSumDisc: new Prisma_Decimal(totals.lumpSumDisc),
+      isRoundOff: input.isRoundOff || false,
       taxTypeId: isSez ? null : cleanId(input.taxTypeId),
       taxRate: isSez ? taxRate : (tax?.taxRate ?? null),
       taxAmount: (isSez || tax) ? new Prisma_Decimal(totals.taxAmount) : null,
@@ -170,16 +173,10 @@ export async function updateQuotation(id: string, input: QuotationInput) {
     : null;
 
   return prisma.$transaction(async (tx) => {
-    const { finalCustomerId, finalContactPersonId } = await processCustomerSelection(
-      tx as any,
-      input.customerSelection,
-      {
-        customerId: input.customerId,
-        contactPersonId: cleanId(input.contactPersonId),
-      }
-    );
+    const finalCustomerId = input.customerId;
+    const finalContactPersonId = cleanId(input.contactPersonId);
 
-    if (!finalCustomerId) throw new Error("Customer resolution failed");
+    if (!finalCustomerId) throw new Error("Customer is required");
 
     const customer = await tx.customerProfile.findUnique({ where: { id: finalCustomerId } });
     const company = await tx.companyProfile.findFirst({ where: { status: "Active" } });
@@ -190,6 +187,7 @@ export async function updateQuotation(id: string, input: QuotationInput) {
       items: input.items,
       lumpSumDisc: input.lumpSumDisc ?? 0,
       taxRate,
+      isRoundOff: input.isRoundOff,
     });
 
     await tx.quotationItem.deleteMany({ where: { quotationId: id } });
@@ -211,6 +209,7 @@ export async function updateQuotation(id: string, input: QuotationInput) {
         exchangeRate: new Prisma_Decimal(input.exchangeRate),
         subTotal: new Prisma_Decimal(totals.subTotal),
         lumpSumDisc: new Prisma_Decimal(totals.lumpSumDisc),
+        isRoundOff: input.isRoundOff || false,
         taxTypeId: isSez ? null : cleanId(input.taxTypeId),
         taxRate: isSez ? taxRate : (tax?.taxRate ?? null),
         taxAmount: (isSez || tax) ? new Prisma_Decimal(totals.taxAmount) : null,

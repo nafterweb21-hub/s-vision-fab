@@ -420,6 +420,52 @@ export async function markRoutingProcessStatus(id: string, status: "New" | "WIP"
       }
     }
 
+    if (status === "Completed") {
+      const rpCheck = await prisma.routingProcess.findUnique({
+        where: { id },
+        include: {
+          routingProcess: true,
+          productionTimesheets: {
+            include: {
+              weldingParameter: true,
+              sprayParameter: true,
+              machiningParameter: true,
+            }
+          }
+        }
+      });
+      
+      const woQuantity = rp.inProcess.workOrder.quantity;
+      if (woQuantity != null) {
+        const totalCompleted = rpCheck?.productionTimesheets.reduce(
+          (acc, ts) => acc + (ts.completedQty ? Number(ts.completedQty) : 0),
+          0
+        ) || 0;
+        
+        if (totalCompleted < Number(woQuantity)) {
+          return { success: false, error: `Cannot complete: Required quantity (${woQuantity}) not met (Currently ${totalCompleted}).` };
+        }
+      }
+      
+      const flags = rpCheck?.routingProcess;
+      let allParamsConfirmed = true;
+      for (const ts of (rpCheck?.productionTimesheets || [])) {
+        if (flags?.welding && ts.weldingParameter) {
+           if (ts.weldingParameter.status !== "Confirmed") allParamsConfirmed = false;
+        }
+        if (flags?.sprayPainting && ts.sprayParameter) {
+           if (ts.sprayParameter.status !== "Confirmed") allParamsConfirmed = false;
+        }
+        if (flags?.machining && ts.machiningParameter) {
+           if (ts.machiningParameter.status !== "Confirmed") allParamsConfirmed = false;
+        }
+      }
+      
+      if (!allParamsConfirmed) {
+        return { success: false, error: "Cannot complete: Some process parameters are pending confirmation." };
+      }
+    }
+
     await prisma.routingProcess.update({ where: { id }, data: { status } });
 
     // Roll WO status if newly WIP
@@ -836,5 +882,64 @@ export async function editRoutingProcess(id: string, data: {
   } catch (err: any) {
     console.error("editRoutingProcess:", err);
     return { success: false, error: err.message || "Failed to edit routing process" };
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Files
+// ──────────────────────────────────────────────────────────────────────────────
+export async function getWorkOrderFiles(workOrderNo: string) {
+  try {
+    const files = await prisma.fileProfile.findMany({
+      where: { workOrderNo },
+      include: { fileCategory: true },
+      orderBy: { createdAt: "desc" },
+    });
+    return { success: true, data: files };
+  } catch (error: any) {
+    console.error("Error fetching work order files:", error);
+    return { success: false, error: "Failed to fetch files" };
+  }
+}
+
+export async function saveWorkOrderFile(data: {
+  workOrderNo: string;
+  fileCategoryId: string;
+  fileName: string;
+  fileType: string;
+  fileSize: number;
+  fileUrl: string;
+}) {
+  try {
+    const wo = await prisma.workOrder.findUnique({ where: { workOrderNo: data.workOrderNo } });
+    if (!wo) return { success: false, error: "Work Order not found" };
+
+    const file = await prisma.fileProfile.create({
+      data: {
+        workOrderNo: data.workOrderNo,
+        fileCategoryId: data.fileCategoryId,
+        fileName: data.fileName,
+        fileType: data.fileType,
+        fileSize: data.fileSize,
+        fileUrl: data.fileUrl,
+      },
+    });
+
+    revalidatePath(`/dashboard/production/work-order/${data.workOrderNo}/files`);
+    return { success: true, data: file };
+  } catch (error: any) {
+    console.error("Error saving work order file:", error);
+    return { success: false, error: error.message || "Failed to save file" };
+  }
+}
+
+export async function deleteWorkOrderFile(fileId: string, workOrderNo: string) {
+  try {
+    await prisma.fileProfile.delete({ where: { id: fileId } });
+    revalidatePath(`/dashboard/production/work-order/${workOrderNo}/files`);
+    return { success: true };
+  } catch (error: any) {
+    console.error("Error deleting work order file:", error);
+    return { success: false, error: error.message || "Failed to delete file" };
   }
 }

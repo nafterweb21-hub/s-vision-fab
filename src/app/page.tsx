@@ -53,10 +53,10 @@ export default function Home() {
       </div>
 
       {/* Right side - Login Form */}
-      <div className="relative flex w-full flex-col justify-center px-4 py-12 sm:px-6 lg:w-1/2 lg:px-8 xl:px-24">
-        <div className="mx-auto w-full max-w-sm lg:max-w-md">
+      <div className="relative flex w-full flex-col px-6 sm:px-8 py-4 md:justify-center md:py-12 lg:w-1/2 lg:px-8 xl:px-24">
+        <div className="mx-auto w-full max-w-sm lg:max-w-md flex-1 md:flex-none flex flex-col justify-center">
           {/* Mobile Logo */}
-          <div className="mb-10 flex items-center gap-3 lg:hidden">
+          <div className="mb-4 md:mb-10 flex items-center gap-3 lg:hidden">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-lg">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -89,7 +89,7 @@ export default function Home() {
         </div>
 
         {/* Footer */}
-        <div className="absolute bottom-6 left-0 w-full px-4 text-center text-sm text-slate-500">
+        <div className="mt-4 pb-2 lg:absolute lg:bottom-6 lg:left-0 lg:mt-0 lg:pb-0 w-full px-4 text-center text-[10px] md:text-sm text-slate-500">
           &copy; {new Date().getFullYear()} Vision One Fab Pvt Ltd. Developed by{" "}
           <a
             href="https://nafter.in"

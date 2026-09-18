@@ -94,8 +94,8 @@ export const SearchableSelect = React.forwardRef<HTMLSelectElement, SearchableSe
         width: rect.width,
         minWidth: Math.max(rect.width, 160),
         zIndex: 99999,
-        // Limit max height to available space
-        maxHeight: shouldDropUp ? Math.max(spaceAbove - 16, 100) : Math.max(spaceBelow - 16, 100),
+        // Limit max height to show roughly 5 items (approx 250px)
+        maxHeight: Math.min(250, shouldDropUp ? Math.max(spaceAbove - 16, 100) : Math.max(spaceBelow - 16, 100)),
       });
     }
   };
@@ -161,7 +161,6 @@ export const SearchableSelect = React.forwardRef<HTMLSelectElement, SearchableSe
           <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
-            autoFocus
             className="w-full pl-8 pr-3 py-1.5 text-sm border border-blue-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
             placeholder="Search..."
             value={search}
@@ -170,7 +169,7 @@ export const SearchableSelect = React.forwardRef<HTMLSelectElement, SearchableSe
           />
         </div>
       </div>
-      <div className="overflow-y-auto overflow-x-hidden flex-1 p-1">
+      <div className="overflow-y-auto overflow-x-hidden flex-1 min-h-0 p-1">
         {filteredOptions.length === 0 ? (
           <div className="px-3 py-2 text-sm text-slate-500 text-center">No options found</div>
         ) : (

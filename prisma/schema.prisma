@@ -592,6 +592,7 @@ model WorkOrder {
   inProcesses          WorkOrderInProcess[]
   invoiceItems         InvoiceItem[]
   consumptions         MaterialConsumption[]
+  files                FileProfile[]
 }
 
 model WorkOrderRework {
@@ -889,6 +890,7 @@ model Quotation {
   exchangeRate       Decimal
   subTotal           Decimal
   lumpSumDisc        Decimal                @default(0)
+  isRoundOff         Boolean                @default(false)
   taxTypeId          String?
   taxRate            Float?
   taxAmount          Decimal?
@@ -1666,4 +1668,28 @@ model TermsAndConditionProfile {
   status      String       @default("Active")
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
+}
+
+model FileCategoryProfile {
+  id          String       @id @default(cuid())
+  name        String       @unique
+  remark      String?
+  status      String       @default("Active")
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  files       FileProfile[]
+}
+
+model FileProfile {
+  id               String              @id @default(cuid())
+  fileCategory     FileCategoryProfile @relation(fields: [fileCategoryId], references: [id], onDelete: Cascade)
+  fileCategoryId   String
+  workOrder        WorkOrder?          @relation(fields: [workOrderNo], references: [workOrderNo], onDelete: Cascade)
+  workOrderNo      String?
+  fileName         String
+  fileType         String
+  fileSize         Int
+  fileUrl          String
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
 }
