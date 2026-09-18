@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { toast as hotToast } from "react-hot-toast";
 import { Search, ClipboardCheck, ArrowLeft, RefreshCw, FileText, CheckCircle, AlertCircle, X, Loader2, Calendar, User, Briefcase, Activity, LogOut } from "lucide-react";
 import { submitWorkOrderQc, submitProcessQc, sendBackToProduction, approveRework, rejectRework } from "../actions";
 
@@ -81,15 +82,19 @@ export default function QcDashboardClient({ initialAwaiting, initialWorkOrders, 
     startTransition(async () => {
       const fullRemark = `[Passed: ${passedQty} | Defects: ${defectsFound}] ${remarks}`;
       
-      // Pass 'demo-qc' as employeeId for now to trigger the NCR and rework creation
-      await submitWorkOrderQc(
+      // The inspector is taken from the signed-in user on the server.
+      const res = await submitWorkOrderQc(
         drawerData.workOrderNo, 
         qcStatus, 
         fullRemark, 
-        "demo-qc", // employeeId
+        undefined,
         passedQty, 
         defectsFound
       );
+      if (!res?.success) {
+        hotToast.error(res?.error || "Could not save the inspection.");
+        return;
+      }
       
       setDrawerOpen(false);
       handleRefresh();
@@ -100,7 +105,11 @@ export default function QcDashboardClient({ initialAwaiting, initialWorkOrders, 
     if (!drawerData) return;
     startTransition(async () => {
       const fullRemark = `[Passed: ${passedQty} | Defects: ${defectsFound}] ${remarks}`;
-      await submitProcessQc(drawerData.id, qcStatus, fullRemark);
+      const res = await submitProcessQc(drawerData.id, qcStatus, fullRemark);
+      if (!res?.success) {
+        hotToast.error(res?.error || "Could not save the inspection.");
+        return;
+      }
       setDrawerOpen(false);
       handleRefresh();
     });
@@ -119,11 +128,13 @@ export default function QcDashboardClient({ initialAwaiting, initialWorkOrders, 
   const handleSubmitRework = () => {
     if (!drawerData) return;
     startTransition(async () => {
-      // Pass 'demo-qc' as employeeId for now
-      if (qcStatus === "Approved") {
-        await approveRework(drawerData.id, "demo-qc", remarks);
-      } else {
-        await rejectRework(drawerData.id, "demo-qc", defectsFound, remarks);
+      const res =
+        qcStatus === "Approved"
+          ? await approveRework(drawerData.id, remarks)
+          : await rejectRework(drawerData.id, defectsFound, remarks);
+      if (!res?.success) {
+        hotToast.error(res?.error || "Could not save the re-inspection.");
+        return;
       }
       setDrawerOpen(false);
       handleRefresh();

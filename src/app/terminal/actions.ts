@@ -605,7 +605,7 @@ export async function getTerminalRecentCompletes(limit = 10, employeeId?: string
         include: {
           mainProcess: true,
           routingProcess: true,
-          inProcess: { include: { workOrder: true } },
+          inProcess: { include: { workOrder: { include: { customer: { select: { customerName: true } } } } } },
         },
       },
     },
@@ -704,6 +704,15 @@ export async function scanOut(payload: ScanOutPayload) {
     if (ts.timeOut) return { success: false, error: "Already scanned out" };
 
     const wo = ts.routingProcess.inProcess.workOrder;
+
+    // Welding sessions that report output must say what was welded and on which machine — the two
+    // fields the form marks as required. (Zero-quantity closes, e.g. the quick scan-out, are exempt.)
+    const reportsOutput = (Number(payload.completedQty) || 0) > 0 || (Number(payload.rejectedQty) || 0) > 0;
+    if (ts.routingProcess.routingProcess?.welding && reportsOutput) {
+      if (!payload.welding?.weldingTypeIds?.length || !payload.welding?.weldingMachineId) {
+        return { success: false, error: "Select the Type of Welding and the Welding Machine before completing." };
+      }
+    }
 
     // Validate overproduction
     if (wo.quantity != null) {

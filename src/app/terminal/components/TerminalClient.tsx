@@ -3,7 +3,7 @@
 import { SearchableSelect } from "@/components/SearchableSelect";
 import { toast as hotToast } from "react-hot-toast";
 
-import { useState, useTransition, useEffect, useRef } from "react";
+import { useState, useTransition, useEffect, useRef, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Monitor, Plus, ChevronRight, CheckCircle2, Info, AlertCircle, Minus, ChevronDown, Check, Zap, Clock, Box, LogOut, Keyboard, Play } from "lucide-react";
@@ -25,6 +25,14 @@ type Support = {
   elcometers: any[];
 };
 
+/** "1h 5m", "27m", or "<1m" for a session under a minute (never "0h 0m"). */
+function fmtDuration(minutes: number) {
+  const t = Math.round(minutes);
+  if (minutes > 0 && t < 1) return "<1m";
+  const h = Math.floor(t / 60);
+  return h ? `${h}h ${t % 60}m` : `${t}m`;
+}
+
 export default function TerminalClient({ support, loggedInEmployee, initialSessions = [], initialRecentCompletes = [], initialAvailable = [], completedTotal = 0 }: { support: Support, loggedInEmployee?: any | null, initialSessions?: any[], initialRecentCompletes?: any[], initialAvailable?: any[], completedTotal?: number }) {
   const router = useRouter();
   const [isScanInOpen, setIsScanInOpen] = useState(false);
@@ -33,6 +41,9 @@ export default function TerminalClient({ support, loggedInEmployee, initialSessi
   const [availableSessions, setAvailableSessions] = useState<any[]>(initialAvailable);
   const [prevInitialAvailable, setPrevInitialAvailable] = useState(initialAvailable);
   const [startingKey, setStartingKey] = useState<string | null>(null);
+  // Times depend on the viewer's time zone, so they must not be rendered on the server: that made the
+  // server HTML differ from the browser's (React hydration error #418 on every load).
+  const mounted = useSyncExternalStore(() => () => {}, () => true, () => false);
   const [selectedCompleteId, setSelectedCompleteId] = useState<string>("");
   const selectedComplete = recentCompletes.find((c) => c.id === selectedCompleteId);
   if (initialAvailable !== prevInitialAvailable) {
@@ -234,7 +245,17 @@ export default function TerminalClient({ support, loggedInEmployee, initialSessi
       return;
     }
 
-    if (flags?.welding) payload.welding = weldingForm;
+    if (flags?.welding) {
+      if (!weldingForm.weldingTypeIds?.length) {
+        hotToast.error("Please select the Type of Welding.");
+        return;
+      }
+      if (!weldingForm.weldingMachineId) {
+        hotToast.error("Please select the Welding Machine.");
+        return;
+      }
+      payload.welding = weldingForm;
+    }
     if (flags?.sprayPainting) payload.spray = sprayForm;
     if (flags?.machining) payload.machining = machiningForm;
 
@@ -403,7 +424,7 @@ export default function TerminalClient({ support, loggedInEmployee, initialSessi
                     .sort((a, b) => new Date(b.timeOut || b.timeIn || b.createdAt).getTime() - new Date(a.timeOut || a.timeIn || a.createdAt).getTime())
                     .map((rc, idx) => (
                     <option key={rc.id || idx} value={rc.id || idx}>
-                      {rc.routingProcess?.inProcess?.workOrderNo} - {rc.routingProcess?.routingProcess?.routingProcess} ({rc.timeOut ? new Date(rc.timeOut).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: false}) : "--:--"})
+                      {rc.routingProcess?.inProcess?.workOrderNo} - {rc.routingProcess?.routingProcess?.routingProcess} ({mounted && rc.timeOut ? new Date(rc.timeOut).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: false}) : "--:--"})
                     </option>
                   ))}
                 </SearchableSelect>
@@ -449,7 +470,7 @@ export default function TerminalClient({ support, loggedInEmployee, initialSessi
                     {[
                       ["Started", selectedComplete.timeIn ? new Date(selectedComplete.timeIn).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }) : "--:--"],
                       ["Finished", selectedComplete.timeOut ? new Date(selectedComplete.timeOut).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }) : "--:--"],
-                      ["Duration", selectedComplete.totalMinutes != null ? `${Math.floor(Number(selectedComplete.totalMinutes) / 60)}h ${Math.round(Number(selectedComplete.totalMinutes) % 60)}m` : "--"],
+                      ["Duration", selectedComplete.totalMinutes != null ? fmtDuration(Number(selectedComplete.totalMinutes)) : "--"],
                     ].map(([label, value]) => (
                       <div key={label} className="bg-slate-50 border border-slate-200 rounded-lg md:rounded-2xl px-2 py-1 md:px-6 md:py-4 flex flex-col items-center justify-center min-w-[60px] md:min-w-[100px]">
                         <div className="text-[7px] md:text-[9px] font-bold text-slate-400 tracking-widest uppercase mb-0 md:mb-1">{label}</div>
