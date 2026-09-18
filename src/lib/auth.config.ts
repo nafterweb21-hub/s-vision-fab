@@ -27,6 +27,9 @@ export const authConfig = {
     },
   },
 
+  // The app runs behind an nginx reverse proxy; without this Auth.js rejects every request
+  // with UntrustedHost unless AUTH_TRUST_HOST happens to be set in the process environment.
+  trustHost: true,
   pages: { signIn: "/" },
   providers: [],
   callbacks: {
