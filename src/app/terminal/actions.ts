@@ -268,6 +268,233 @@ export async function scanIn(input: { workOrderNo: string; inProcessId: string; 
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
+/** The signed-in user's employee record (linked id, else matched by email); admins may have none. */
+async function getSignedInEmployee() {
+  const user = (await auth())?.user;
+  if (!user) return null;
+  const select = { id: true, roleProfileId: true } as const;
+  let emp = user.employeeId ? await prisma.employee.findUnique({ where: { id: user.employeeId }, select }) : null;
+  if (!emp && user.email) emp = await prisma.employee.findFirst({ where: { email: user.email }, select });
+  return { user, emp, isAdmin: user.role === "ADMIN" };
+}
+
+export type CompletedSessionsQuery = {
+  q?: string;
+  /** Local calendar dates (YYYY-MM-DD) of the viewer, inclusive. */
+  from?: string;
+  to?: string;
+  page?: number;
+  pageSize?: number;
+  /** Viewer's `Date.getTimezoneOffset()`, so day boundaries are local, not server time. */
+  tzOffsetMinutes?: number;
+};
+
+/**
+ * A worker's finished sessions, newest first, with search, a date range and paging — built so months of
+ * history stay navigable. Workers see only their own; an admin with no linked employee sees everyone's.
+ */
+export async function getCompletedSessions(query: CompletedSessionsQuery = {}) {
+  const empty = { rows: [] as any[], total: 0, page: 1, pageCount: 1, pageSize: 15, scope: "none" as "own" | "all" | "none", totals: { sessions: 0, completedQty: 0, rejectedQty: 0, minutes: 0 } };
+  try {
+    const me = await getSignedInEmployee();
+    if (!me) return empty;
+    if (!me.emp && !me.isAdmin) return empty;
+    const scope: "own" | "all" = me.emp ? "own" : "all";
+
+    const pageSize = Math.min(Math.max(Math.floor(query.pageSize ?? 15), 5), 50);
+    const tz = Number.isFinite(query.tzOffsetMinutes) ? Number(query.tzOffsetMinutes) : 0;
+    const dayStartUtc = (ymd?: string) => {
+      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd ?? "");
+      return m ? new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]) + tz * 60000) : null;
+    };
+    const from = dayStartUtc(query.from);
+    const toExclusive = dayStartUtc(query.to);
+    if (toExclusive) toExclusive.setUTCDate(toExclusive.getUTCDate() + 1);
+
+    const q = (query.q ?? "").trim();
+    const where: any = {
+      timeOut: { not: null, ...(from ? { gte: from } : {}), ...(toExclusive ? { lt: toExclusive } : {}) },
+      ...(me.emp ? { employeeId: me.emp.id } : {}),
+      ...(q
+        ? {
+            OR: [
+              { routingProcess: { inProcess: { workOrderNo: { contains: q, mode: "insensitive" } } } },
+              { routingProcess: { inProcess: { workOrder: { customer: { customerName: { contains: q, mode: "insensitive" } } } } } },
+              { routingProcess: { routingProcess: { routingProcess: { contains: q, mode: "insensitive" } } } },
+              { routingProcess: { mainProcess: { process: { contains: q, mode: "insensitive" } } } },
+            ],
+          }
+        : {}),
+    };
+
+    const [total, agg] = await Promise.all([
+      prisma.productionTimesheet.count({ where }),
+      prisma.productionTimesheet.aggregate({ where, _sum: { completedQty: true, rejectedQty: true, totalMinutes: true } }),
+    ]);
+    const pageCount = Math.max(1, Math.ceil(total / pageSize));
+    const page = Math.min(Math.max(Math.floor(query.page ?? 1), 1), pageCount);
+
+    const rows = await prisma.productionTimesheet.findMany({
+      where,
+      orderBy: { timeOut: "desc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      select: {
+        id: true,
+        timeIn: true,
+        timeOut: true,
+        totalMinutes: true,
+        totalIdleMinutes: true,
+        completedQty: true,
+        rejectedQty: true,
+        rejectReason: true,
+        machineCodes: true,
+        qcStatus: true,
+        qcRemark: true,
+        employee: { select: { name: true, code: true } },
+        routingProcess: {
+          select: {
+            mainProcess: { select: { process: true } },
+            routingProcess: { select: { routingProcess: true } },
+            inProcess: {
+              select: {
+                description: true,
+                workOrderNo: true,
+                workOrder: { select: { jobDescription: true, quantity: true, uom: true, customer: { select: { customerName: true } } } },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    return {
+      rows: JSON.parse(JSON.stringify(rows)) as any[],
+      total,
+      page,
+      pageCount,
+      pageSize,
+      scope,
+      totals: {
+        sessions: total,
+        completedQty: Number(agg._sum.completedQty ?? 0),
+        rejectedQty: Number(agg._sum.rejectedQty ?? 0),
+        minutes: Number(agg._sum.totalMinutes ?? 0),
+      },
+    };
+  } catch (error) {
+    console.error("getCompletedSessions failed:", error);
+    return empty;
+  }
+}
+
+/**
+ * Work the signed-in operator can start right now, so they can tap it instead of scanning or typing.
+ *
+ * It is the current (serial front) step of every Proceed/WIP work order whose routing process allows
+ * the operator's role — the same sequence + role gate `scanIn` enforces — minus steps assigned to
+ * someone else and steps this operator already has running. An admin with no linked employee is not
+ * role-filtered and sees every current step.
+ */
+export async function getAvailableSessions() {
+  try {
+    const me = await getSignedInEmployee();
+    if (!me) return [];
+    const { emp, isAdmin } = me;
+    if (!emp && !isAdmin) return [];
+
+    const workOrders = await prisma.workOrder.findMany({
+      where: { status: { in: ["Proceed", "WIP"] } },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+      select: {
+        workOrderNo: true,
+        jobDescription: true,
+        quantity: true,
+        uom: true,
+        deliveryDate: true,
+        customer: { select: { customerName: true } },
+        inProcesses: {
+          orderBy: { sn: "asc" },
+          select: {
+            id: true,
+            sn: true,
+            description: true,
+            routingProcesses: {
+              orderBy: { sequence: "asc" },
+              select: {
+                id: true,
+                sequence: true,
+                status: true,
+                mainProcessId: true,
+                routingProcessId: true,
+                assignedEmployeeId: true,
+                targetCompletionDate: true,
+                mainProcess: { select: { process: true } },
+                routingProcess: { select: { routingProcess: true, allowedRoles: { select: { id: true } } } },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const running = emp
+      ? await prisma.productionTimesheet.findMany({
+          where: { employeeId: emp.id, timeOut: null },
+          select: { routingProcessId: true },
+        })
+      : [];
+    const runningIds = new Set(running.map((t) => t.routingProcessId));
+
+    const out: any[] = [];
+    for (const wo of workOrders) {
+      const flat = wo.inProcesses.flatMap((ip) => ip.routingProcesses.map((rp) => ({ ip, rp })));
+      const gateRows: GateRow[] = flat.map(({ ip, rp }) => ({
+        id: rp.id,
+        inProcessSn: ip.sn ?? 0,
+        sequence: rp.sequence,
+        status: rp.status,
+        mainProcessId: rp.mainProcessId,
+        allowedRoleIds: (rp.routingProcess?.allowedRoles ?? []).map((r) => r.id),
+      }));
+
+      for (const g of computeGating(gateRows, emp?.roleProfileId)) {
+        if (!g.available) continue;
+        if (emp ? !g.permitted : false) continue; // role gate (admin without an employee skips it)
+        const found = flat.find((f) => f.rp.id === g.id);
+        if (!found) continue;
+        const { ip, rp } = found;
+        if (!rp.mainProcessId || !rp.routingProcessId) continue;
+        if (emp && rp.assignedEmployeeId && rp.assignedEmployeeId !== emp.id) continue;
+        if (runningIds.has(rp.id)) continue;
+
+        out.push({
+          key: rp.id,
+          workOrderNo: wo.workOrderNo,
+          customer: wo.customer?.customerName ?? "",
+          jobDescription: wo.jobDescription ?? "",
+          quantity: wo.quantity != null ? Number(wo.quantity) : null,
+          uom: wo.uom ?? "",
+          deliveryDate: wo.deliveryDate ? wo.deliveryDate.toISOString() : null,
+          inProcessId: ip.id,
+          inProcessName: ip.description,
+          mainProcessId: rp.mainProcessId,
+          mainProcessName: rp.mainProcess?.process ?? "",
+          routingProcessProfileId: rp.routingProcessId,
+          routingProcessName: rp.routingProcess?.routingProcess ?? "",
+          status: rp.status,
+          targetDate: rp.targetCompletionDate.toISOString(),
+        });
+      }
+    }
+    return out;
+  } catch (error) {
+    console.error("getAvailableSessions failed:", error);
+    return [];
+  }
+}
+
 export async function togglePauseSession(timesheetId: string) {
   try {
     const ts = await prisma.productionTimesheet.findUnique({ where: { id: timesheetId } });

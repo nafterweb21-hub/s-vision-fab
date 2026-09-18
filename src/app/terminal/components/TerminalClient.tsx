@@ -5,9 +5,11 @@ import { toast as hotToast } from "react-hot-toast";
 
 import { useState, useTransition, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Monitor, Plus, ChevronRight, CheckCircle2, Info, AlertCircle, Minus, ChevronDown, Check, Zap, Clock, Box, LogOut, Keyboard } from "lucide-react";
+import Link from "next/link";
+import { Monitor, Plus, ChevronRight, CheckCircle2, Info, AlertCircle, Minus, ChevronDown, Check, Zap, Clock, Box, LogOut, Keyboard, Play } from "lucide-react";
 import ProductionIntake from "./ProductionIntake";
 import {
+  scanIn,
   scanOut,
   togglePauseSession,
   type ScanOutPayload,
@@ -23,11 +25,20 @@ type Support = {
   elcometers: any[];
 };
 
-export default function TerminalClient({ support, loggedInEmployee, initialSessions = [], initialRecentCompletes = [] }: { support: Support, loggedInEmployee?: any | null, initialSessions?: any[], initialRecentCompletes?: any[] }) {
+export default function TerminalClient({ support, loggedInEmployee, initialSessions = [], initialRecentCompletes = [], initialAvailable = [], completedTotal = 0 }: { support: Support, loggedInEmployee?: any | null, initialSessions?: any[], initialRecentCompletes?: any[], initialAvailable?: any[], completedTotal?: number }) {
   const router = useRouter();
   const [isScanInOpen, setIsScanInOpen] = useState(false);
   const [activeSessions, setActiveSessions] = useState<any[]>(initialSessions);
   const [recentCompletes, setRecentCompletes] = useState<any[]>(initialRecentCompletes);
+  const [availableSessions, setAvailableSessions] = useState<any[]>(initialAvailable);
+  const [prevInitialAvailable, setPrevInitialAvailable] = useState(initialAvailable);
+  const [startingKey, setStartingKey] = useState<string | null>(null);
+  const [selectedCompleteId, setSelectedCompleteId] = useState<string>("");
+  const selectedComplete = recentCompletes.find((c) => c.id === selectedCompleteId);
+  if (initialAvailable !== prevInitialAvailable) {
+    setPrevInitialAvailable(initialAvailable);
+    setAvailableSessions(initialAvailable);
+  }
   
   const [now, setNow] = useState(new Date());
   useEffect(() => {
@@ -152,12 +163,40 @@ export default function TerminalClient({ support, loggedInEmployee, initialSessi
   const maxAllowedQty = Math.max(0, targetQty - previouslyCompleted);
   const remainingQty = Math.max(0, maxAllowedQty - (Number(producedCount) || 0));
 
+  // One tap starts a session for the signed-in operator; the server re-checks sequence, role and identity.
+  async function handleStartAvailable(s: any) {
+    if (!loggedInEmployee?.id || loggedInEmployee.code === "UNLINKED_USER") {
+      hotToast.error("Your account is not linked to an employee, so it cannot start sessions.");
+      return;
+    }
+    setStartingKey(s.key);
+    try {
+      const res = await scanIn({
+        workOrderNo: s.workOrderNo,
+        inProcessId: s.inProcessId,
+        mainProcessId: s.mainProcessId,
+        routingProcessProfileId: s.routingProcessProfileId,
+        employeeId: loggedInEmployee.id,
+      });
+      if (!res.success) {
+        hotToast.error(res.error || "Could not start the session.");
+        router.refresh();
+        return;
+      }
+      hotToast.success(`Started ${s.workOrderNo} · ${s.routingProcessName}`);
+      router.refresh();
+    } finally {
+      setStartingKey(null);
+    }
+  }
+
   function handleScanInSuccess() {
     closeScanInModal();
     router.refresh();
   }
 
   function handleSelectSession(session: any) {
+    setSelectedCompleteId("");
     setSelectedSessionId(session.id);
     setProducedCount(0);
     setDefectCount(0);
@@ -249,7 +288,7 @@ export default function TerminalClient({ support, loggedInEmployee, initialSessi
           <div className="bg-slate-50 border border-slate-200 rounded-lg md:rounded-2xl px-1 py-1 md:px-6 md:py-3 flex flex-col items-center justify-center flex-1">
             <div className="text-[7px] md:text-[9px] font-bold tracking-widest text-slate-500 uppercase mb-0 md:mb-1">Total Produced</div>
             <div className="text-sm md:text-2xl font-bold text-emerald-600 leading-none">
-              {recentCompletes.length}
+              {completedTotal}
             </div>
           </div>
           <button 
@@ -267,6 +306,47 @@ export default function TerminalClient({ support, loggedInEmployee, initialSessi
         {/* LEFT SIDEBAR */}
         <div className="lg:col-span-4 space-y-3 md:space-y-8">
           
+          <section>
+            <div className="flex items-center gap-1.5 md:gap-2 mb-2 md:mb-4 text-emerald-600">
+              <Play size={14} className="md:w-4 md:h-4" fill="currentColor" />
+              <h3 className="text-[10px] md:text-xs font-bold tracking-widest uppercase text-slate-500">Available Sessions</h3>
+              <span className="ml-auto text-[10px] md:text-xs font-bold text-slate-400">{availableSessions.length}</span>
+            </div>
+
+            <div className="space-y-2 md:space-y-3">
+              {availableSessions.length === 0 ? (
+                <div className="bg-slate-50 border border-slate-200 shadow-sm rounded-xl md:rounded-3xl p-3 md:p-6 text-center text-slate-500 text-[10px] md:text-sm">
+                  No work is waiting for you right now.
+                </div>
+              ) : (
+                availableSessions.map((s) => (
+                  <div
+                    key={s.key}
+                    className="bg-white border border-slate-200 shadow-sm rounded-xl md:rounded-2xl p-3 md:p-4 flex items-center justify-between gap-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-xs md:text-sm font-bold text-slate-900 truncate">{s.workOrderNo}</p>
+                      <p className="text-[10px] md:text-xs font-semibold text-emerald-700 truncate">
+                        {s.mainProcessName} · {s.routingProcessName}
+                      </p>
+                      <p className="text-[10px] md:text-xs text-slate-500 truncate">
+                        {[s.customer, s.quantity != null ? `${s.quantity} ${s.uom}`.trim() : ""].filter(Boolean).join(" · ")}
+                      </p>
+                      <p className="text-[10px] text-slate-400 truncate">{s.inProcessName}</p>
+                    </div>
+                    <button
+                      onClick={() => handleStartAvailable(s)}
+                      disabled={startingKey !== null}
+                      className="shrink-0 px-3 py-2 md:px-4 rounded-lg md:rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] md:text-xs font-bold uppercase tracking-wider transition-colors active:scale-95 disabled:opacity-50"
+                    >
+                      {startingKey === s.key ? "Starting..." : "Start"}
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </section>
+
           <section>
             <div className="flex items-center gap-1.5 md:gap-2 mb-2 md:mb-4 text-cyan-600">
               <Zap size={14} className="md:w-4 md:h-4" fill="currentColor" />
@@ -312,7 +392,11 @@ export default function TerminalClient({ support, loggedInEmployee, initialSessi
               ) : (
                 <SearchableSelect 
                   className="w-full bg-white border border-slate-200 shadow-sm rounded-lg md:rounded-2xl px-2 py-1.5 md:px-4 md:py-4 text-[10px] md:text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 focus:border-cyan-500"
-                  defaultValue=""
+                  value={selectedCompleteId || ""}
+                  onChange={(e) => {
+                    setSelectedCompleteId(e.target.value);
+                    setSelectedSessionId("");
+                  }}
                 >
                   <option value="" disabled>View Recent Completes...</option>
                   {[...recentCompletes]
@@ -324,6 +408,13 @@ export default function TerminalClient({ support, loggedInEmployee, initialSessi
                   ))}
                 </SearchableSelect>
               )}
+              <Link
+                href="/terminal/history"
+                className="flex items-center justify-between w-full bg-white border border-slate-200 shadow-sm rounded-lg md:rounded-2xl px-2 py-1.5 md:px-4 md:py-3 text-[10px] md:text-sm font-bold text-cyan-700 hover:border-cyan-300 hover:bg-cyan-50/40 transition-colors"
+              >
+                View full history
+                <ChevronRight size={14} />
+              </Link>
             </div>
           </section>
 
@@ -340,7 +431,64 @@ export default function TerminalClient({ support, loggedInEmployee, initialSessi
               </svg>
             </div>
 
-            {!selectedSession ? (
+            {selectedComplete ? (
+              <div className="relative z-10 flex-1">
+                <div className="flex flex-col md:flex-row md:items-start justify-between gap-3 mb-4 md:mb-8">
+                  <div>
+                    <div className="inline-block bg-emerald-50 text-emerald-700 text-[9px] md:text-[10px] font-bold px-2 py-0.5 md:px-3 md:py-1 rounded-full uppercase tracking-widest mb-1.5 md:mb-3">
+                      Completed Session
+                    </div>
+                    <h2 className="text-xl md:text-4xl font-bold tracking-tight mb-1 md:mb-2 text-slate-900">
+                      {selectedComplete.routingProcess?.routingProcess?.routingProcess || "Unknown Process"}
+                    </h2>
+                    <div className="text-slate-400 font-bold tracking-widest text-[10px] md:text-sm uppercase">
+                      {selectedComplete.routingProcess?.inProcess?.workOrderNo}
+                    </div>
+                  </div>
+                  <div className="flex gap-2 md:gap-4">
+                    {[
+                      ["Started", selectedComplete.timeIn ? new Date(selectedComplete.timeIn).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }) : "--:--"],
+                      ["Finished", selectedComplete.timeOut ? new Date(selectedComplete.timeOut).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }) : "--:--"],
+                      ["Duration", selectedComplete.totalMinutes != null ? `${Math.floor(Number(selectedComplete.totalMinutes) / 60)}h ${Math.round(Number(selectedComplete.totalMinutes) % 60)}m` : "--"],
+                    ].map(([label, value]) => (
+                      <div key={label} className="bg-slate-50 border border-slate-200 rounded-lg md:rounded-2xl px-2 py-1 md:px-6 md:py-4 flex flex-col items-center justify-center min-w-[60px] md:min-w-[100px]">
+                        <div className="text-[7px] md:text-[9px] font-bold text-slate-400 tracking-widest uppercase mb-0 md:mb-1">{label}</div>
+                        <div className="text-slate-900 font-bold tracking-wider text-sm">{value}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <dl className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6 text-sm">
+                  {[
+                    ["Customer", selectedComplete.routingProcess?.inProcess?.workOrder?.customer?.customerName],
+                    ["Completed qty", Number(selectedComplete.completedQty) || 0],
+                    ["Rejected qty", Number(selectedComplete.rejectedQty) || 0],
+                    ["QC status", selectedComplete.qcStatus],
+                    ["Operator", selectedComplete.employee ? `${selectedComplete.employee.name} (${selectedComplete.employee.code})` : null],
+                    ["Machines", selectedComplete.machineCodes],
+                    ["Reject reason", selectedComplete.rejectReason],
+                    ["QC remark", selectedComplete.qcRemark],
+                  ]
+                    .filter(([, v]) => v !== null && v !== undefined && v !== "")
+                    .map(([k, v]) => (
+                      <div key={k as string}>
+                        <dt className="text-[10px] font-bold tracking-widest uppercase text-slate-400">{k}</dt>
+                        <dd className="text-slate-900 font-medium break-words">{v as any}</dd>
+                      </div>
+                    ))}
+                </dl>
+
+                <div className="mt-6 md:mt-10 flex items-center gap-4">
+                  <Link href="/terminal/history" className="text-xs md:text-sm font-bold text-cyan-700 hover:underline">
+                    Open full history
+                  </Link>
+                  <button onClick={() => setSelectedCompleteId("")} className="text-xs md:text-sm font-bold text-slate-500 hover:text-slate-700">
+                    Close
+                  </button>
+                </div>
+              </div>
+            ) : !selectedSession ? (
               <div className="flex-1 flex flex-col items-center justify-center text-slate-400">
                 <Monitor size={48} className="mb-4 opacity-20" />
                 <p>Select an active session to view details</p>

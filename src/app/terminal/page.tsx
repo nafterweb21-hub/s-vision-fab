@@ -1,5 +1,5 @@
 import TerminalClient from "./components/TerminalClient";
-import { getTerminalSupportData, getTerminalActiveSessions, getTerminalRecentCompletes } from "./actions";
+import { getTerminalSupportData, getTerminalActiveSessions, getTerminalRecentCompletes, getAvailableSessions } from "./actions";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -53,7 +53,14 @@ export default async function TerminalPage() {
 
   // Always fetch all sessions so the client can filter if localEmployee is used
   initialSessions = await getTerminalActiveSessions();
-  initialRecentCompletes = await getTerminalRecentCompletes(50);
+  // A worker sees their own recent completes; only an unlinked (e.g. admin) account sees everyone's.
+  const scopeEmployeeId =
+    loggedInEmployee && loggedInEmployee.code !== "UNLINKED_USER" ? loggedInEmployee.id : undefined;
+  initialRecentCompletes = await getTerminalRecentCompletes(10, scopeEmployeeId);
+  const completedTotal = await prisma.productionTimesheet.count({
+    where: { timeOut: { not: null }, ...(scopeEmployeeId ? { employeeId: scopeEmployeeId } : {}) },
+  });
+  const initialAvailable = await getAvailableSessions();
 
   return (
     <TerminalClient 
@@ -61,6 +68,8 @@ export default async function TerminalPage() {
       loggedInEmployee={loggedInEmployee ? JSON.parse(JSON.stringify(loggedInEmployee)) : null}
       initialSessions={initialSessions}
       initialRecentCompletes={initialRecentCompletes}
+      initialAvailable={initialAvailable}
+      completedTotal={completedTotal}
     />
   );
 }
