@@ -64,9 +64,17 @@ ssh $SSH_OPTS "$VPS_HOST" "rm -rf $DEPLOY_PATH/node_modules $DEPLOY_PATH/.next $
 echo "==> Fixing permissions for uploads directory..."
 ssh $SSH_OPTS "$VPS_HOST" "sudo chmod -R 777 $DEPLOY_PATH/public/uploads"
 
-echo "==> Pushing Prisma schema to DB on VPS..."
-# Execute prisma db push via npx on the server
-ssh $SSH_OPTS "$VPS_HOST" "export NVM_DIR=~/.nvm && source ~/.nvm/nvm.sh && nvm use 20.20.2 && rm -rf /tmp/prisma_deps && mkdir -p /tmp/prisma_deps && cd /tmp/prisma_deps && npm init -y && npm install dotenv typescript ts-node @types/node prisma@7.10.0 && cd $DEPLOY_PATH && NODE_PATH=/tmp/prisma_deps/node_modules npx -y prisma@7.10.0 db push --accept-data-loss"
+# Schema sync is opt-in: RUN_DB_PUSH=1 ./deploy_lightsail.sh ...
+# The app connects as a limited role (vision_app) that does not own the tables, so a push
+# needs a DB URL for the owning role in the server's .env. It never uses --accept-data-loss
+# (destructive changes are refused, not applied) and a failure here never aborts the deploy.
+if [ "${RUN_DB_PUSH:-0}" = "1" ]; then
+  echo "==> Pushing Prisma schema to DB on VPS (RUN_DB_PUSH=1)..."
+  ssh $SSH_OPTS "$VPS_HOST" "export NVM_DIR=~/.nvm && source ~/.nvm/nvm.sh && nvm use 20.20.2 && rm -rf /tmp/prisma_deps && mkdir -p /tmp/prisma_deps && cd /tmp/prisma_deps && npm init -y && npm install dotenv typescript ts-node @types/node prisma@7.10.0 && cd $DEPLOY_PATH && NODE_PATH=/tmp/prisma_deps/node_modules npx -y prisma@7.10.0 db push" \
+    || echo "WARNING: prisma db push failed or was refused; the app is unaffected. Apply schema changes manually."
+else
+  echo "==> Skipping prisma db push (set RUN_DB_PUSH=1 to sync the schema)"
+fi
 
 
 echo "==> Restarting app via pm2..."
