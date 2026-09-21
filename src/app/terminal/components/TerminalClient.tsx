@@ -758,6 +758,14 @@ export default function TerminalClient({ support, loggedInEmployee, initialSessi
                         <option value="">Select Machine...</option>
                         {support.weldingMachines.map((m) => <option key={m.id} value={m.id}>{m.machineCode} - {m.model}</option>)}
                       </SearchableSelect>
+                      <SearchableSelect 
+                        value={weldingForm.weldingTypeIds?.[0] || ""} 
+                        onChange={(e) => setWeldingForm({...weldingForm, weldingTypeIds: e.target.value ? [e.target.value] : []})} 
+                        className="w-full appearance-none bg-white border border-slate-200 text-slate-700 text-sm font-medium rounded-xl px-4 py-3 outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/20"
+                      >
+                        <option value="">Type of Welding...</option>
+                        {support.weldingTypes.map((t: any) => <option key={t.id} value={t.id}>{t.type}</option>)}
+                      </SearchableSelect>
                       <input type="number" placeholder="Voltage (V)" value={weldingForm.voltageVolts || ""} onChange={(e) => setWeldingForm({...weldingForm, voltageVolts: e.target.value ? Number(e.target.value) : undefined})} className="w-full appearance-none bg-white border border-slate-200 text-slate-700 text-sm font-medium rounded-xl px-4 py-3 outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/20" />
                       <input type="number" placeholder="Current (A)" value={weldingForm.currentAmp || ""} onChange={(e) => setWeldingForm({...weldingForm, currentAmp: e.target.value ? Number(e.target.value) : undefined})} className="w-full appearance-none bg-white border border-slate-200 text-slate-700 text-sm font-medium rounded-xl px-4 py-3 outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/20" />
                       <input type="text" placeholder="Electrode Type" value={weldingForm.electrodeType || ""} onChange={(e) => setWeldingForm({...weldingForm, electrodeType: e.target.value})} className="w-full appearance-none bg-white border border-slate-200 text-slate-700 text-sm font-medium rounded-xl px-4 py-3 outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/20" />

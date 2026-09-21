@@ -62,6 +62,7 @@ export default async function WorkOrdersPage() {
               routingProcesses: {
                 select: {
                   sn: true,
+                  status: true,
                   productionTimesheets: {
                     select: {
                       completedQty: true,
@@ -84,9 +85,7 @@ export default async function WorkOrdersPage() {
       let rejectedQty = 0;
       const totalQty = Number(wo.quantity) || 0;
 
-      if (wo.status === "Completed") {
-        producedQty = totalQty;
-      } else if (wo.inProcesses && wo.inProcesses.length > 0) {
+      if (wo.inProcesses && wo.inProcesses.length > 0) {
         let lastProcess = null;
         let maxSn = -1;
         wo.inProcesses.forEach((ip: any) => {
@@ -111,13 +110,23 @@ export default async function WorkOrdersPage() {
       // Cap at total
       producedQty = Math.min(producedQty, totalQty);
 
+      let derivedStatus = wo.status || "Unknown";
+      if (derivedStatus === "Completed" && wo.inProcesses && wo.inProcesses.length > 0) {
+        const allCompleted = wo.inProcesses.every((ip: any) => 
+          ip.routingProcesses.length > 0 && ip.routingProcesses.every((rp: any) => rp.status === "Completed")
+        );
+        if (!allCompleted) {
+          derivedStatus = "WIP";
+        }
+      }
+
       return {
         workOrderNo: wo.workOrderNo,
         date: wo.date ? new Date(wo.date).toISOString() : null,
         customerName: wo.customer?.customerName || wo.CustomerProfile?.customerName || "-",
         jobDescription: wo.jobDescription || "-",
         uom: wo.uom || "",
-        status: wo.status || "Unknown",
+        status: derivedStatus,
         qcAcceptance: wo.qcAcceptance,
         producedQty,
         rejectedQty,

@@ -25,6 +25,11 @@ export default async function WorkOrderDetailPage({
           rejectedBy: true,
           reInspectedBy: true
         }
+      },
+      inProcesses: {
+        include: {
+          routingProcesses: true
+        }
       }
     },
   });
@@ -35,8 +40,20 @@ export default async function WorkOrderDetailPage({
 
   const uoms = await getUomList();
 
+  let derivedStatus = workOrder.status || "Unknown";
+  if (derivedStatus === "Completed" && workOrder.inProcesses && workOrder.inProcesses.length > 0) {
+    const allCompleted = workOrder.inProcesses.every((ip: any) => 
+      ip.routingProcesses.length > 0 && ip.routingProcesses.every((rp: any) => rp.status === "Completed")
+    );
+    if (!allCompleted) {
+      derivedStatus = "WIP";
+    }
+  }
+  
+  const modifiedWorkOrder = { ...workOrder, status: derivedStatus };
+
   // Decimals → strings to keep client serialisable
-  const serialised = JSON.parse(JSON.stringify(workOrder));
+  const serialised = JSON.parse(JSON.stringify(modifiedWorkOrder));
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">

@@ -161,7 +161,7 @@ const ALLOWED: Record<string, string[]> = {
   WIP: ["On Hold", "Cancelled"],
   "On Hold": ["WIP", "Cancelled"],
   "Pending for QC": ["Completed", "On Hold"],
-  Completed: [],
+  Completed: ["WIP"],
   Void: [],
   Cancelled: [],
 };
@@ -186,6 +186,15 @@ export async function transitionWorkOrderStatus(workOrderNo: string, next: strin
       const hasRouting = wo.inProcesses.some((ip: any) => ip.routingProcesses.length > 0);
       if (!hasRouting) {
         return { success: false, error: "Set at least one routing process before Proceed" };
+      }
+    }
+
+    if (next === "Completed") {
+      const allCompleted = wo.inProcesses.every((ip: any) => 
+        ip.routingProcesses.length > 0 && ip.routingProcesses.every((rp: any) => rp.status === "Completed")
+      );
+      if (!allCompleted) {
+        return { success: false, error: "Cannot mark as Completed until all routing processes are Completed" };
       }
     }
 

@@ -124,6 +124,14 @@ export default async function WorkOrderTimesheetsPage({
 
   const editable = !["Void", "Cancelled", "Completed"].includes(workOrder.status);
 
+  let topDerivedStatus = workOrder.status || "Unknown";
+  if (topDerivedStatus === "Completed" && workOrder.inProcesses && workOrder.inProcesses.length > 0) {
+    const allCompleted = workOrder.inProcesses.every((ip: any) => 
+      ip.routingProcesses.length > 0 && ip.routingProcesses.every((rp: any) => rp.status === "Completed")
+    );
+    if (!allCompleted) topDerivedStatus = "WIP";
+  }
+
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       <div className="flex items-center gap-4">
@@ -136,7 +144,7 @@ export default async function WorkOrderTimesheetsPage({
         <div>
           <h1 className="text-2xl font-bold text-slate-800">Work Order: {workOrder.workOrderNo}</h1>
           <p className="text-sm text-slate-500 mt-1">
-            Status: <span className="font-medium">{workOrder.status}</span>
+            Status: <span className="font-medium">{topDerivedStatus}</span>
           </p>
         </div>
       </div>

@@ -42,7 +42,9 @@ const NEXT: Record<string, { label: string; to: string; tone: string }[]> = {
     { label: "QC Approve → Complete", to: "Completed", tone: "bg-emerald-600 hover:bg-emerald-700 text-white" },
     { label: "Send back On Hold", to: "On Hold", tone: "bg-orange-100 text-orange-700 hover:bg-orange-200" },
   ],
-  Completed: [],
+  Completed: [
+    { label: "Revert to WIP", to: "WIP", tone: "bg-amber-600 hover:bg-amber-700 text-white" }
+  ],
   Void: [],
   Cancelled: [],
 };
