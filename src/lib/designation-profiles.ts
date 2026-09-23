@@ -18,6 +18,26 @@ export async function createDesignationProfile(data: {
   remark?: string;
   createdBy?: string;
 }) {
+  const existing = await prisma.designationProfile.findUnique({
+    where: { designation: data.designation },
+  });
+
+  if (existing) {
+    if (existing.isDeleted) {
+      return await prisma.designationProfile.update({
+        where: { id: existing.id },
+        data: {
+          isDeleted: false,
+          remark: data.remark,
+          status: "Active",
+          updatedBy: data.createdBy,
+        },
+      });
+    } else {
+      throw new Error("A Designation Profile with this name already exists.");
+    }
+  }
+
   return await prisma.designationProfile.create({
     data: {
       ...data,
