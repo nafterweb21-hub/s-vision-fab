@@ -1,0 +1,15 @@
+import { prisma } from "../src/lib/prisma";
+
+async function run() {
+  await prisma.workOrder.update({
+    where: { workOrderNo: 'WO-SO-2026-0003-001' },
+    data: { status: 'WIP' }
+  });
+  console.log('Successfully updated DB status to WIP');
+}
+
+run()
+  .catch(console.error)
+  .finally(async () => {
+    await prisma.$disconnect();
+  });

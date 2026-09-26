@@ -9,8 +9,16 @@ import { getWorkOrderFiles, deleteWorkOrderFile } from "../../actions";
 import { getFileCategoriesList } from "@/app/dashboard/master-profile/file-category/actions";
 import { customConfirm } from "@/lib/customConfirm";
 import UploadFileDialog from "./UploadFileDialog";
+import { useSession } from "next-auth/react";
+import { canCreate, canDelete } from "@/lib/access";
 
 export default function WorkOrderFilesPage() {
+  const { data: session } = useSession();
+  const userRole = (session?.user as any)?.role;
+  const permissions = (session?.user as any)?.permissions;
+  const canUpload = canCreate(permissions, 'WORK_ORDER', userRole);
+  const canDeleteFile = canDelete(permissions, 'WORK_ORDER', userRole);
+
   const params = useParams();
   const id = params.id as string;
 
@@ -124,15 +132,17 @@ export default function WorkOrderFilesPage() {
                 </option>
               ))}
             </select>
-            <button
-              onClick={() => setIsDialogOpen(true)}
-              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 hover:bg-blue-700 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors cursor-pointer"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-              </svg>
-              Upload Files
-            </button>
+            {canUpload && (
+              <button
+                onClick={() => setIsDialogOpen(true)}
+                className="inline-flex items-center gap-2 rounded-lg bg-blue-600 hover:bg-blue-700 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors cursor-pointer"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                </svg>
+                Upload Files
+              </button>
+            )}
           </div>
         </div>
 
@@ -199,15 +209,17 @@ export default function WorkOrderFilesPage() {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                           </svg>
                         </a>
-                        <button
-                          onClick={() => handleDelete(file.id)}
-                          className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-md transition-colors"
-                          title="Delete"
-                        >
-                          <svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
+                        {canDeleteFile && (
+                          <button
+                            onClick={() => handleDelete(file.id)}
+                            className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-md transition-colors"
+                            title="Delete"
+                          >
+                            <svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

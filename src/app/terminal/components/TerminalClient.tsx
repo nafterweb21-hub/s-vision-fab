@@ -6,7 +6,7 @@ import { toast as hotToast } from "react-hot-toast";
 import { useState, useTransition, useEffect, useRef, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Monitor, Plus, ChevronRight, CheckCircle2, Info, AlertCircle, Minus, ChevronDown, Check, Zap, Clock, Box, LogOut, Keyboard, Play } from "lucide-react";
+import { Monitor, Plus, ChevronRight, CheckCircle2, Info, AlertCircle, Minus, ChevronDown, Check, Zap, Clock, Box, LogOut, Keyboard, Play, FileText, X } from "lucide-react";
 import ProductionIntake from "./ProductionIntake";
 import {
   scanIn,
@@ -14,6 +14,7 @@ import {
   togglePauseSession,
   type ScanOutPayload,
 } from "../actions";
+import { getWorkOrderFiles } from "../../dashboard/production/work-order/actions";
 
 type Support = {
   employees: { id: string; name: string; code: string }[];
@@ -166,6 +167,29 @@ export default function TerminalClient({ support, loggedInEmployee, initialSessi
   // loggedInEmployee is now provided directly by the server page
 
   const selectedSession = activeSessions.find((s) => s.id === selectedSessionId);
+
+  const [isFilesModalOpen, setIsFilesModalOpen] = useState(false);
+  const [sessionFiles, setSessionFiles] = useState<any[]>([]);
+  const [isLoadingFiles, setIsLoadingFiles] = useState(false);
+
+  const openFilesModal = async () => {
+    if (!selectedSession?.routingProcess?.inProcess?.workOrderNo) return;
+    setIsFilesModalOpen(true);
+    setIsLoadingFiles(true);
+    try {
+      const res = await getWorkOrderFiles(selectedSession.routingProcess.inProcess.workOrderNo);
+      if (res.success && res.data) {
+        setSessionFiles(res.data);
+      } else {
+        hotToast.error("Failed to load files.");
+      }
+    } catch (err) {
+      console.error(err);
+      hotToast.error("Error loading files.");
+    } finally {
+      setIsLoadingFiles(false);
+    }
+  };
 
   const targetQty = selectedSession ? Number(selectedSession.routingProcess?.inProcess?.workOrder?.quantity || 0) : 0;
   const previouslyCompleted = selectedSession 
@@ -588,9 +612,18 @@ export default function TerminalClient({ support, loggedInEmployee, initialSessi
 
                 {/* Process Information Display */}
                 <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 mb-8 relative z-10">
-                  <h3 className="text-[10px] font-bold text-slate-400 tracking-widest uppercase mb-4 flex items-center gap-2">
-                    <Info size={14} className="text-cyan-600" /> Process Information
-                  </h3>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-[10px] font-bold text-slate-400 tracking-widest uppercase flex items-center gap-2">
+                      <Info size={14} className="text-cyan-600" /> Process Information
+                    </h3>
+                    <button
+                      onClick={openFilesModal}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-100 hover:text-cyan-600 transition-colors shadow-sm"
+                    >
+                      <FileText size={14} />
+                      View Documents
+                    </button>
+                  </div>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                     <div>
                       <div className="text-xs text-slate-500 font-medium mb-1">Drawing Number</div>
@@ -943,6 +976,61 @@ export default function TerminalClient({ support, loggedInEmployee, initialSessi
         loggedInEmployeeId={loggedInEmployee?.id}
         onScanOutRequest={handleIntakeScanOutRequest}
       />
+      {isFilesModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsFilesModalOpen(false)} />
+          <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[85vh]">
+            <div className="flex items-center justify-between p-5 border-b border-slate-100 bg-slate-50">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">Work Order Documents</h3>
+                <p className="text-xs text-slate-500 font-medium">{selectedSession?.routingProcess?.inProcess?.workOrderNo}</p>
+              </div>
+              <button onClick={() => setIsFilesModalOpen(false)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-xl transition-colors bg-white border border-slate-200 shadow-sm">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto flex-1 bg-slate-50/50">
+              {isLoadingFiles ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-cyan-600" />
+                </div>
+              ) : sessionFiles.length === 0 ? (
+                <div className="text-center py-12 text-slate-500">
+                  <FileText size={32} className="mx-auto text-slate-300 mb-3" />
+                  <p className="text-sm font-medium">No documents uploaded</p>
+                  <p className="text-xs mt-1 text-slate-400">Files attached to this work order will appear here.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {sessionFiles.map((file) => (
+                    <div key={file.id} className="group relative flex items-start gap-3 p-3 bg-white rounded-xl border border-slate-200 hover:border-cyan-300 hover:shadow-md transition-all">
+                      <div className="p-2 bg-slate-50 border border-slate-100 text-slate-500 rounded-lg group-hover:bg-cyan-50 group-hover:border-cyan-100 group-hover:text-cyan-600 transition-colors">
+                        <FileText size={20} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-bold text-slate-900 truncate" title={file.fileName}>{file.fileName}</p>
+                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-0.5">{file.fileCategory?.name || 'General'}</p>
+                      </div>
+                      <a
+                        href={file.fileUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="absolute inset-0 z-10"
+                        title="Click to view"
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="p-4 border-t border-slate-100 bg-white flex justify-end">
+              <button onClick={() => setIsFilesModalOpen(false)} className="px-5 py-2 font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl text-sm transition-colors border border-transparent hover:border-slate-200">
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
