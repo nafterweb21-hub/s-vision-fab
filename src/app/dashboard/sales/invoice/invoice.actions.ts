@@ -15,6 +15,18 @@ import {
   IrpError,
 } from "@/lib/einvoice";
 
+function formatUserFriendlyError(error: any): string {
+  const msg = error?.message || String(error);
+  if (msg.includes("Foreign key constraint violated")) {
+    return "A related record (like customer or contact person) could not be found or was invalid. Please check your selections.";
+  }
+  if (msg.includes("Unique constraint failed")) {
+    return "A record with this information already exists.";
+  }
+  return msg;
+}
+
+
 /**
  * Compute the CGST/SGST/IGST breakup for an invoice being saved, from its flat
  * tax rate and the seller/buyer state codes. Fetches the company + customer so
@@ -259,7 +271,7 @@ export async function createInvoice(data: any) {
           companyId: data.companyId,
           invoiceType: data.invoiceType,
           customerId: data.customerId,
-          contactPersonId: data.contactPersonId,
+          contactPersonId: data.contactPersonId || null,
           tel: data.tel || null,
           fax: data.fax || null,
           email: data.email || null,
@@ -299,7 +311,7 @@ export async function createInvoice(data: any) {
     revalidatePath("/dashboard/sales/invoice");
     return { success: true, data: JSON.parse(JSON.stringify(invoice)) };
   } catch (error: any) {
-    return { success: false, error: error.message };
+    return { success: false, error: formatUserFriendlyError(error) };
   }
 }
 
@@ -324,7 +336,7 @@ export async function updateInvoice(id: string, data: any) {
         companyId: data.companyId,
         invoiceType: data.invoiceType,
         customerId: data.customerId,
-        contactPersonId: data.contactPersonId,
+        contactPersonId: data.contactPersonId || null,
         tel: data.tel || null,
         fax: data.fax || null,
         email: data.email || null,
@@ -364,7 +376,7 @@ export async function updateInvoice(id: string, data: any) {
     revalidatePath("/dashboard/sales/invoice");
     return { success: true, data: JSON.parse(JSON.stringify(invoice)) };
   } catch (error: any) {
-    return { success: false, error: error.message };
+    return { success: false, error: formatUserFriendlyError(error) };
   }
 }
 

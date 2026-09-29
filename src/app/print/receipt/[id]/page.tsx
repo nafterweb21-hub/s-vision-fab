@@ -33,6 +33,7 @@ export default async function PrintReceiptPage(
   if (!receipt) notFound();
 
   const company = receipt.company || await prisma.companyProfile.findFirst({ where: { status: "Active" } });
+  const settings = await prisma.generalSetting.findFirst();
   
   const gstRegistrationNo = company?.gstRegistrationNo || "";
   const companyAddress = company?.address || "";
@@ -173,13 +174,21 @@ export default async function PrintReceiptPage(
         </div>
         
         <div className="signatures">
-          <div>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
              <br/><br/><br/>
              <div className="signature-line">Customer Signature</div>
           </div>
-          <div>
-             <br/><br/><br/>
-             <div className="signature-line">Authorized Signature</div>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end" }}>
+            {settings?.enableSignature && settings?.signatureUrl ? (
+              <img 
+                src={settings.signatureUrl.startsWith("/uploads") ? `/api${settings.signatureUrl}` : settings.signatureUrl} 
+                alt="Signature" 
+                style={{ maxHeight: "40px", marginBottom: "4px" }} 
+              />
+            ) : (
+              <><br/><br/><br/></>
+            )}
+            <div className="signature-line">Authorized Signature</div>
           </div>
         </div>
       </div>

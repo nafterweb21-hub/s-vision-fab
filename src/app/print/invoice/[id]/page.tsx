@@ -85,6 +85,7 @@ export default async function PrintInvoicePage(
   if (!inv) notFound();
 
   const company = inv.company || await prisma.companyProfile.findFirst({ where: { status: "Active" } });
+  const settings = await prisma.generalSetting.findFirst();
   
   const totalQty = inv.items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
   const uomName = inv.items.length > 0 && inv.items[0].uom ? inv.items[0].uom.uomName : "PCS";
@@ -490,11 +491,20 @@ export default async function PrintInvoicePage(
                     Certified that the particulars given above are true and<br/>correct.
                   </div>
                   <div style={{ fontWeight: "bold", fontSize: "12px", marginTop: "4px" }}>
-                    For Vision Fab Private Limited
+                    For {companyName}
                   </div>
                 </div>
-                <div style={{ fontSize: "8px", fontWeight: "bold", marginTop: "40px", paddingBottom: "4px" }}>
-                  Authorised Signatory
+                <div style={{ marginTop: "10px" }}>
+                  {settings?.enableSignature && settings?.signatureUrl && (
+                    <img 
+                      src={settings.signatureUrl.startsWith("/uploads") ? `/api${settings.signatureUrl}` : settings.signatureUrl} 
+                      alt="Signature" 
+                      style={{ maxHeight: "40px", margin: "0 auto 4px auto" }} 
+                    />
+                  )}
+                  <div style={{ fontSize: "8px", fontWeight: "bold", paddingBottom: "4px" }}>
+                    Authorised Signatory
+                  </div>
                 </div>
               </div>
             </div>

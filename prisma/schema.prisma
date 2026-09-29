@@ -1693,3 +1693,14 @@ model FileProfile {
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt
 }
+
+model GeneralSetting {
+  id                   String   @id @default(cuid())
+  logoUrl              String?
+  enableSignature      Boolean  @default(false)
+  signatureUrl         String?
+  invoiceBackgroundUrl String?
+  invoiceFooterUrl     String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}

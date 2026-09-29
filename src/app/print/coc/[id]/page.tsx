@@ -35,6 +35,7 @@ export default async function PrintCocPage(
   if (!coc) notFound();
 
   const company = await prisma.companyProfile.findFirst({ where: { status: "Active" } });
+  const settings = await prisma.generalSetting.findFirst();
 
   // Fallback to static if no company
   const companyName = company?.companyName || "Vision One Pte Ltd";
@@ -286,6 +287,13 @@ export default async function PrintCocPage(
             <div className="sig-title">CHECKED BY :</div>
             <div className="sig-role">QC INSPECTOR</div>
             <div className="sig-name">{coc.checkedBy?.name || "—"}</div>
+            {settings?.enableSignature && settings?.signatureUrl && (
+              <img 
+                src={settings.signatureUrl.startsWith("/uploads") ? `/api${settings.signatureUrl}` : settings.signatureUrl} 
+                alt="Signature" 
+                style={{ maxHeight: "40px", marginBottom: "4px" }} 
+              />
+            )}
             <div className="sig-line"></div>
             <div className="sig-footer">Authorised Signature</div>
           </div>
@@ -293,6 +301,13 @@ export default async function PrintCocPage(
             <div className="sig-title">APPROVED BY :</div>
             <div className="sig-role">QC MANAGER</div>
             <div className="sig-name">{coc.approvedBy?.name || "—"}</div>
+            {settings?.enableSignature && settings?.signatureUrl && (
+              <img 
+                src={settings.signatureUrl.startsWith("/uploads") ? `/api${settings.signatureUrl}` : settings.signatureUrl} 
+                alt="Signature" 
+                style={{ maxHeight: "40px", marginBottom: "4px" }} 
+              />
+            )}
             <div className="sig-line"></div>
             <div className="sig-footer">Authorised Signature</div>
           </div>

@@ -41,6 +41,8 @@ export default async function PrintPurchaseOrderPage(
 
   if (!po) notFound();
 
+  const settings = await prisma.generalSetting.findFirst();
+
   const primarySupplierAddress = po.supplier?.addresses?.find((a) => a.isDefault)?.address || po.supplier?.addresses?.[0]?.address || "";
   
   return (
@@ -229,9 +231,18 @@ export default async function PrintPurchaseOrderPage(
           
           <div style={{ marginTop: '30px', display: 'flex', justifyContent: 'flex-end' }}>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '200px' }}>
-              <div style={{ fontSize: '11px', marginBottom: '40px', width: '100%', textAlign: 'center' }}>
+              <div style={{ fontSize: '11px', marginBottom: '10px', width: '100%', textAlign: 'center' }}>
                 Approved By
               </div>
+              {settings?.enableSignature && settings?.signatureUrl ? (
+                <img 
+                  src={settings.signatureUrl.startsWith("/uploads") ? `/api${settings.signatureUrl}` : settings.signatureUrl} 
+                  alt="Signature" 
+                  style={{ maxHeight: "40px", marginBottom: "4px" }} 
+                />
+              ) : (
+                <div style={{ height: "40px" }}></div>
+              )}
               <div style={{ borderTop: '1px solid #111', width: '100%' }}></div>
             </div>
           </div>

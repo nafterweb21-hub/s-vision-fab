@@ -27,6 +27,7 @@ export default async function PrintDeliveryOrderPage(
   if (!deliveryOrder) notFound();
 
   const company = await prisma.companyProfile.findFirst({ where: { status: "Active" } });
+  const settings = await prisma.generalSetting.findFirst();
   
   const companyAddress = company?.address || "";
   const companyPhone = company?.phoneNo || "";
@@ -208,6 +209,13 @@ export default async function PrintDeliveryOrderPage(
             <div className="signature-line">Goods Received in Good Condition By</div>
           </div>
           <div className="signature-box">
+            {settings?.enableSignature && settings?.signatureUrl && (
+              <img 
+                src={settings.signatureUrl.startsWith("/uploads") ? `/api${settings.signatureUrl}` : settings.signatureUrl} 
+                alt="Signature" 
+                style={{ maxHeight: "40px", margin: "0 auto 4px auto" }} 
+              />
+            )}
             <div className="signature-line">For {companyName}</div>
           </div>
         </div>

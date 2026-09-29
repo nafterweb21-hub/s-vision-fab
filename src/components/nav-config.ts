@@ -46,6 +46,7 @@ import {
   TrendingUp,
   User,
   Users,
+  Settings,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -101,6 +102,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { href: '/dashboard/admin/users', label: 'Users', icon: Users, iconClass: 'text-blue-500' },
       { href: '/dashboard/admin/roles', label: 'Roles', icon: Key, iconClass: 'text-yellow-500' },
       { href: '/dashboard/admin/document-numbering', label: 'Document Numbering', icon: Hash, iconClass: 'text-slate-500' },
+      { href: '/dashboard/settings/general', label: 'General Settings', icon: Settings, iconClass: 'text-slate-500' },
     ],
   },
   {
