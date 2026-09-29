@@ -88,6 +88,9 @@ export default function CustomerProfilePage() {
   // Create Customer Form States
   const [newName, setNewName] = useState("");
   const [newGstin, setNewGstin] = useState("");
+  const [newRoNumber, setNewRoNumber] = useState("");
+  const [newPan, setNewPan] = useState("");
+  const [newPlaceOfSupply, setNewPlaceOfSupply] = useState("");
   const [newRemarks, setNewRemarks] = useState("");
   const [newIsSez, setNewIsSez] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -96,6 +99,9 @@ export default function CustomerProfilePage() {
   // Manage Customer General Info Form States
   const [remarksEdit, setRemarksEdit] = useState("");
   const [gstinEdit, setGstinEdit] = useState("");
+  const [roNumberEdit, setRoNumberEdit] = useState("");
+  const [panEdit, setPanEdit] = useState("");
+  const [placeOfSupplyEdit, setPlaceOfSupplyEdit] = useState("");
   const [isSezEdit, setIsSezEdit] = useState(false);
   const [remarksSuccess, setRemarksSuccess] = useState(false);
 
@@ -144,6 +150,9 @@ export default function CustomerProfilePage() {
       setCustomerDetail(res.data as CustomerFullDetail);
       setRemarksEdit(res.data.remarks || "");
       setGstinEdit((res.data as any).gstin || "");
+      setRoNumberEdit((res.data as any).roNumber || "");
+      setPanEdit((res.data as any).pan || "");
+      setPlaceOfSupplyEdit((res.data as any).placeOfSupply || "");
       setIsSezEdit((res.data as any).isSez || false);
     } else {
       hotToast.error(res.error || "Failed to load customer details.");
@@ -153,6 +162,9 @@ export default function CustomerProfilePage() {
   const handleOpenCreateModal = async () => {
     setNewName("");
     setNewGstin("");
+    setNewRoNumber("");
+    setNewPan("");
+    setNewPlaceOfSupply("");
     setNewRemarks("");
     setNewIsSez(false);
     setFormError(null);
@@ -185,6 +197,9 @@ export default function CustomerProfilePage() {
         remarks: newRemarks,
         gstin: newGstin,
         isSez: newIsSez,
+        roNumber: newRoNumber,
+        pan: newPan,
+        placeOfSupply: newPlaceOfSupply,
       });
 
       if (res.success) {
@@ -216,7 +231,14 @@ export default function CustomerProfilePage() {
     }
 
     startTransition(async () => {
-      const res = await updateCustomerInfo(selectedCustomerId, { remarks: remarksEdit, gstin: gstinEdit, isSez: isSezEdit });
+      const res = await updateCustomerInfo(selectedCustomerId, {
+        remarks: remarksEdit,
+        gstin: gstinEdit,
+        isSez: isSezEdit,
+        roNumber: roNumberEdit,
+        pan: panEdit,
+        placeOfSupply: placeOfSupplyEdit,
+      });
       if (res.success) {
         setRemarksSuccess(true);
         loadCustomers();
@@ -690,6 +712,48 @@ export default function CustomerProfilePage() {
                   />
                 </div>
 
+                {/* RO Number */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-bold text-blue-800">
+                    RO Number
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Enter RO Number..."
+                    value={newRoNumber}
+                    onChange={(e) => setNewRoNumber(e.target.value)}
+                    className="rounded-lg glossy-input px-3 py-2 text-base outline-hidden"
+                  />
+                </div>
+
+                {/* PAN */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-bold text-blue-800">
+                    PAN
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. ABCDE1234F"
+                    value={newPan}
+                    onChange={(e) => setNewPan(e.target.value)}
+                    className="rounded-lg glossy-input px-3 py-2 text-base outline-hidden"
+                  />
+                </div>
+
+                {/* Place of Supply */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-bold text-blue-800">
+                    Place of Supply
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Tamil Nadu (33)"
+                    value={newPlaceOfSupply}
+                    onChange={(e) => setNewPlaceOfSupply(e.target.value)}
+                    className="rounded-lg glossy-input px-3 py-2 text-base outline-hidden"
+                  />
+                </div>
+
                 {/* Remarks */}
                 <div className="flex flex-col gap-1.5">
                   <label className="text-sm font-bold text-blue-800">
@@ -836,6 +900,48 @@ export default function CustomerProfilePage() {
                           placeholder="Enter GSTIN..."
                           value={gstinEdit}
                           onChange={(e) => setGstinEdit(e.target.value)}
+                          className="rounded-lg glossy-input px-3 py-2 text-base outline-hidden"
+                        />
+                      </div>
+
+                      {/* RO Number */}
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-base font-bold text-blue-800">
+                          RO Number
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="Enter RO Number..."
+                          value={roNumberEdit}
+                          onChange={(e) => setRoNumberEdit(e.target.value)}
+                          className="rounded-lg glossy-input px-3 py-2 text-base outline-hidden"
+                        />
+                      </div>
+
+                      {/* PAN */}
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-base font-bold text-blue-800">
+                          PAN
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. ABCDE1234F"
+                          value={panEdit}
+                          onChange={(e) => setPanEdit(e.target.value)}
+                          className="rounded-lg glossy-input px-3 py-2 text-base outline-hidden"
+                        />
+                      </div>
+
+                      {/* Place of Supply */}
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-base font-bold text-blue-800">
+                          Place of Supply
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Tamil Nadu (33)"
+                          value={placeOfSupplyEdit}
+                          onChange={(e) => setPlaceOfSupplyEdit(e.target.value)}
                           className="rounded-lg glossy-input px-3 py-2 text-base outline-hidden"
                         />
                       </div>

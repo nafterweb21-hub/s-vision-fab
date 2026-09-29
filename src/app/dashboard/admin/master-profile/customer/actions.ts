@@ -11,6 +11,9 @@ export interface CustomerProfileInput {
   remarks?: string;
   gstin?: string;
   isSez?: boolean;
+  roNumber?: string;
+  pan?: string;
+  placeOfSupply?: string;
 }
 
 export interface ContactPersonInput {
@@ -132,6 +135,9 @@ export async function createCustomerProfile(data: CustomerProfileInput) {
           remarks,
           gstin: data.gstin?.trim() || null,
           isSez: data.isSez || false,
+          roNumber: data.roNumber?.trim() || null,
+          pan: data.pan?.trim() || null,
+          placeOfSupply: data.placeOfSupply?.trim() || null,
           status: "Active",
         },
       });
@@ -145,7 +151,7 @@ export async function createCustomerProfile(data: CustomerProfileInput) {
   }
 }
 
-export async function updateCustomerInfo(id: string, data: { remarks?: string; gstin?: string; isSez?: boolean }) {
+export async function updateCustomerInfo(id: string, data: { remarks?: string; gstin?: string; isSez?: boolean; roNumber?: string; pan?: string; placeOfSupply?: string }) {
   try {
     const existing = await prisma.customerProfile.findUnique({
       where: { id },
@@ -164,6 +170,9 @@ export async function updateCustomerInfo(id: string, data: { remarks?: string; g
         remarks: data.remarks?.trim() || null,
         gstin: data.gstin?.trim() || null,
         isSez: data.isSez !== undefined ? data.isSez : existing.isSez,
+        roNumber: data.roNumber?.trim() || null,
+        pan: data.pan?.trim() || null,
+        placeOfSupply: data.placeOfSupply?.trim() || null,
       },
     });
 
