@@ -27,7 +27,9 @@ export async function updateGeneralSetting(data: any) {
           enableSignature: data.enableSignature,
           signatureUrl: data.signatureUrl,
           invoiceBackgroundUrl: data.invoiceBackgroundUrl,
+          enableInvoiceBackground: data.enableInvoiceBackground,
           invoiceFooterUrl: data.invoiceFooterUrl,
+          enableInvoiceFooter: data.enableInvoiceFooter,
         },
       });
     } else {
@@ -38,7 +40,9 @@ export async function updateGeneralSetting(data: any) {
           enableSignature: data.enableSignature,
           signatureUrl: data.signatureUrl,
           invoiceBackgroundUrl: data.invoiceBackgroundUrl,
+          enableInvoiceBackground: data.enableInvoiceBackground,
           invoiceFooterUrl: data.invoiceFooterUrl,
+          enableInvoiceFooter: data.enableInvoiceFooter,
         },
       });
     }

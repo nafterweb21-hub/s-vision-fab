@@ -1699,8 +1699,10 @@ model GeneralSetting {
   logoUrl              String?
   enableSignature      Boolean  @default(false)
   signatureUrl         String?
-  invoiceBackgroundUrl String?
-  invoiceFooterUrl     String?
-  createdAt            DateTime @default(now())
+  invoiceBackgroundUrl    String?
+  enableInvoiceBackground Boolean  @default(false)
+  invoiceFooterUrl        String?
+  enableInvoiceFooter     Boolean  @default(false)
+  createdAt               DateTime @default(now())
   updatedAt            DateTime @updatedAt
 }

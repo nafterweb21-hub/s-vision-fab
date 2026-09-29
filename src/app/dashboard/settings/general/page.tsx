@@ -11,7 +11,9 @@ export default function GeneralSettingsPage() {
   const [logoUrl, setLogoUrl] = useState("");
   const [enableSignature, setEnableSignature] = useState(false);
   const [signatureUrl, setSignatureUrl] = useState("");
+  const [enableInvoiceBackground, setEnableInvoiceBackground] = useState(false);
   const [invoiceBackgroundUrl, setInvoiceBackgroundUrl] = useState("");
+  const [enableInvoiceFooter, setEnableInvoiceFooter] = useState(false);
   const [invoiceFooterUrl, setInvoiceFooterUrl] = useState("");
 
   const [uploadingField, setUploadingField] = useState<string | null>(null);
@@ -27,7 +29,9 @@ export default function GeneralSettingsPage() {
       setLogoUrl(res.data.logoUrl || "");
       setEnableSignature(res.data.enableSignature || false);
       setSignatureUrl(res.data.signatureUrl || "");
+      setEnableInvoiceBackground(res.data.enableInvoiceBackground || false);
       setInvoiceBackgroundUrl(res.data.invoiceBackgroundUrl || "");
+      setEnableInvoiceFooter(res.data.enableInvoiceFooter || false);
       setInvoiceFooterUrl(res.data.invoiceFooterUrl || "");
     } else {
       hotToast.error(res.error || "Failed to load settings.");
@@ -74,7 +78,9 @@ export default function GeneralSettingsPage() {
       logoUrl,
       enableSignature,
       signatureUrl,
+      enableInvoiceBackground,
       invoiceBackgroundUrl,
+      enableInvoiceFooter,
       invoiceFooterUrl,
     };
     const res = await updateGeneralSetting(payload);
@@ -193,12 +199,44 @@ export default function GeneralSettingsPage() {
               maxSize="500 x 150" 
             />
 
+            <div className="flex items-center gap-2">
+              <div 
+                className={`w-4 h-4 rounded-sm flex items-center justify-center cursor-pointer ${enableInvoiceBackground ? 'bg-emerald-500' : 'border border-gray-300'}`}
+                onClick={() => setEnableInvoiceBackground(!enableInvoiceBackground)}
+              >
+                {enableInvoiceBackground && (
+                  <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                  </svg>
+                )}
+              </div>
+              <label className="text-xs font-semibold text-gray-700 cursor-pointer" onClick={() => setEnableInvoiceBackground(!enableInvoiceBackground)}>
+                Enable Invoice Background Image
+              </label>
+            </div>
+
             <ImageUploader 
               label="Invoice background image" 
               url={invoiceBackgroundUrl} 
               field="background" 
               maxSize="1400 x 1400" 
             />
+
+            <div className="flex items-center gap-2">
+              <div 
+                className={`w-4 h-4 rounded-sm flex items-center justify-center cursor-pointer ${enableInvoiceFooter ? 'bg-emerald-500' : 'border border-gray-300'}`}
+                onClick={() => setEnableInvoiceFooter(!enableInvoiceFooter)}
+              >
+                {enableInvoiceFooter && (
+                  <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                  </svg>
+                )}
+              </div>
+              <label className="text-xs font-semibold text-gray-700 cursor-pointer" onClick={() => setEnableInvoiceFooter(!enableInvoiceFooter)}>
+                Enable Invoice Footer Image
+              </label>
+            </div>
 
             <ImageUploader 
               label="Invoice footer Image" 

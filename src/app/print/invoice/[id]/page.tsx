@@ -179,14 +179,33 @@ export default async function PrintInvoicePage(
         .items-table tbody tr.tax-row td { padding-top: 4px; padding-bottom: 2px; }
         
         .totals-row td { border-top: 1.5px solid #63a0d4; padding: 4px; font-weight: bold; background: #e6f2ff; }
+        
+        .has-bg .items-table th,
+        .has-bg .totals-row td,
+        .has-bg .bg-\\[\\#f7fbff\\] {
+          background-color: transparent !important;
+        }
       `}</style>
 
       <PrintToolbar doc="invoice" id={id} label="Print Invoice" />
 
-      <div className="page">
+      <div className={`page ${settings?.enableInvoiceBackground && settings?.invoiceBackgroundUrl ? 'has-bg' : ''}`} style={
+        settings?.enableInvoiceBackground && settings?.invoiceBackgroundUrl
+          ? {
+              backgroundImage: `url('${settings.invoiceBackgroundUrl.startsWith("/uploads") ? `/api${settings.invoiceBackgroundUrl}` : settings.invoiceBackgroundUrl}')`,
+              backgroundSize: "100% 100%",
+              backgroundRepeat: "no-repeat",
+              backgroundPosition: "center",
+            }
+          : {}
+      }>
         <div className="header">
           <div className="header-left">
-            <img src="/logo.jpg" alt="Logo" />
+            <img 
+              src={settings?.logoUrl ? (settings.logoUrl.startsWith("/uploads") ? `/api${settings.logoUrl}` : settings.logoUrl) : "/logo.jpg"} 
+              alt="Logo" 
+              style={{ mixBlendMode: "multiply" }}
+            />
             <div className="tagline">Your Engineering & Innovative Solution</div>
           </div>
           <div className="header-right">
@@ -499,7 +518,7 @@ export default async function PrintInvoicePage(
                     <img 
                       src={settings.signatureUrl.startsWith("/uploads") ? `/api${settings.signatureUrl}` : settings.signatureUrl} 
                       alt="Signature" 
-                      style={{ maxHeight: "40px", margin: "0 auto 4px auto" }} 
+                      style={{ maxHeight: "40px", margin: "0 auto 4px auto", mixBlendMode: "multiply" }} 
                     />
                   )}
                   <div style={{ fontSize: "8px", fontWeight: "bold", paddingBottom: "4px" }}>
@@ -510,6 +529,16 @@ export default async function PrintInvoicePage(
             </div>
           </div>
         </div>
+        
+        {settings?.enableInvoiceFooter && settings?.invoiceFooterUrl && (
+          <div style={{ marginTop: "12px", textAlign: "center", width: "100%" }}>
+            <img
+              src={settings.invoiceFooterUrl.startsWith("/uploads") ? `/api${settings.invoiceFooterUrl}` : settings.invoiceFooterUrl}
+              alt="Invoice Footer"
+              style={{ maxWidth: "100%", height: "auto", maxHeight: "150px", display: "block", margin: "0 auto" }}
+            />
+          </div>
+        )}
       </div>
     </>
   );
