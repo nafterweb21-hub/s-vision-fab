@@ -65,15 +65,45 @@ echo "==> Fixing permissions for uploads directory..."
 ssh $SSH_OPTS "$VPS_HOST" "sudo chmod -R 777 $DEPLOY_PATH/public/uploads"
 
 # Schema sync is opt-in: RUN_DB_PUSH=1 ./deploy_lightsail.sh ...
-# The app connects as a limited role (vision_app) that does not own the tables, so a push
-# needs a DB URL for the owning role in the server's .env. It never uses --accept-data-loss
-# (destructive changes are refused, not applied) and a failure here never aborts the deploy.
+# The app connects as a limited role (vision_app) that does not own the tables (postgres does),
+# so `prisma db push` is refused. Instead: Prisma diffs the live DB (read-only, as vision_app)
+# against prisma/schema.prisma into SQL, which is then applied in one transaction as the
+# postgres superuser via peer auth (sudo -u postgres). Default privileges already grant
+# vision_app access to tables postgres creates. Potentially destructive SQL (drops, truncates,
+# deletes, column type changes) is printed and refused, never applied. A failure here never
+# aborts the deploy.
+DB_NAME="vision_one"
 if [ "${RUN_DB_PUSH:-0}" = "1" ]; then
-  echo "==> Pushing Prisma schema to DB on VPS (RUN_DB_PUSH=1)..."
-  ssh $SSH_OPTS "$VPS_HOST" "export NVM_DIR=~/.nvm && source ~/.nvm/nvm.sh && nvm use 20.20.2 && rm -rf /tmp/prisma_deps && mkdir -p /tmp/prisma_deps && cd /tmp/prisma_deps && npm init -y && npm install dotenv typescript ts-node @types/node prisma@7.10.0 && cd $DEPLOY_PATH && NODE_PATH=/tmp/prisma_deps/node_modules npx -y prisma@7.10.0 db push" \
-    || echo "WARNING: prisma db push failed or was refused; the app is unaffected. Apply schema changes manually."
+  echo "==> Syncing Prisma schema to DB on VPS (RUN_DB_PUSH=1)..."
+  ssh $SSH_OPTS "$VPS_HOST" "DEPLOY_PATH='$DEPLOY_PATH' DB_NAME='$DB_NAME' bash -s" <<'REMOTE' \
+    || echo "WARNING: schema sync failed or was refused; the app is unaffected. Apply schema changes manually."
+export NVM_DIR=~/.nvm && source ~/.nvm/nvm.sh >/dev/null && nvm use 20.20.2 >/dev/null
+set -e
+if [ ! -d /tmp/prisma_deps/node_modules/prisma ]; then
+  mkdir -p /tmp/prisma_deps && cd /tmp/prisma_deps
+  npm init -y >/dev/null && npm install --silent dotenv typescript ts-node @types/node prisma@7.10.0
+fi
+cd "$DEPLOY_PATH"
+SQL=$(mktemp /tmp/schema_sync.XXXXXX)
+trap 'rm -f "$SQL"' EXIT
+NODE_PATH=/tmp/prisma_deps/node_modules npx -y prisma@7.10.0 migrate diff \
+  --from-config-datasource --to-schema prisma/schema.prisma --script > "$SQL"
+if ! grep -qvE '^[[:space:]]*(--.*)?$' "$SQL"; then
+  echo "Schema already in sync; nothing to apply."
+  exit 0
+fi
+echo "---- schema changes ----"; cat "$SQL"; echo "------------------------"
+if grep -iqE 'DROP (TABLE|COLUMN|TYPE|SCHEMA)|TRUNCATE|DELETE FROM|SET DATA TYPE' "$SQL"; then
+  echo "Refusing: potentially destructive statements above. Review and apply manually with:"
+  echo "  sudo -u postgres psql -d $DB_NAME -v ON_ERROR_STOP=1 -1 -f <file>"
+  exit 1
+fi
+# The SQL file is readable only by this user, so feed it to psql on stdin.
+sudo -u postgres psql -d "$DB_NAME" -v ON_ERROR_STOP=1 -1 -f - < "$SQL"
+echo "Schema sync applied."
+REMOTE
 else
-  echo "==> Skipping prisma db push (set RUN_DB_PUSH=1 to sync the schema)"
+  echo "==> Skipping schema sync (set RUN_DB_PUSH=1 to sync the schema)"
 fi
 
 
