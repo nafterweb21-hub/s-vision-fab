@@ -95,7 +95,7 @@ export default async function PrintReceiptPage(
       <div className="page">
         <div className="header">
           <div className="header-left">
-            <img src="/logo.jpg" alt="Logo" />
+            <img src={company?.uploadUrl ? (company.uploadUrl.startsWith("/uploads") ? `/api${company.uploadUrl}` : company.uploadUrl) : "/logo.jpg"} alt="Logo" />
             <div className="tagline">Your Engineering & Innovative Solution</div>
           </div>
           <div className="header-right">

@@ -202,7 +202,7 @@ export default async function PrintInvoicePage(
         <div className="header">
           <div className="header-left">
             <img 
-              src={settings?.logoUrl ? (settings.logoUrl.startsWith("/uploads") ? `/api${settings.logoUrl}` : settings.logoUrl) : "/logo.jpg"} 
+              src={company?.uploadUrl ? (company.uploadUrl.startsWith("/uploads") ? `/api${company.uploadUrl}` : company.uploadUrl) : "/logo.jpg"} 
               alt="Logo" 
               style={{ mixBlendMode: "multiply" }}
             />

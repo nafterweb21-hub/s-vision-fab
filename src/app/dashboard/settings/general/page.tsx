@@ -8,7 +8,6 @@ export default function GeneralSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const [logoUrl, setLogoUrl] = useState("");
   const [enableSignature, setEnableSignature] = useState(false);
   const [signatureUrl, setSignatureUrl] = useState("");
   const [enableInvoiceBackground, setEnableInvoiceBackground] = useState(false);
@@ -26,7 +25,6 @@ export default function GeneralSettingsPage() {
     setLoading(true);
     const res = await getGeneralSetting();
     if (res.success && res.data) {
-      setLogoUrl(res.data.logoUrl || "");
       setEnableSignature(res.data.enableSignature || false);
       setSignatureUrl(res.data.signatureUrl || "");
       setEnableInvoiceBackground(res.data.enableInvoiceBackground || false);
@@ -52,8 +50,7 @@ export default function GeneralSettingsPage() {
 
       if (!res.ok) throw new Error(json.error || "Upload failed");
 
-      if (field === "logo") setLogoUrl(json.url);
-      else if (field === "signature") setSignatureUrl(json.url);
+      if (field === "signature") setSignatureUrl(json.url);
       else if (field === "background") setInvoiceBackgroundUrl(json.url);
       else if (field === "footer") setInvoiceFooterUrl(json.url);
       
@@ -66,8 +63,7 @@ export default function GeneralSettingsPage() {
   };
 
   const handleRemove = (field: string) => {
-    if (field === "logo") setLogoUrl("");
-    else if (field === "signature") setSignatureUrl("");
+    if (field === "signature") setSignatureUrl("");
     else if (field === "background") setInvoiceBackgroundUrl("");
     else if (field === "footer") setInvoiceFooterUrl("");
   };
@@ -75,7 +71,6 @@ export default function GeneralSettingsPage() {
   const handleSave = async () => {
     setSaving(true);
     const payload = {
-      logoUrl,
       enableSignature,
       signatureUrl,
       enableInvoiceBackground,
@@ -164,18 +159,11 @@ export default function GeneralSettingsPage() {
         <div className="bg-white rounded-md shadow-sm border border-gray-100">
           <div className="px-6 py-4 border-b border-gray-100">
             <div className="inline-block border border-gray-200 rounded px-4 py-2 text-xs font-semibold text-gray-600">
-              Logo and Signature Setting
+              Signature Setting
             </div>
           </div>
 
           <div className="p-6 space-y-6">
-            <ImageUploader 
-              label="Logo" 
-              url={logoUrl} 
-              field="logo" 
-              maxSize="400 x 200" 
-            />
-
             <div className="flex items-center gap-2">
               <div 
                 className={`w-4 h-4 rounded-sm flex items-center justify-center cursor-pointer ${enableSignature ? 'bg-emerald-500' : 'border border-gray-300'}`}

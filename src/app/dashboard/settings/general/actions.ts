@@ -23,7 +23,6 @@ export async function updateGeneralSetting(data: any) {
     if (!setting) {
       setting = await prisma.generalSetting.create({
         data: {
-          logoUrl: data.logoUrl,
           enableSignature: data.enableSignature,
           signatureUrl: data.signatureUrl,
           invoiceBackgroundUrl: data.invoiceBackgroundUrl,
@@ -36,7 +35,6 @@ export async function updateGeneralSetting(data: any) {
       setting = await prisma.generalSetting.update({
         where: { id: setting.id },
         data: {
-          logoUrl: data.logoUrl,
           enableSignature: data.enableSignature,
           signatureUrl: data.signatureUrl,
           invoiceBackgroundUrl: data.invoiceBackgroundUrl,

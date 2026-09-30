@@ -102,7 +102,7 @@ export default async function PrintCocPage(
         
         <div className="header">
           <div className="logo-box">
-            <img src="/logo.jpg" alt="Company Logo" style={{ maxHeight: "80px", maxWidth: "100%", objectFit: "contain" }} />
+            <img src={company?.uploadUrl ? (company.uploadUrl.startsWith("/uploads") ? `/api${company.uploadUrl}` : company.uploadUrl) : "/logo.jpg"} alt="Company Logo" style={{ maxHeight: "80px", maxWidth: "100%", objectFit: "contain" }} />
           </div>
           <div className="company-info">
             <div>{companyName}</div>
