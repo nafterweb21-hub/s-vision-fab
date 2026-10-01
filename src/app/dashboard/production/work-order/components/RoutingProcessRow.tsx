@@ -96,7 +96,7 @@ export default function RoutingProcessRow({
       onDrop={dnd ? dnd.onDrop : undefined}
     >
       {dnd && (
-        <td className="px-2 py-2 w-8 align-middle">
+        <td className="px-1.5 py-1.5 sm:px-2 sm:py-2 w-6 sm:w-8 align-middle">
           {dnd.enabled ? (
             <span
               draggable
@@ -105,32 +105,32 @@ export default function RoutingProcessRow({
               title="Drag to reorder"
               className="inline-flex cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-600"
             >
-              <GripVertical size={16} />
+              <GripVertical size={14} className="sm:w-4 sm:h-4" />
             </span>
           ) : (
             <span className="inline-flex text-slate-200" title="Completed steps cannot be reordered">
-              <GripVertical size={16} />
+              <GripVertical size={14} className="sm:w-4 sm:h-4" />
             </span>
           )}
         </td>
       )}
-      <td className="px-3 py-2 text-slate-600">{rp?.sequence}</td>
-      <td className="px-3 py-2">{rp?.mainProcess?.process ?? "-"}</td>
-      <td className="px-3 py-2 font-medium text-slate-800">
+      <td className="px-1.5 py-1.5 sm:px-3 sm:py-2 text-slate-600">{rp?.sequence}</td>
+      <td className="px-1.5 py-1.5 sm:px-3 sm:py-2">{rp?.mainProcess?.process ?? "-"}</td>
+      <td className="px-1.5 py-1.5 sm:px-3 sm:py-2 font-medium text-slate-800">
         {rp?.routingProcess?.routingProcess ?? "-"}
       </td>
-      <td className="px-3 py-2 text-slate-600">
+      <td className="px-1.5 py-1.5 sm:px-3 sm:py-2 text-slate-600">
         {rp?.assignedEmployee?.name ?? "-"}
       </td>
-      <td className="px-3 py-2 text-slate-600">{fmtDate(rp?.targetCompletionDate)}</td>
-      <td className="px-3 py-2 text-center">
+      <td className="px-1.5 py-1.5 sm:px-3 sm:py-2 text-slate-600">{fmtDate(rp?.targetCompletionDate)}</td>
+      <td className="px-1.5 py-1.5 sm:px-3 sm:py-2 text-center">
         {rp?.fullyReceived ? (
-          <span className="text-xs text-emerald-700">Yes</span>
+          <span className="text-[9px] sm:text-xs text-emerald-700">Yes</span>
         ) : (
-          <span className="text-xs text-slate-400">-</span>
+          <span className="text-[9px] sm:text-xs text-slate-400">-</span>
         )}
       </td>
-      <td className="px-3 py-2 text-center">
+      <td className="px-1.5 py-1.5 sm:px-3 sm:py-2 text-center">
         {expectsParams ? (
           <div className="inline-block m-0.5">
             <ParameterDetailDrawer
@@ -146,15 +146,15 @@ export default function RoutingProcessRow({
             />
           </div>
         ) : (
-          <span className="text-slate-400 text-xs">-</span>
+          <span className="text-slate-400 text-[9px] sm:text-xs">-</span>
         )}
       </td>
-      <td className="px-3 py-2">
-        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_BADGE[rp?.status] ?? "bg-slate-100 text-slate-700"}`}>
+      <td className="px-1.5 py-1.5 sm:px-3 sm:py-2">
+        <span className={`px-1.5 py-0.5 sm:px-2 sm:py-0.5 rounded-full text-[9px] sm:text-xs font-medium ${STATUS_BADGE[rp?.status] ?? "bg-slate-100 text-slate-700"}`}>
           {rp?.status}
         </span>
       </td>
-      <td className="px-3 py-2 text-right">
+      <td className="px-1.5 py-1.5 sm:px-3 sm:py-2 text-right">
         <div className="flex items-center justify-end gap-1.5">
           {canEditDetails && (
             <EditRoutingProcessModal
@@ -174,7 +174,7 @@ export default function RoutingProcessRow({
             <button
               onClick={() => setStatus("Completed")}
               disabled={isPending}
-              className="text-xs px-2 py-1 rounded bg-emerald-100 text-emerald-700 hover:bg-emerald-200 disabled:opacity-50"
+              className="text-[9px] sm:text-xs px-1.5 py-0.5 sm:px-2 sm:py-1 rounded bg-emerald-100 text-emerald-700 hover:bg-emerald-200 disabled:opacity-50"
             >
               Complete
             </button>

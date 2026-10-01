@@ -138,16 +138,16 @@ export default async function WorkOrdersPage() {
       <div className="p-3 sm:p-6">
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4 sm:mb-6 gap-3 sm:gap-0">
           <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-slate-800">Work Orders</h1>
-            <p className="text-xs sm:text-sm text-slate-500 mt-1">
+            <h1 className="text-lg sm:text-2xl font-bold text-slate-800">Work Orders</h1>
+            <p className="text-[9px] sm:text-sm text-slate-500 mt-0.5 sm:mt-1 leading-tight sm:leading-normal">
               Work orders are created from confirmed Sales Order batches via Outstanding Work.
             </p>
           </div>
           {hasCreatePermission && (
-            <div className="flex items-center gap-2 sm:gap-4">
+            <div className="flex items-center gap-1.5 sm:gap-4 w-full sm:w-auto">
               <Link
                 href="/dashboard/production/rework"
-                className="px-3 sm:px-4 py-1.5 sm:py-2 bg-amber-50 border border-amber-200 text-amber-700 font-bold text-xs sm:text-sm rounded-lg hover:bg-amber-100 transition-colors whitespace-nowrap"
+                className="flex-1 sm:flex-none text-center px-2 sm:px-4 py-1.5 sm:py-2 bg-amber-50 border border-amber-200 text-amber-700 font-bold text-[10px] sm:text-sm rounded sm:rounded-lg hover:bg-amber-100 transition-colors whitespace-nowrap"
               >
                 Rework Queue
               </Link>
@@ -175,37 +175,37 @@ export default async function WorkOrdersPage() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-xs sm:text-sm text-left">
-                <thead className="text-[10px] sm:text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200">
+              <table className="w-full text-[10px] sm:text-sm text-left">
+                <thead className="text-[9px] sm:text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200">
                   <tr>
-                    <th className="px-2 sm:px-6 py-2 sm:py-4 font-semibold">WO No</th>
-                    <th className="px-2 sm:px-6 py-2 sm:py-4 font-semibold hidden md:table-cell">Date</th>
-                    <th className="px-2 sm:px-6 py-2 sm:py-4 font-semibold">Customer</th>
-                    <th className="px-2 sm:px-6 py-2 sm:py-4 font-semibold hidden lg:table-cell">Job Desc</th>
-                    <th className="px-2 sm:px-6 py-2 sm:py-4 font-semibold w-[120px] sm:w-[160px] hidden sm:table-cell">Progress</th>
-                    <th className="px-2 sm:px-6 py-2 sm:py-4 font-semibold">Status</th>
-                    <th className="px-2 sm:px-6 py-2 sm:py-4 font-semibold text-right">Action</th>
+                    <th className="px-1.5 sm:px-6 py-1.5 sm:py-4 font-semibold">WO No</th>
+                    <th className="px-1.5 sm:px-6 py-1.5 sm:py-4 font-semibold hidden md:table-cell">Date</th>
+                    <th className="px-1.5 sm:px-6 py-1.5 sm:py-4 font-semibold">Customer</th>
+                    <th className="px-1.5 sm:px-6 py-1.5 sm:py-4 font-semibold hidden lg:table-cell">Job Desc</th>
+                    <th className="px-1.5 sm:px-6 py-1.5 sm:py-4 font-semibold w-[120px] sm:w-[160px] hidden sm:table-cell">Progress</th>
+                    <th className="px-1.5 sm:px-6 py-1.5 sm:py-4 font-semibold">Status</th>
+                    <th className="px-1.5 sm:px-6 py-1.5 sm:py-4 font-semibold text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
                   {enrichedWorkOrders.map((wo: any, index: number) => (
                     <tr
                       key={wo.workOrderNo || `wo-${index}`}
-                      className={`hover:bg-slate-50/50 ${wo.status === 'Rejected' ? 'bg-rose-50 border-l-4 border-l-rose-500' : ''
+                      className={`hover:bg-slate-50/50 ${wo.status === 'Rejected' ? 'bg-rose-50 border-l-2 sm:border-l-4 border-l-rose-500' : ''
                         }`}
                     >
-                      <td className="px-2 sm:px-6 py-2 sm:py-4 font-bold text-blue-600 break-all min-w-[80px]">
+                      <td className="px-1.5 sm:px-6 py-1.5 sm:py-4 font-bold text-blue-600 break-all min-w-[70px] sm:min-w-[80px]">
                         {wo.workOrderNo || "-"}
                         {wo.status === 'Rejected' && (
-                          <div className="text-[8px] sm:text-[10px] font-bold text-rose-600 mt-0.5 uppercase tracking-wide leading-tight">
+                          <div className="text-[7px] sm:text-[10px] font-bold text-rose-600 mt-0.5 uppercase tracking-wide leading-tight">
                             ⚠ QC Rejected
                           </div>
                         )}
                       </td>
-                      <td className="px-2 sm:px-6 py-2 sm:py-4 hidden md:table-cell">{wo.date ? new Date(wo.date).toLocaleDateString() : "-"}</td>
-                      <td className="px-2 sm:px-6 py-2 sm:py-4 leading-tight">{wo.customerName}</td>
-                      <td className="px-2 sm:px-6 py-2 sm:py-4 max-w-[100px] sm:max-w-xs truncate hidden lg:table-cell">{wo.jobDescription}</td>
-                      <td className="px-2 sm:px-6 py-2 sm:py-4 hidden sm:table-cell">
+                      <td className="px-1.5 sm:px-6 py-1.5 sm:py-4 hidden md:table-cell">{wo.date ? new Date(wo.date).toLocaleDateString() : "-"}</td>
+                      <td className="px-1.5 sm:px-6 py-1.5 sm:py-4 leading-tight">{wo.customerName}</td>
+                      <td className="px-1.5 sm:px-6 py-1.5 sm:py-4 max-w-[100px] sm:max-w-xs truncate hidden lg:table-cell">{wo.jobDescription}</td>
+                      <td className="px-1.5 sm:px-6 py-1.5 sm:py-4 hidden sm:table-cell">
                         <div className="flex flex-col gap-1 sm:gap-1.5 min-w-[80px] sm:min-w-[120px]">
                           <div className="flex items-center justify-between text-[10px] sm:text-xs font-bold text-slate-700">
                             <span>{wo.producedQty} <span className="text-[8px] sm:text-[9px] text-slate-400 font-medium uppercase">{wo.uom}</span></span>
@@ -224,34 +224,34 @@ export default async function WorkOrdersPage() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-2 sm:px-6 py-2 sm:py-4">
+                      <td className="px-1.5 sm:px-6 py-1.5 sm:py-4">
                         {wo.status === 'Rejected' ? (
-                          <span className="px-1.5 sm:px-2.5 py-0.5 sm:py-1.5 rounded-full text-[9px] sm:text-xs font-bold bg-rose-600 text-white leading-none inline-block">
+                          <span className="px-1 sm:px-2.5 py-0.5 sm:py-1.5 rounded-full text-[8px] sm:text-xs font-bold bg-rose-600 text-white leading-none inline-block">
                             REJECTED
                           </span>
                         ) : wo.status === 'Completed' || wo.qcAcceptance === 'Approved' ? (
-                          <span className="px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[9px] sm:text-xs font-medium bg-emerald-100 text-emerald-700 leading-none inline-block">
+                          <span className="px-1 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[8px] sm:text-xs font-medium bg-emerald-100 text-emerald-700 leading-none inline-block">
                             {wo.status || "Completed"}
                           </span>
                         ) : wo.status === 'Pending for QC' ? (
-                          <span className="px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[9px] sm:text-xs font-medium bg-purple-100 text-purple-700 leading-none inline-block">
+                          <span className="px-1 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[8px] sm:text-xs font-medium bg-purple-100 text-purple-700 leading-none inline-block">
                             PENDING QC
                           </span>
                         ) : (
                           <span
-                            className={`px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[9px] sm:text-xs font-medium leading-none inline-block ${wo.status ? (STATUS_STYLES[wo.status] ?? "bg-slate-100 text-slate-700") : "bg-slate-100 text-slate-700"
+                            className={`px-1 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[8px] sm:text-xs font-medium leading-none inline-block ${wo.status ? (STATUS_STYLES[wo.status] ?? "bg-slate-100 text-slate-700") : "bg-slate-100 text-slate-700"
                               }`}
                           >
                             {wo.status || "Unknown"}
                           </span>
                         )}
                       </td>
-                      <td className="px-2 sm:px-6 py-2 sm:py-4 text-right">
-                        <div className="flex flex-col sm:flex-row items-end sm:items-center justify-end gap-1.5 sm:gap-3">
+                      <td className="px-1.5 sm:px-6 py-1.5 sm:py-4 text-right">
+                        <div className="flex flex-col sm:flex-row items-end sm:items-center justify-end gap-1 sm:gap-3">
                           {wo.status === 'Rejected' && (
                             <Link
                               href="/dashboard/production/rework"
-                              className="text-amber-600 hover:text-amber-800 font-bold text-[10px] sm:text-xs bg-amber-50 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded"
+                              className="text-amber-600 hover:text-amber-800 font-bold text-[9px] sm:text-xs bg-amber-50 px-1 sm:px-2 py-0.5 sm:py-1 rounded"
                             >
                               Fix
                             </Link>
@@ -259,12 +259,12 @@ export default async function WorkOrdersPage() {
                           {wo.workOrderNo ? (
                             <Link
                               href={`/dashboard/production/work-order/${wo.workOrderNo}`}
-                              className="text-blue-600 hover:text-blue-800 font-medium text-[10px] sm:text-sm bg-blue-50 sm:bg-transparent px-1.5 sm:px-0 py-0.5 sm:py-0 rounded"
+                              className="text-blue-600 hover:text-blue-800 font-medium text-[9px] sm:text-sm bg-blue-50 sm:bg-transparent px-1 sm:px-0 py-0.5 sm:py-0 rounded"
                             >
                               Open
                             </Link>
                           ) : (
-                            <span className="text-slate-400 text-[10px] sm:text-sm">Unavail</span>
+                            <span className="text-slate-400 text-[9px] sm:text-sm">Unavail</span>
                           )}
                         </div>
                       </td>

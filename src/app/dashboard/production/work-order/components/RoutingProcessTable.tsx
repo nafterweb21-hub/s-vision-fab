@@ -99,23 +99,23 @@ export default function RoutingProcessTable({
   }
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm text-left">
-        <thead className="text-xs text-slate-500 uppercase bg-white border-b border-slate-100">
+    <div className="overflow-x-auto w-full">
+      <table className="w-full text-sm text-left min-w-[600px] sm:min-w-[1000px]">
+        <thead className="text-[10px] sm:text-xs text-slate-500 uppercase bg-white border-b border-slate-100">
           <tr>
-            {dndEnabled && <th className="px-2 py-2 w-8" aria-label="Reorder" />}
-            <th className="px-3 py-2 font-semibold w-12">SN</th>
-            <th className="px-3 py-2 font-semibold">Main Process</th>
-            <th className="px-3 py-2 font-semibold">Routing Process</th>
-            <th className="px-3 py-2 font-semibold">Assigned Employee</th>
-            <th className="px-3 py-2 font-semibold">Target Date</th>
-            <th className="px-3 py-2 font-semibold text-center">Fully Recv?</th>
-            <th className="px-3 py-2 font-semibold text-center">Process Parameter</th>
-            <th className="px-3 py-2 font-semibold">Status</th>
-            <th className="px-3 py-2 font-semibold text-right">Actions</th>
+            {dndEnabled && <th className="px-1.5 sm:px-2 py-1.5 sm:py-2 w-6 sm:w-8" aria-label="Reorder" />}
+            <th className="px-1.5 sm:px-3 py-1.5 sm:py-2 font-semibold w-8 sm:w-12">SN</th>
+            <th className="px-1.5 sm:px-3 py-1.5 sm:py-2 font-semibold">Main Process</th>
+            <th className="px-1.5 sm:px-3 py-1.5 sm:py-2 font-semibold">Routing Process</th>
+            <th className="px-1.5 sm:px-3 py-1.5 sm:py-2 font-semibold">Assigned Employee</th>
+            <th className="px-1.5 sm:px-3 py-1.5 sm:py-2 font-semibold">Target Date</th>
+            <th className="px-1.5 sm:px-3 py-1.5 sm:py-2 font-semibold text-center">Fully Recv?</th>
+            <th className="px-1.5 sm:px-3 py-1.5 sm:py-2 font-semibold text-center">Process Parameter</th>
+            <th className="px-1.5 sm:px-3 py-1.5 sm:py-2 font-semibold">Status</th>
+            <th className="px-1.5 sm:px-3 py-1.5 sm:py-2 font-semibold text-right">Actions</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-100">
+        <tbody className="divide-y divide-slate-100 text-[10px] sm:text-sm">
           {rows.map((rp) => (
             <RoutingProcessRow
               key={rp.id}

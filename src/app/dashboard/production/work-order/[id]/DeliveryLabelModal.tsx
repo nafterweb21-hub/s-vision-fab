@@ -31,9 +31,9 @@ export default function DeliveryLabelModal({
     <>
       <button
         onClick={() => setIsOpen(true)}
-        className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg font-semibold transition-colors border border-indigo-200 ml-2"
+        className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1 px-2 py-1 sm:px-4 sm:py-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded sm:rounded-lg text-[10px] sm:text-sm font-semibold transition-colors border border-indigo-200"
       >
-        <Printer size={16} />
+        <Printer size={12} className="sm:w-4 sm:h-4" />
         Print Label
       </button>
 
@@ -57,7 +57,7 @@ export default function DeliveryLabelModal({
                 />
                 <p className="text-xs text-slate-500 mt-1">Date does not save into the system</p>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="flex flex-col sm:grid sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Quantity</label>
                   <input

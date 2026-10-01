@@ -163,53 +163,55 @@ export default async function WorkOrderRoutingPage({
   }
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-6">
-      <div className="flex items-center gap-4">
-        <Link
-          href="/dashboard/production/work-order"
-          className="p-2 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors"
-        >
-          <ArrowLeft size={20} />
-        </Link>
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800">Work Order: {workOrder.workOrderNo}</h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Status: <span className="font-medium">{topDerivedStatus}</span>
-          </p>
+    <div className="p-0 sm:p-4 max-w-6xl mx-auto space-y-1 sm:space-y-6">
+      <div className="flex flex-col md:flex-row md:items-center gap-1 justify-between px-1 sm:px-0 mt-1 sm:mt-0">
+        <div className="flex items-start md:items-center gap-1 w-full md:w-auto">
+          <Link
+            href="/dashboard/production/work-order"
+            className="p-0.5 sm:p-2 shrink-0 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors mt-0.5 md:mt-0"
+          >
+            <ArrowLeft size={12} className="sm:w-5 sm:h-5" />
+          </Link>
+          <div className="min-w-0">
+            <h1 className="text-sm sm:text-xl md:text-2xl font-bold text-slate-800 break-words leading-tight">Work Order: {workOrder.workOrderNo}</h1>
+            <p className="text-[9px] sm:text-xs md:text-sm text-slate-500 mt-0.5">
+              Status: <span className="font-medium">{topDerivedStatus}</span>
+            </p>
+          </div>
         </div>
       </div>
 
-      <div className="border-b border-slate-200">
-        <nav className="-mb-px flex space-x-8">
+      <div className="border-b border-slate-200 overflow-x-auto no-scrollbar">
+        <nav className="-mb-px flex space-x-1 sm:space-x-8 min-w-max px-1 sm:px-0">
           <Link
             href={`/dashboard/production/work-order/${id}`}
-            className="border-b-2 border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 py-4 px-1 text-sm font-medium"
+            className="border-b-2 border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 py-1.5 sm:py-4 px-1 text-[10px] sm:text-sm font-medium whitespace-nowrap"
           >
             Order Details
           </Link>
-          <div className="border-b-2 border-blue-600 text-blue-600 py-4 px-1 text-sm font-medium">
+          <div className="border-b-2 border-blue-600 text-blue-600 py-1.5 sm:py-4 px-1 text-[10px] sm:text-sm font-medium whitespace-nowrap">
             In-Process & Routing
           </div>
           <Link
             href={`/dashboard/production/work-order/${id}/timesheets`}
-            className="border-b-2 border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 py-4 px-1 text-sm font-medium"
+            className="border-b-2 border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 py-1.5 sm:py-4 px-1 text-[10px] sm:text-sm font-medium whitespace-nowrap"
           >
             Timesheets & Parameters
           </Link>
           <Link
             href={`/dashboard/production/work-order/${id}/files`}
-            className="border-b-2 border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 py-4 px-1 text-sm font-medium"
+            className="border-b-2 border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 py-1.5 sm:py-4 px-1 text-[10px] sm:text-sm font-medium whitespace-nowrap"
           >
             Files
           </Link>
         </nav>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-        <div className="flex justify-between items-center mb-4">
+      <div className="bg-white rounded-md sm:rounded-xl shadow-sm border-y sm:border border-slate-200 p-1.5 sm:p-6">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-1.5 sm:gap-4 mb-2 sm:mb-4">
           <div>
-            <h3 className="text-lg font-semibold text-slate-800">Inprocess Name</h3>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <h3 className="text-[11px] sm:text-lg font-semibold text-slate-800">Inprocess Name</h3>
+            <p className="hidden sm:block text-xs text-slate-500 mt-0.5">
               Within an in-process, routing runs strictly in sequence. New items can only be appended after existing Completed / WIP rows.
             </p>
           </div>
@@ -225,14 +227,14 @@ export default async function WorkOrderRoutingPage({
             <p className="text-sm">No in-process steps defined yet.</p>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-2 sm:space-y-4">
             {inProcessRows.map((ip: any) => (
-              <div key={ip.id} className="border border-slate-200 rounded-lg overflow-hidden">
-                <div className="p-4 bg-slate-50 border-b border-slate-200">
-                  <div className="flex justify-between items-start gap-4">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h4 className="font-semibold text-slate-800">
+              <div key={ip.id} className="border border-slate-200 rounded-md sm:rounded-lg overflow-hidden">
+                <div className="p-2 sm:p-4 bg-slate-50 border-b border-slate-200">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-1.5 sm:gap-4">
+                    <div className="min-w-0 w-full sm:w-auto">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <h4 className="text-[11px] sm:text-base font-semibold text-slate-800">
                           {ip.sn}. {ip.description}
                         </h4>
                         {editable && ip.derivedStatus === "New" && (
@@ -243,23 +245,23 @@ export default async function WorkOrderRoutingPage({
                           />
                         )}
                         <span
-                          className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                          className={`px-1.5 py-0.5 rounded sm:rounded-full text-[9px] sm:text-xs font-medium ${
                             IP_STATUS_BADGE[ip.derivedStatus] ?? "bg-slate-100 text-slate-700"
                           }`}
                         >
                           {ip.derivedStatus}
                         </span>
                         {ip.allFlag && (
-                          <span className="px-2 py-0.5 rounded-full text-xs bg-blue-50 text-blue-700">All</span>
+                          <span className="px-1.5 py-0.5 rounded sm:rounded-full text-[9px] sm:text-xs bg-blue-50 text-blue-700">All</span>
                         )}
                       </div>
-                      <div className="mt-1 text-xs text-slate-500 space-x-3">
+                      <div className="mt-0.5 sm:mt-1 text-[9px] sm:text-xs text-slate-500 space-x-2 sm:space-x-3">
                         <span>Target: {new Date(ip.targetCompletionDate).toLocaleDateString("en-GB")}</span>
                         {ip.conditionalSn && (
                           <span>Precondition: SN {ip.conditionalSn.sn} ({ip.conditionalSn.description})</span>
                         )}
                       </div>
-                      {ip.remark && <div className="mt-2 text-xs text-slate-600">{ip.remark}</div>}
+                      {ip.remark && <div className="mt-1 sm:mt-2 text-[9px] sm:text-xs text-slate-600">{ip.remark}</div>}
                     </div>
                     <AddRoutingProcessModal
                       inProcessId={ip.id}
@@ -277,7 +279,7 @@ export default async function WorkOrderRoutingPage({
                 </div>
 
                 {ip.routingProcesses.length === 0 ? (
-                  <div className="px-4 py-8 text-center text-slate-400 text-xs">
+                  <div className="px-2 py-4 sm:px-4 sm:py-8 text-center text-slate-400 text-[10px] sm:text-xs">
                     No routing processes yet.
                   </div>
                 ) : (

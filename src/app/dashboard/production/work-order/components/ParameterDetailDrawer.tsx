@@ -99,7 +99,7 @@ export default function ParameterDetailDrawer({
           setIsEditing(false);
           setError("");
         }}
-        className="px-3 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-xs font-semibold hover:bg-blue-100 transition-colors shadow-sm"
+        className="px-1.5 py-0.5 sm:px-3 sm:py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded sm:rounded-lg text-[9px] sm:text-xs font-semibold hover:bg-blue-100 transition-colors shadow-sm"
       >
         View
       </button>
@@ -107,21 +107,21 @@ export default function ParameterDetailDrawer({
       {isOpen && (
         <div className="fixed inset-0 z-50 flex flex-col bg-white animate-in fade-in slide-in-from-bottom-4 duration-200">
           <div className="w-full h-full flex flex-col">
-            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-              <h3 className="text-lg font-semibold text-slate-800">
-                Process Parameter — {type} {isEditing && <span className="text-sm font-normal text-indigo-600">(Editing)</span>}
+            <div className="px-3 py-2 sm:px-6 sm:py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <h3 className="text-[11px] sm:text-lg font-semibold text-slate-800">
+                Process Parameter — {type} {isEditing && <span className="text-[9px] sm:text-sm font-normal text-indigo-600">(Editing)</span>}
               </h3>
               <button
                 onClick={() => setOpen(false)}
-                className="p-1 hover:bg-slate-200 rounded-md text-slate-500 transition-colors"
+                className="p-0.5 sm:p-1 hover:bg-slate-200 rounded-md text-slate-500 transition-colors"
               >
-                <X size={20} />
+                <X size={14} className="sm:w-5 sm:h-5" />
               </button>
             </div>
 
-            <div className="p-6 overflow-y-auto flex-1">
+            <div className="p-3 sm:p-6 overflow-y-auto flex-1">
               {error && (
-                <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
+                <div className="mb-3 sm:mb-4 p-2 sm:p-3 bg-red-50 border border-red-200 text-red-700 rounded-md sm:rounded-lg text-[9px] sm:text-sm">
                   {error}
                 </div>
               )}
@@ -172,7 +172,7 @@ export default function ParameterDetailDrawer({
               )}
             </div>
 
-            <div className="px-6 py-3 border-t border-slate-100 bg-slate-50 flex justify-between items-center">
+            <div className="px-3 py-2 sm:px-6 sm:py-3 border-t border-slate-100 bg-slate-50 flex justify-between items-center">
               <div>
                 {editable && !isEditing && (has || targetTimesheetId) && (
                   <button
@@ -246,36 +246,36 @@ export default function ParameterDetailDrawer({
                         });
                       }
                     }}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 border border-indigo-200 text-indigo-600 rounded-lg hover:bg-indigo-50 text-sm font-semibold transition-colors"
+                    className="inline-flex items-center gap-1 sm:gap-1.5 px-2 py-1 sm:px-4 sm:py-2 border border-indigo-200 text-indigo-600 rounded sm:rounded-lg hover:bg-indigo-50 text-[10px] sm:text-sm font-semibold transition-colors"
                   >
-                    <Edit size={16} />
+                    <Edit size={12} className="sm:w-4 sm:h-4" />
                     {has ? "Update" : "Add Parameters"}
                   </button>
                 )}
               </div>
 
-              <div className="flex gap-2">
+              <div className="flex gap-1.5 sm:gap-2">
                 {isEditing ? (
                   <>
                     <button
                       onClick={() => setIsEditing(false)}
-                      className="px-4 py-2 border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-100 text-sm font-medium transition-colors"
+                      className="px-2 py-1 sm:px-4 sm:py-2 border border-slate-200 text-slate-600 rounded sm:rounded-lg hover:bg-slate-100 text-[10px] sm:text-sm font-medium transition-colors"
                     >
                       Cancel
                     </button>
                     <button
                       onClick={handleSave}
                       disabled={isPending}
-                      className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 text-sm font-semibold transition-colors"
+                      className="inline-flex items-center gap-1 sm:gap-1.5 px-2 py-1 sm:px-4 sm:py-2 bg-indigo-600 text-white rounded sm:rounded-lg hover:bg-indigo-700 disabled:opacity-50 text-[10px] sm:text-sm font-semibold transition-colors"
                     >
-                      <Save size={16} />
+                      <Save size={12} className="sm:w-4 sm:h-4" />
                       {isPending ? "Saving..." : "Save"}
                     </button>
                   </>
                 ) : (
                   <button
                     onClick={() => setOpen(false)}
-                    className="px-4 py-2 border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-100 text-sm font-medium transition-colors"
+                    className="px-2 py-1 sm:px-4 sm:py-2 border border-slate-200 text-slate-600 rounded sm:rounded-lg hover:bg-slate-100 text-[10px] sm:text-sm font-medium transition-colors"
                   >
                     Cancel
                   </button>
@@ -292,8 +292,8 @@ export default function ParameterDetailDrawer({
 function Field({ label, value }: { label: string; value?: any }) {
   return (
     <div>
-      <div className="text-xs font-semibold text-slate-500">{label}</div>
-      <div className="mt-1 px-3 py-1.5 border border-slate-100 rounded bg-slate-50 text-sm text-slate-700 min-h-[34px]">
+      <div className="text-[9px] sm:text-xs font-semibold text-slate-500">{label}</div>
+      <div className="mt-0.5 sm:mt-1 px-2 py-1 sm:px-3 sm:py-1.5 border border-slate-100 rounded bg-slate-50 text-[10px] sm:text-sm text-slate-700 min-h-[24px] sm:min-h-[34px]">
         {value == null || value === "" ? "-" : String(value)}
       </div>
     </div>
@@ -302,11 +302,11 @@ function Field({ label, value }: { label: string; value?: any }) {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="mb-5">
-      <h4 className="text-xs font-bold text-slate-600 uppercase tracking-wider mb-2.5 pb-1 border-b border-slate-100">
+    <div className="mb-3 sm:mb-5">
+      <h4 className="text-[10px] sm:text-xs font-bold text-slate-600 uppercase tracking-wider mb-1.5 sm:mb-2.5 pb-0.5 sm:pb-1 border-b border-slate-100">
         {title}
       </h4>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">{children}</div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-2 sm:gap-4">{children}</div>
     </div>
   );
 }
@@ -528,7 +528,7 @@ function WeldingEdit({
           <SearchableSelect
             value={formData.weldingMachineId}
             onChange={(e) => updateField("weldingMachineId", e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            className="border border-slate-300 rounded sm:rounded-lg px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
           >
             <option value="">Select Machine...</option>
             {weldingMachines.map((m: any) => (
@@ -546,7 +546,7 @@ function WeldingEdit({
           <SearchableSelect
             value={formData.typeOfJointId}
             onChange={(e) => updateField("typeOfJointId", e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            className="border border-slate-300 rounded sm:rounded-lg px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
           >
             <option value="">Select Joint...</option>
             {joints.map((j: any) => (
@@ -563,7 +563,7 @@ function WeldingEdit({
             type="text"
             value={formData.electrodeType}
             onChange={(e) => updateField("electrodeType", e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            className="border border-slate-300 rounded sm:rounded-lg px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
           />
         </div>
 
@@ -573,7 +573,7 @@ function WeldingEdit({
             type="text"
             value={formData.weldingPosition}
             onChange={(e) => updateField("weldingPosition", e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            className="border border-slate-300 rounded sm:rounded-lg px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
           />
         </div>
 
@@ -584,7 +584,7 @@ function WeldingEdit({
             step="any"
             value={formData.weldingJoint}
             onChange={(e) => updateField("weldingJoint", e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            className="border border-slate-300 rounded sm:rounded-lg px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
           />
         </div>
 
@@ -595,7 +595,7 @@ function WeldingEdit({
             step="any"
             value={formData.weldingSizeMm}
             onChange={(e) => updateField("weldingSizeMm", e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            className="border border-slate-300 rounded sm:rounded-lg px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
           />
         </div>
       </Section>
@@ -608,7 +608,7 @@ function WeldingEdit({
             step="any"
             value={formData.voltageVolts}
             onChange={(e) => updateField("voltageVolts", e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            className="border border-slate-300 rounded sm:rounded-lg px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
           />
         </div>
 
@@ -619,7 +619,7 @@ function WeldingEdit({
             step="any"
             value={formData.currentAmp}
             onChange={(e) => updateField("currentAmp", e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            className="border border-slate-300 rounded sm:rounded-lg px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
           />
         </div>
 
@@ -630,7 +630,7 @@ function WeldingEdit({
             step="any"
             value={formData.coolingTimeMins}
             onChange={(e) => updateField("coolingTimeMins", e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            className="border border-slate-300 rounded sm:rounded-lg px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
           />
         </div>
 
@@ -641,7 +641,7 @@ function WeldingEdit({
             step="any"
             value={formData.preHeatingC}
             onChange={(e) => updateField("preHeatingC", e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            className="border border-slate-300 rounded sm:rounded-lg px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
           />
         </div>
 
@@ -652,7 +652,7 @@ function WeldingEdit({
             step="any"
             value={formData.postHeatingC}
             onChange={(e) => updateField("postHeatingC", e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            className="border border-slate-300 rounded sm:rounded-lg px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
           />
         </div>
 
@@ -663,7 +663,7 @@ function WeldingEdit({
             step="any"
             value={formData.heatTreatmentHrc}
             onChange={(e) => updateField("heatTreatmentHrc", e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            className="border border-slate-300 rounded sm:rounded-lg px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
           />
         </div>
       </Section>
@@ -674,7 +674,7 @@ function WeldingEdit({
           value={formData.remark}
           onChange={(e) => updateField("remark", e.target.value)}
           rows={3}
-          className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white resize-none"
+          className="border border-slate-300 rounded sm:rounded-lg px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white resize-none"
         />
       </div>
     </div>
@@ -749,7 +749,7 @@ function SprayEdit({
             step="any"
             value={formData.paintTankPressurePsi}
             onChange={(e) => updateField("paintTankPressurePsi", e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            className="border border-slate-300 rounded sm:rounded-lg px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
           />
         </div>
 
@@ -760,7 +760,7 @@ function SprayEdit({
             step="any"
             value={formData.sprayNozzleSize}
             onChange={(e) => updateField("sprayNozzleSize", e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            className="border border-slate-300 rounded sm:rounded-lg px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
           />
         </div>
 
@@ -770,7 +770,7 @@ function SprayEdit({
             type="text"
             value={formData.typeOfPaint}
             onChange={(e) => updateField("typeOfPaint", e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            className="border border-slate-300 rounded sm:rounded-lg px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
           />
         </div>
 
@@ -780,7 +780,7 @@ function SprayEdit({
             value={formData.remark}
             onChange={(e) => updateField("remark", e.target.value)}
             rows={2}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white resize-none"
+            className="border border-slate-300 rounded sm:rounded-lg px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white resize-none"
           />
         </div>
       </Section>
@@ -792,7 +792,7 @@ function SprayEdit({
             type="datetime-local"
             value={formData.surfaceStartDatetime}
             onChange={(e) => updateField("surfaceStartDatetime", e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            className="border border-slate-300 rounded sm:rounded-lg px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
           />
         </div>
 
@@ -802,7 +802,7 @@ function SprayEdit({
             type="datetime-local"
             value={formData.surfaceEndDatetime}
             onChange={(e) => updateField("surfaceEndDatetime", e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            className="border border-slate-300 rounded sm:rounded-lg px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
           />
         </div>
 
@@ -812,7 +812,7 @@ function SprayEdit({
             type="text"
             value={formData.surfaceGeneralWeather}
             onChange={(e) => updateField("surfaceGeneralWeather", e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            className="border border-slate-300 rounded sm:rounded-lg px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
           />
         </div>
 
@@ -822,7 +822,7 @@ function SprayEdit({
             type="text"
             value={formData.surfaceEnvTemperature}
             onChange={(e) => updateField("surfaceEnvTemperature", e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            className="border border-slate-300 rounded sm:rounded-lg px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
           />
         </div>
 
@@ -832,7 +832,7 @@ function SprayEdit({
             type="text"
             value={formData.surfaceRelativeHumidity}
             onChange={(e) => updateField("surfaceRelativeHumidity", e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            className="border border-slate-300 rounded sm:rounded-lg px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
           />
         </div>
 
@@ -842,7 +842,7 @@ function SprayEdit({
             type="text"
             value={formData.surfaceAbrasiveType}
             onChange={(e) => updateField("surfaceAbrasiveType", e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            className="border border-slate-300 rounded sm:rounded-lg px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
           />
         </div>
 
@@ -852,7 +852,7 @@ function SprayEdit({
             type="text"
             value={formData.surfaceSandpaperGrit}
             onChange={(e) => updateField("surfaceSandpaperGrit", e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            className="border border-slate-300 rounded sm:rounded-lg px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
           />
         </div>
       </Section>
@@ -864,7 +864,7 @@ function SprayEdit({
             type="datetime-local"
             value={formData.primerStartDatetime}
             onChange={(e) => updateField("primerStartDatetime", e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            className="border border-slate-300 rounded sm:rounded-lg px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
           />
         </div>
 
@@ -874,7 +874,7 @@ function SprayEdit({
             type="datetime-local"
             value={formData.primerEndDatetime}
             onChange={(e) => updateField("primerEndDatetime", e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            className="border border-slate-300 rounded sm:rounded-lg px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
           />
         </div>
 
@@ -884,7 +884,7 @@ function SprayEdit({
             type="text"
             value={formData.primerGeneralWeather}
             onChange={(e) => updateField("primerGeneralWeather", e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            className="border border-slate-300 rounded sm:rounded-lg px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
           />
         </div>
 
@@ -894,7 +894,7 @@ function SprayEdit({
             type="text"
             value={formData.primerEnvTemperature}
             onChange={(e) => updateField("primerEnvTemperature", e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            className="border border-slate-300 rounded sm:rounded-lg px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
           />
         </div>
 
@@ -904,7 +904,7 @@ function SprayEdit({
             type="text"
             value={formData.primerRelativeHumidity}
             onChange={(e) => updateField("primerRelativeHumidity", e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            className="border border-slate-300 rounded sm:rounded-lg px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
           />
         </div>
 
@@ -914,7 +914,7 @@ function SprayEdit({
             type="text"
             value={formData.primerPaintBatchNo}
             onChange={(e) => updateField("primerPaintBatchNo", e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            className="border border-slate-300 rounded sm:rounded-lg px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
           />
         </div>
 
@@ -924,7 +924,7 @@ function SprayEdit({
             type="date"
             value={formData.primerExpiryDate}
             onChange={(e) => updateField("primerExpiryDate", e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            className="border border-slate-300 rounded sm:rounded-lg px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
           />
         </div>
 
@@ -934,7 +934,7 @@ function SprayEdit({
             type="text"
             value={formData.primerDftMeasurement}
             onChange={(e) => updateField("primerDftMeasurement", e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            className="border border-slate-300 rounded sm:rounded-lg px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
           />
         </div>
       </Section>
@@ -946,7 +946,7 @@ function SprayEdit({
             type="datetime-local"
             value={formData.topcoatStartDatetime2}
             onChange={(e) => updateField("topcoatStartDatetime2", e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            className="border border-slate-300 rounded sm:rounded-lg px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
           />
         </div>
 
@@ -956,7 +956,7 @@ function SprayEdit({
             type="datetime-local"
             value={formData.topcoatEndDatetime2}
             onChange={(e) => updateField("topcoatEndDatetime2", e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            className="border border-slate-300 rounded sm:rounded-lg px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
           />
         </div>
 
@@ -966,7 +966,7 @@ function SprayEdit({
             type="text"
             value={formData.topcoatGeneralWeather2}
             onChange={(e) => updateField("topcoatGeneralWeather2", e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            className="border border-slate-300 rounded sm:rounded-lg px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
           />
         </div>
 
@@ -976,7 +976,7 @@ function SprayEdit({
             type="text"
             value={formData.topcoatEnvTemperature2}
             onChange={(e) => updateField("topcoatEnvTemperature2", e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            className="border border-slate-300 rounded sm:rounded-lg px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
           />
         </div>
 
@@ -986,7 +986,7 @@ function SprayEdit({
             type="text"
             value={formData.topcoatRelativeHumidity2}
             onChange={(e) => updateField("topcoatRelativeHumidity2", e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            className="border border-slate-300 rounded sm:rounded-lg px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
           />
         </div>
 
@@ -996,7 +996,7 @@ function SprayEdit({
             type="text"
             value={formData.topcoatAbrasiveType}
             onChange={(e) => updateField("topcoatAbrasiveType", e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            className="border border-slate-300 rounded sm:rounded-lg px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
           />
         </div>
 
@@ -1006,7 +1006,7 @@ function SprayEdit({
             type="text"
             value={formData.topcoatSandpaperGrit}
             onChange={(e) => updateField("topcoatSandpaperGrit", e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            className="border border-slate-300 rounded sm:rounded-lg px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
           />
         </div>
 
@@ -1016,7 +1016,7 @@ function SprayEdit({
             type="text"
             value={formData.topcoatPaintBatchNo}
             onChange={(e) => updateField("topcoatPaintBatchNo", e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            className="border border-slate-300 rounded sm:rounded-lg px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
           />
         </div>
 
@@ -1026,7 +1026,7 @@ function SprayEdit({
             type="date"
             value={formData.topcoatExpiryDate}
             onChange={(e) => updateField("topcoatExpiryDate", e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            className="border border-slate-300 rounded sm:rounded-lg px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
           />
         </div>
 
@@ -1036,7 +1036,7 @@ function SprayEdit({
             type="text"
             value={formData.topcoatDftMeasurement}
             onChange={(e) => updateField("topcoatDftMeasurement", e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            className="border border-slate-300 rounded sm:rounded-lg px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
           />
         </div>
 
@@ -1046,7 +1046,7 @@ function SprayEdit({
             type="text"
             value={formData.topcoatAdhesiveTestResult}
             onChange={(e) => updateField("topcoatAdhesiveTestResult", e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            className="border border-slate-300 rounded sm:rounded-lg px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
           />
         </div>
       </Section>
@@ -1065,7 +1065,7 @@ function SprayEdit({
                 elcometerName: found ? found.serialNo : "",
               }));
             }}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            className="border border-slate-300 rounded sm:rounded-lg px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
           >
             <option value="">Select Elcometer...</option>
             {elcometers.map((el: any) => (
@@ -1082,7 +1082,7 @@ function SprayEdit({
             value={formData.additionalRemark}
             onChange={(e) => updateField("additionalRemark", e.target.value)}
             rows={2}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white resize-none"
+            className="border border-slate-300 rounded sm:rounded-lg px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white resize-none"
           />
         </div>
       </Section>
@@ -1154,7 +1154,7 @@ function MachiningEdit({
           <SearchableSelect
             value={formData.machineSerialNoId}
             onChange={(e) => updateField("machineSerialNoId", e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            className="border border-slate-300 rounded sm:rounded-lg px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
           >
             <option value="">Select Machine...</option>
             {machiningMachines.map((m: any) => (
@@ -1173,7 +1173,7 @@ function MachiningEdit({
             type="text"
             value={formData.cncProgramNo}
             onChange={(e) => updateField("cncProgramNo", e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            className="border border-slate-300 rounded sm:rounded-lg px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
           />
         </div>
 
@@ -1183,7 +1183,7 @@ function MachiningEdit({
             type="text"
             value={formData.testRun}
             onChange={(e) => updateField("testRun", e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            className="border border-slate-300 rounded sm:rounded-lg px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
           />
         </div>
 
@@ -1193,7 +1193,7 @@ function MachiningEdit({
             type="text"
             value={formData.specialTooling}
             onChange={(e) => updateField("specialTooling", e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            className="border border-slate-300 rounded sm:rounded-lg px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
           />
         </div>
 
@@ -1204,7 +1204,7 @@ function MachiningEdit({
             step="any"
             value={formData.partRuntimeHr}
             onChange={(e) => updateField("partRuntimeHr", e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            className="border border-slate-300 rounded sm:rounded-lg px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
           />
         </div>
 
@@ -1215,7 +1215,7 @@ function MachiningEdit({
             step="any"
             value={formData.partRuntimeMins}
             onChange={(e) => updateField("partRuntimeMins", e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            className="border border-slate-300 rounded sm:rounded-lg px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
           />
         </div>
       </Section>
@@ -1284,7 +1284,7 @@ function MachiningEdit({
           value={formData.remark}
           onChange={(e) => updateField("remark", e.target.value)}
           rows={3}
-          className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white resize-none"
+          className="border border-slate-300 rounded sm:rounded-lg px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white resize-none"
         />
       </div>
     </div>

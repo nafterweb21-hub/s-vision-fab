@@ -93,26 +93,26 @@ export default function WorkOrderHeader({ wo, uoms }: Props) {
   const actions = NEXT[wo.status] ?? [];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {error && (
-        <div className="bg-red-50 text-red-600 p-4 rounded-lg text-sm border border-red-200">{error}</div>
+        <div className="bg-red-50 text-red-600 p-2 sm:p-4 rounded-md sm:rounded-lg text-xs sm:text-sm border border-red-200">{error}</div>
       )}
 
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1 sm:gap-0">
         <span
-          className={`px-3 py-1 rounded-full text-xs font-semibold ${
+          className={`px-1 py-0.5 sm:px-3 sm:py-1 rounded sm:rounded-full text-[8px] sm:text-xs font-semibold shrink-0 ${
             STATUS_STYLES[wo.status] ?? "bg-slate-100 text-slate-700"
           }`}
         >
           Status: {wo.status}
         </span>
-        <div className="flex gap-2 flex-wrap justify-end">
+        <div className="flex gap-1 flex-wrap justify-start sm:justify-end w-full sm:w-auto">
           {actions.map((a) => (
             <button
               key={a.to}
               onClick={() => transition(a.to)}
               disabled={isPending}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium disabled:opacity-50 ${a.tone}`}
+              className={`px-1.5 py-0.5 sm:px-3 sm:py-1.5 rounded text-[9px] sm:text-sm font-medium disabled:opacity-50 flex-1 sm:flex-none text-center ${a.tone}`}
             >
               {a.label}
             </button>
@@ -215,11 +215,11 @@ export default function WorkOrderHeader({ wo, uoms }: Props) {
         />
       </div>
 
-      <div className="pt-4 border-t border-slate-200 flex justify-end">
+      <div className="pt-2 sm:pt-4 border-t border-slate-200 flex justify-end">
         <button
           onClick={save}
           disabled={!editable || isPending}
-          className="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm font-medium shadow-sm shadow-blue-500/20"
+          className="px-3 py-1 sm:px-5 sm:py-2 bg-blue-600 text-white rounded sm:rounded-lg hover:bg-blue-700 disabled:opacity-50 text-[10px] sm:text-sm font-medium shadow-sm shadow-blue-500/20 w-full sm:w-auto"
         >
           {isPending ? "Saving..." : "Save Changes"}
         </button>
@@ -237,15 +237,15 @@ function fmtDate(d?: string | Date | null) {
 }
 
 const inputCls =
-  "w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition-colors disabled:bg-slate-50 disabled:text-slate-500";
+  "w-full px-1 py-0.5 sm:px-3 sm:py-2 border border-slate-200 rounded sm:rounded-lg text-[9px] sm:text-sm bg-white focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition-colors disabled:bg-slate-50 disabled:text-slate-500";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wide mb-3 pb-2 border-b border-slate-100">
+      <h3 className="text-[9px] sm:text-sm font-semibold text-slate-700 uppercase tracking-wide mb-0.5 sm:mb-2 pb-0.5 sm:pb-2 border-b border-slate-100">
         {title}
       </h3>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{children}</div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-1 sm:gap-4">{children}</div>
     </div>
   );
 }
@@ -253,8 +253,8 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function ReadOnly({ label, value }: { label: string; value?: string | null }) {
   return (
     <div>
-      <label className="text-xs font-medium text-slate-500">{label}</label>
-      <div className="mt-1 px-3 py-2 border border-slate-100 rounded-lg text-sm bg-slate-50 text-slate-700 min-h-[38px]">
+      <label className="text-[8px] sm:text-xs font-medium text-slate-500">{label}</label>
+      <div className="mt-0 sm:mt-1 px-1 py-0.5 sm:px-3 sm:py-2 border border-slate-100 rounded sm:rounded-lg text-[9px] sm:text-sm bg-slate-50 text-slate-700 min-h-[20px] sm:min-h-[38px] flex items-center">
         {value || "-"}
       </div>
     </div>
@@ -272,10 +272,10 @@ function Editable({
 }) {
   return (
     <div>
-      <label className="text-xs font-medium text-slate-500">
+      <label className="text-[8px] sm:text-xs font-medium text-slate-500">
         {label} {required && <span className="text-red-500">*</span>}
       </label>
-      <div className="mt-1">{children}</div>
+      <div className="mt-0 sm:mt-1">{children}</div>
     </div>
   );
 }

@@ -133,53 +133,55 @@ export default async function WorkOrderTimesheetsPage({
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
-      <div className="flex items-center gap-4">
-        <Link
-          href="/dashboard/production/work-order"
-          className="p-2 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors"
-        >
-          <ArrowLeft size={20} />
-        </Link>
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800">Work Order: {workOrder.workOrderNo}</h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Status: <span className="font-medium">{topDerivedStatus}</span>
-          </p>
+    <div className="p-0 sm:p-4 max-w-7xl mx-auto space-y-1 sm:space-y-6">
+      <div className="flex flex-col md:flex-row md:items-center gap-1 justify-between px-1 sm:px-0 mt-1 sm:mt-0">
+        <div className="flex items-start md:items-center gap-1 w-full md:w-auto">
+          <Link
+            href="/dashboard/production/work-order"
+            className="p-0.5 sm:p-2 shrink-0 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors mt-0.5 md:mt-0"
+          >
+            <ArrowLeft size={12} className="sm:w-5 sm:h-5" />
+          </Link>
+          <div className="min-w-0">
+            <h1 className="text-sm sm:text-xl md:text-2xl font-bold text-slate-800 break-words leading-tight">Work Order: {workOrder.workOrderNo}</h1>
+            <p className="text-[9px] sm:text-xs md:text-sm text-slate-500 mt-0.5">
+              Status: <span className="font-medium">{topDerivedStatus}</span>
+            </p>
+          </div>
         </div>
       </div>
 
-      <div className="border-b border-slate-200">
-        <nav className="-mb-px flex space-x-8">
+      <div className="border-b border-slate-200 overflow-x-auto no-scrollbar">
+        <nav className="-mb-px flex space-x-1 sm:space-x-8 min-w-max px-1 sm:px-0">
           <Link
             href={`/dashboard/production/work-order/${id}`}
-            className="border-b-2 border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 py-4 px-1 text-sm font-medium"
+            className="border-b-2 border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 py-1.5 sm:py-4 px-1 text-[10px] sm:text-sm font-medium whitespace-nowrap"
           >
             Order Details
           </Link>
           <Link
             href={`/dashboard/production/work-order/${id}/routing`}
-            className="border-b-2 border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 py-4 px-1 text-sm font-medium"
+            className="border-b-2 border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 py-1.5 sm:py-4 px-1 text-[10px] sm:text-sm font-medium whitespace-nowrap"
           >
             In-Process & Routing
           </Link>
-          <div className="border-b-2 border-blue-600 text-blue-600 py-4 px-1 text-sm font-medium">
+          <div className="border-b-2 border-blue-600 text-blue-600 py-1.5 sm:py-4 px-1 text-[10px] sm:text-sm font-medium whitespace-nowrap">
             Timesheets & Parameters
           </div>
           <Link
             href={`/dashboard/production/work-order/${id}/files`}
-            className="border-b-2 border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 py-4 px-1 text-sm font-medium"
+            className="border-b-2 border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 py-1.5 sm:py-4 px-1 text-[10px] sm:text-sm font-medium whitespace-nowrap"
           >
             Files
           </Link>
         </nav>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="p-6 border-b border-slate-200 flex justify-between items-center bg-slate-50">
+      <div className="bg-white rounded-md sm:rounded-xl shadow-sm border-y sm:border border-slate-200 overflow-hidden">
+        <div className="p-1.5 sm:p-6 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-1.5 sm:gap-4 bg-slate-50">
           <div>
-            <h3 className="text-lg font-semibold text-slate-800">Production Timesheets</h3>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <h3 className="text-[11px] sm:text-lg font-semibold text-slate-800">Production Timesheets</h3>
+            <p className="hidden sm:block text-xs text-slate-500 mt-0.5">
               Scan IN / OUT data from Production Terminal. Authorized override only.
             </p>
           </div>
@@ -197,60 +199,60 @@ export default async function WorkOrderTimesheetsPage({
             <p className="text-sm">No timesheets recorded for this work order yet.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left">
-              <thead className="text-xs text-slate-500 uppercase bg-slate-100 border-b border-slate-200">
+          <div className="overflow-x-auto w-full">
+            <table className="w-full text-sm text-left min-w-[600px] sm:min-w-[1000px]">
+              <thead className="text-[10px] sm:text-xs text-slate-500 uppercase bg-slate-100 border-b border-slate-200">
                 <tr>
-                  <th className="px-4 py-3 font-semibold">Employee</th>
-                  <th className="px-4 py-3 font-semibold">Process</th>
-                  <th className="px-4 py-3 font-semibold">Time In</th>
-                  <th className="px-4 py-3 font-semibold">Time Out</th>
-                  <th className="px-4 py-3 font-semibold text-right">Total Min</th>
-                  <th className="px-4 py-3 font-semibold text-center">Completed</th>
-                  <th className="px-4 py-3 font-semibold text-right">Qty</th>
-                  <th className="px-4 py-3 font-semibold">Machine</th>
-                  <th className="px-4 py-3 font-semibold text-center">Parameters</th>
-                  <th className="px-4 py-3 font-semibold text-right">Actions</th>
+                  <th className="px-1.5 py-1.5 sm:px-4 sm:py-3 font-semibold">Employee</th>
+                  <th className="px-1.5 py-1.5 sm:px-4 sm:py-3 font-semibold">Process</th>
+                  <th className="px-1.5 py-1.5 sm:px-4 sm:py-3 font-semibold">Time In</th>
+                  <th className="px-1.5 py-1.5 sm:px-4 sm:py-3 font-semibold">Time Out</th>
+                  <th className="px-1.5 py-1.5 sm:px-4 sm:py-3 font-semibold text-right">Total Min</th>
+                  <th className="px-1.5 py-1.5 sm:px-4 sm:py-3 font-semibold text-center">Completed</th>
+                  <th className="px-1.5 py-1.5 sm:px-4 sm:py-3 font-semibold text-right">Qty</th>
+                  <th className="px-1.5 py-1.5 sm:px-4 sm:py-3 font-semibold">Machine</th>
+                  <th className="px-1.5 py-1.5 sm:px-4 sm:py-3 font-semibold text-center">Parameters</th>
+                  <th className="px-1.5 py-1.5 sm:px-4 sm:py-3 font-semibold text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200">
+              <tbody className="divide-y divide-slate-200 text-[10px] sm:text-sm">
                 {rows.map((ts: any) => (
                   <tr key={ts.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-4 py-3 font-medium text-slate-800">{ts.employee.name}</td>
-                    <td className="px-4 py-3">
+                    <td className="px-1.5 py-1.5 sm:px-4 sm:py-3 font-medium text-slate-800">{ts.employee.name}</td>
+                    <td className="px-1.5 py-1.5 sm:px-4 sm:py-3">
                       <div className="font-medium text-slate-700">{ts.processName}</div>
-                      <div className="text-xs text-slate-500">{ts.inProcessDescription}</div>
+                      <div className="text-[9px] sm:text-xs text-slate-500">{ts.inProcessDescription}</div>
                     </td>
-                    <td className="px-4 py-3 text-slate-600 whitespace-nowrap">
+                    <td className="px-1.5 py-1.5 sm:px-4 sm:py-3 text-slate-600 whitespace-nowrap">
                       {ts.timeIn ? new Date(ts.timeIn).toLocaleString() : "-"}
                     </td>
-                    <td className="px-4 py-3 text-slate-600 whitespace-nowrap">
+                    <td className="px-1.5 py-1.5 sm:px-4 sm:py-3 text-slate-600 whitespace-nowrap">
                       {ts.timeOut ? new Date(ts.timeOut).toLocaleString() : "-"}
                     </td>
-                    <td className="px-4 py-3 text-right font-medium">
+                    <td className="px-1.5 py-1.5 sm:px-4 sm:py-3 text-right font-medium">
                       {ts.totalMinutes ? Number(ts.totalMinutes).toString() : "-"}
                     </td>
-                    <td className="px-4 py-3 text-center">
+                    <td className="px-1.5 py-1.5 sm:px-4 sm:py-3 text-center">
                       <span
-                        className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                        className={`px-1.5 py-0.5 sm:px-2 sm:py-0.5 rounded-full text-[9px] sm:text-xs font-medium ${
                           ts.completed ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
                         }`}
                       >
                         {ts.completed ? "Yes" : "No"}
                       </span>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-1.5 py-1.5 sm:px-4 sm:py-3">
                       <div className="flex flex-col items-end gap-1">
                         <span className="font-medium">
                           {ts.completedQty ? Number(ts.completedQty).toString() : "-"}
                         </span>
                         {ts.completedQty != null && totalOrderQty > 0 && (
-                          <div className="w-24 text-[10px]">
+                          <div className="w-16 sm:w-24 text-[9px] sm:text-[10px]">
                             <div className="flex justify-between text-slate-500 mb-0.5">
                               <span>Rem: {Math.max(0, totalOrderQty - ts.runningSum)}</span>
                               <span>{Math.min(100, Math.round((ts.runningSum / totalOrderQty) * 100))}%</span>
                             </div>
-                            <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                            <div className="w-full h-1 sm:h-1.5 bg-slate-200 rounded-full overflow-hidden">
                               <div
                                 className="h-full bg-blue-500 rounded-full"
                                 style={{ width: `${Math.min(100, (ts.runningSum / totalOrderQty) * 100)}%` }}
@@ -260,8 +262,8 @@ export default async function WorkOrderTimesheetsPage({
                         )}
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-slate-600">{ts.machineCodes || "-"}</td>
-                    <td className="px-4 py-3 text-center">
+                    <td className="px-1.5 py-1.5 sm:px-4 sm:py-3 text-slate-600">{ts.machineCodes || "-"}</td>
+                    <td className="px-1.5 py-1.5 sm:px-4 sm:py-3 text-center">
                       <ParameterDetailDrawer
                         welding={ts.weldingParameter ? JSON.parse(JSON.stringify(ts.weldingParameter)) : null}
                         spray={ts.sprayParameter ? JSON.parse(JSON.stringify(ts.sprayParameter)) : null}
@@ -281,7 +283,7 @@ export default async function WorkOrderTimesheetsPage({
                         }}
                       />
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="px-1.5 py-1.5 sm:px-4 sm:py-3 text-right">
                       {editable && (
                         <AddTimesheetModal
                           workOrderNo={id}
