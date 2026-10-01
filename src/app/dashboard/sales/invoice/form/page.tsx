@@ -34,6 +34,7 @@ export default function InvoiceFormPage() {
     amountBeforeTax: 0,
     taxAmount: 0,
     amountAfterTax: 0,
+    roundOff: 0,
     bankDetails: "",
     remark: "",
     doIds: [],
@@ -83,7 +84,10 @@ export default function InvoiceFormPage() {
              ...item,
              amount: Number(item.amount),
              unitPrice: Number(item.unitPrice),
-             quantity: Number(item.quantity)
+             quantity: Number(item.quantity),
+             taxTypeId: item.taxTypeId || "",
+             taxRate: Number(item.taxRate || item.gstRate || 0),
+             taxAmount: Number(item.taxAmount || 0)
           }))
         });
         setStatus(data.status);
@@ -144,7 +148,8 @@ export default function InvoiceFormPage() {
       items: [],
       amountBeforeTax: 0,
       taxAmount: 0,
-      amountAfterTax: 0
+      amountAfterTax: 0,
+      roundOff: 0
     }));
 
     // Fetch DOs
@@ -173,7 +178,7 @@ export default function InvoiceFormPage() {
   const handleCurrencyChange = (currencyId: string) => {
     const currency = metadata.currencies.find((c: any) => c.id === currencyId);
     setFormData((prev: any) => {
-      const totals = calculateTotals(prev.items, prev.taxRate, currencyId);
+      const totals = calculateTotals(prev.items, currencyId);
       return {
         ...prev,
         currencyId,
@@ -183,18 +188,7 @@ export default function InvoiceFormPage() {
     });
   };
 
-  const handleTaxChange = (taxId: string) => {
-    const tax = metadata.taxes.find((t: any) => t.id === taxId);
-    setFormData((prev: any) => {
-      const taxRate = tax ? Number(tax.taxRate) : 0;
-      const totals = calculateTotals(prev.items, taxRate, prev.currencyId);
-      return {
-        ...prev,
-        taxTypeId: taxId,
-        ...totals
-      };
-    });
-  };
+
 
   const handleBankChange = (bankId: string) => {
     const bank = metadata.banks?.find((b: any) => b.id === bankId);
@@ -208,15 +202,32 @@ Branch: ${bank.branchCode || ""}`;
     }
   };
 
-  const calculateTotals = (items: any[], taxRate: number, overrideCurrencyId?: string) => {
+  const calculateTotals = (items: any[], overrideCurrencyId?: string, overrideRoundOff?: number) => {
     const customer = metadata.customers?.find((c: any) => c.id === formData.customerId);
     const company = metadata.companies?.find((c: any) => c.id === formData.companyId);
-    const effectiveTaxRate = customer?.isSez ? (Number(company?.sezTaxRate) || 0) : taxRate;
+    const effectiveTaxRate = customer?.isSez ? (Number(company?.sezTaxRate) || 0) : 0;
 
-    const amtBefore = items.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-    const taxAmt = amtBefore * (effectiveTaxRate / 100);
+    let amtBefore = 0;
+    let totalTax = 0;
+
+    items.forEach(item => {
+        const amt = Number(item.amount) || 0;
+        amtBefore += amt;
+        
+        let itemTaxRate = Number(item.taxRate) || 0;
+        if (customer?.isSez) {
+             itemTaxRate = effectiveTaxRate;
+        }
+
+        const tAmt = amt * (itemTaxRate / 100);
+        item.taxRate = itemTaxRate;
+        item.taxAmount = tAmt;
+        totalTax += tAmt;
+    });
+
+    const rOff = overrideRoundOff !== undefined ? overrideRoundOff : (Number(formData.roundOff) || 0);
     
-    let finalTotal = amtBefore + taxAmt;
+    let finalTotal = amtBefore + totalTax + rOff;
     const cid = overrideCurrencyId || formData.currencyId;
     const currency = metadata.currencies?.find((c: any) => c.id === cid);
     
@@ -229,8 +240,9 @@ Branch: ${bank.branchCode || ""}`;
     return {
       taxRate: effectiveTaxRate,
       amountBeforeTax: amtBefore,
-      taxAmount: taxAmt,
-      amountAfterTax: finalTotal
+      taxAmount: totalTax,
+      amountAfterTax: finalTotal,
+      roundOff: rOff
     };
   };
 
@@ -266,6 +278,11 @@ Branch: ${bank.branchCode || ""}`;
     const newItems = [...formData.items];
     newItems[index][field] = value;
     
+    if (field === "taxTypeId") {
+       const tax = metadata.taxes.find((t: any) => t.id === value);
+       newItems[index].taxRate = tax ? Number(tax.taxRate) : 0;
+    }
+
     if (field === "quantity" || field === "unitPrice") {
       newItems[index].amount = Number(newItems[index].quantity) * Number(newItems[index].unitPrice);
     }
@@ -286,6 +303,9 @@ Branch: ${bank.branchCode || ""}`;
       amount: 0,
       remark: "",
       hsnCode: "",
+      taxTypeId: "",
+      taxRate: 0,
+      taxAmount: 0,
     };
     const newItems = [...formData.items, newItem];
     const totals = calculateTotals(newItems, formData.taxRate);
@@ -704,26 +724,13 @@ Branch: ${bank.branchCode || ""}`;
             />
           </div>
 
-          <div className="space-y-1 md:col-span-2">
-            <label className="text-sm font-semibold text-blue-900">Tax Type {!selectedCustomer?.isSez && <span className="text-rose-500">*</span>}</label>
-            {selectedCustomer?.isSez ? (
+          {selectedCustomer?.isSez && (
+            <div className="space-y-1 md:col-span-2">
               <div className="w-full px-3 py-2 bg-slate-100 border border-slate-200 rounded-lg text-slate-500 text-sm">
                 SEZ Tax ({Number(metadata.companies.find((c: any) => c.id === formData.companyId)?.sezTaxRate) || 0}%) Auto-applied
               </div>
-            ) : (
-              <SearchableSelect
-                value={formData.taxTypeId}
-                onChange={(e) => handleTaxChange(e.target.value)}
-                disabled={!isDraft}
-                className="w-full px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-60"
-              >
-                <option value="">Select Tax...</option>
-                {metadata.taxes.map((t: any) => (
-                  <option key={t.id} value={t.id}>{t.taxType} ({t.taxRate}%)</option>
-                ))}
-              </SearchableSelect>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -752,6 +759,7 @@ Branch: ${bank.branchCode || ""}`;
                 <th className="px-4 py-3 w-32">UOM</th>
                 <th className="px-4 py-3 w-32">Unit Price</th>
                 <th className="px-4 py-3 w-32">Amount</th>
+                <th className="px-4 py-3 w-32">Tax</th>
                 <th className="px-4 py-3 w-16"></th>
               </tr>
             </thead>
@@ -835,6 +843,24 @@ Branch: ${bank.branchCode || ""}`;
                        {Number(item.amount).toFixed(2)}
                     </td>
                     <td className="px-4 py-2">
+                      <SearchableSelect
+                        value={item.taxTypeId || ""}
+                        onChange={(e) => updateItem(index, "taxTypeId", e.target.value)}
+                        disabled={!isDraft}
+                        className="w-full px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-lg text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-60"
+                      >
+                        <option value="">Select Tax...</option>
+                        {metadata.taxes.map((t: any) => (
+                          <option key={t.id} value={t.id}>{t.taxType} ({t.taxRate}%)</option>
+                        ))}
+                      </SearchableSelect>
+                      {Number(item.taxAmount) > 0 && (
+                        <div className="text-[10px] text-slate-500 mt-1 text-right">
+                          Tax: {Number(item.taxAmount).toFixed(2)}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-2">
                       {isDraft && (
                         <button
                           onClick={() => handleRemoveItem(index)}
@@ -860,8 +886,23 @@ Branch: ${bank.branchCode || ""}`;
                <span className="text-blue-900">{Number(formData.amountBeforeTax).toFixed(2)}</span>
              </div>
              <div className="flex justify-between text-sm">
-               <span className="font-semibold text-blue-900">Tax Amount ({formData.taxRate}%):</span>
+               <span className="font-semibold text-blue-900">Tax Amount:</span>
                <span className="text-blue-900">{Number(formData.taxAmount).toFixed(2)}</span>
+             </div>
+             <div className="flex justify-between text-sm">
+               <span className="font-semibold text-blue-900 self-center">Round Off:</span>
+               <input
+                 type="number"
+                 step="0.01"
+                 value={formData.roundOff || 0}
+                 onChange={(e) => {
+                    const rOff = Number(e.target.value);
+                    const totals = calculateTotals(formData.items, formData.currencyId, rOff);
+                    setFormData((prev: any) => ({ ...prev, ...totals, roundOff: rOff }));
+                 }}
+                 disabled={!isDraft}
+                 className="w-24 px-2 py-1 text-right bg-blue-50 border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-60"
+               />
              </div>
              <div className="flex justify-between text-lg border-t border-blue-200 pt-3">
                <span className="font-bold text-blue-900">Total Amount:</span>

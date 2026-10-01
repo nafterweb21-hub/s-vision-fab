@@ -96,6 +96,7 @@ export default async function PrintPurchaseOrderPage(
             <div style={{ marginBottom: '2px' }}>To :</div>
             <div className="dyn font-bold" style={{ fontSize: '13px', marginBottom: '2px' }}>{po.supplier?.supplierName}</div>
             <div className="dyn" style={{ whiteSpace: 'pre-wrap', marginBottom: '4px' }}>{primarySupplierAddress}</div>
+            {po.supplierGst && <div style={{ marginBottom: '2px' }}>Supplier GST : <span className="dyn">{po.supplierGst}</span></div>}
             <div style={{ marginBottom: '2px' }}>Attn : <span className="dyn">{po.contactPerson?.contactPersonName || "—"}</span></div>
             <div style={{ display: 'flex', gap: '20px', marginBottom: '2px' }}>
               <div>Tel : <span className="dyn">{po.telNo || "—"}</span></div>
@@ -154,7 +155,7 @@ export default async function PrintPurchaseOrderPage(
           </tbody>
           <tfoot>
             <tr>
-              <td colSpan={7} rowSpan={3} style={{ border: 'none', padding: '15px 10px 0 0', verticalAlign: 'top' }}>
+              <td colSpan={7} rowSpan={Number(po.roundOff) !== 0 ? 4 : 3} style={{ border: 'none', padding: '15px 10px 0 0', verticalAlign: 'top' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', color: '#111' }}>
                   <tbody>
                     <tr>
@@ -194,12 +195,23 @@ export default async function PrintPurchaseOrderPage(
             <tr>
               <td colSpan={3} style={{ padding: '6px', textAlign: 'right', fontWeight: 'bold' }}>
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-                  <span>{po.taxType?.taxType || 'GST'} @ {po.taxRate?.toString()}% :</span>
+                  <span>Total Tax :</span>
                   <span style={{ width: '15px', textAlign: 'center' }}>$</span>
                 </div>
               </td>
               <td className="dyn" style={{ padding: '6px', textAlign: 'right', fontWeight: 'bold' }}>{formatNumber(po.taxAmount)}</td>
             </tr>
+            {Number(po.roundOff) !== 0 && (
+              <tr>
+                <td colSpan={3} style={{ padding: '6px', textAlign: 'right', fontWeight: 'bold' }}>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                    <span>Round Off :</span>
+                    <span style={{ width: '15px', textAlign: 'center' }}>$</span>
+                  </div>
+                </td>
+                <td className="dyn" style={{ padding: '6px', textAlign: 'right', fontWeight: 'bold' }}>{formatNumber(po.roundOff)}</td>
+              </tr>
+            )}
             <tr>
               <td colSpan={3} style={{ padding: '6px', textAlign: 'right', fontWeight: 'bold' }}>
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>

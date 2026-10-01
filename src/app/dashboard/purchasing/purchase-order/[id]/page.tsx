@@ -37,6 +37,9 @@ type Item = {
   remark: string;
   hsnCode: string;
   hsnDescription: string;
+  taxTypeId: string;
+  taxRate: string;
+  taxAmount: string;
 };
 
 export default function PurchaseOrderEditPage() {
@@ -64,11 +67,11 @@ export default function PurchaseOrderEditPage() {
   const [purchaserId, setPurchaserId] = useState("");
   const [currencyId, setCurrencyId] = useState("");
   const [exchangeRate, setExchangeRate] = useState("1.00");
-  const [taxTypeId, setTaxTypeId] = useState("");
-  const [taxRate, setTaxRate] = useState("0.00");
   const [amountBeforeTax, setAmountBeforeTax] = useState("0.00");
   const [taxAmount, setTaxAmount] = useState("0.00");
   const [amountAfterTax, setAmountAfterTax] = useState("0.00");
+  const [roundOff, setRoundOff] = useState("0.00");
+  const [supplierGst, setSupplierGst] = useState("");
   const [millCertificate, setMillCertificate] = useState(false);
   const [certOfConformance, setCertOfConformance] = useState(false);
 
@@ -99,11 +102,11 @@ export default function PurchaseOrderEditPage() {
           setPurchaserId(po.purchaserId);
           setCurrencyId(po.currencyId);
           setExchangeRate(Number(po.exchangeRate || 1).toFixed(4));
-          setTaxTypeId(po.taxTypeId);
-          setTaxRate(Number(po.taxRate || 0).toFixed(2));
           setAmountBeforeTax(Number(po.amountBeforeTax || 0).toFixed(2));
           setTaxAmount(Number(po.taxAmount || 0).toFixed(2));
           setAmountAfterTax(Number(po.amountAfterTax || 0).toFixed(2));
+          setRoundOff(Number(po.roundOff || 0).toFixed(2));
+          setSupplierGst(po.supplierGst || "");
           setMillCertificate(po.millCertificate || false);
           setCertOfConformance(po.certOfConformance || false);
           setRemark(po.remark || "");
@@ -129,6 +132,9 @@ export default function PurchaseOrderEditPage() {
               remark: it.remark || "",
               hsnCode: it.hsnCode || "",
               hsnDescription: it.hsnDescription || "",
+              taxTypeId: it.taxTypeId || "",
+              taxRate: Number(it.taxRate || 0).toFixed(2),
+              taxAmount: Number(it.taxAmount || 0).toFixed(2),
             })),
           );
         } else {
@@ -160,6 +166,9 @@ export default function PurchaseOrderEditPage() {
             remark: "",
             hsnCode: "",
             hsnDescription: "",
+            taxTypeId: "",
+            taxRate: "0.00",
+            taxAmount: "0.00",
           }]);
         }
       } catch (e: any) {
@@ -219,14 +228,6 @@ export default function PurchaseOrderEditPage() {
     }
   };
 
-  const handleTaxTypeChange = (tid: string) => {
-    setTaxTypeId(tid);
-    const tax = data?.taxes?.find(t => t.id === tid);
-    if (tax) {
-      setTaxRate(Number(tax.taxRate).toFixed(2));
-    }
-  };
-
   const handlePrChange = (prId: string) => {
     setPurchaseRequisitionId(prId);
     if (prId) {
@@ -252,6 +253,9 @@ export default function PurchaseOrderEditPage() {
           remark: it.remark || "",
           hsnCode: "",
           hsnDescription: "",
+          taxTypeId: "",
+          taxRate: "0.00",
+          taxAmount: "0.00",
         })).filter(it => Number(it.quantity) > 0);
         setItems(newItems);
       }
@@ -290,6 +294,21 @@ export default function PurchaseOrderEditPage() {
           updated.amount = (q * p).toFixed(2);
         }
 
+        if (patch.taxTypeId !== undefined) {
+          const tax = data?.taxes?.find((t) => t.id === patch.taxTypeId);
+          if (tax) {
+            updated.taxRate = Number(tax.taxRate).toFixed(2);
+          } else {
+            updated.taxRate = "0.00";
+          }
+        }
+        
+        const q = Number(updated.quantity) || 0;
+        const p = Number(updated.unitPrice) || 0;
+        const amt = q * p;
+        const tRate = Number(updated.taxRate) || 0;
+        updated.taxAmount = (amt * (tRate / 100)).toFixed(2);
+
         if (patch.quantity || patch.conversion) {
           const q = Number(updated.quantity) || 0;
           const c = Number(updated.conversion) || 1;
@@ -302,12 +321,19 @@ export default function PurchaseOrderEditPage() {
   }
 
   useEffect(() => {
-    const totalItems = items.reduce((sum, it) => sum + (Number(it.amount) || 0), 0);
+    let totalItems = 0;
+    let totalTax = 0;
+    items.forEach((it) => {
+      const amt = Number(it.amount) || 0;
+      const tRate = Number(it.taxRate) || 0;
+      const tAmt = amt * (tRate / 100);
+      totalItems += amt;
+      totalTax += tAmt;
+    });
     setAmountBeforeTax(totalItems.toFixed(2));
-    const taxAmt = totalItems * (Number(taxRate) / 100);
-    setTaxAmount(taxAmt.toFixed(2));
+    setTaxAmount(totalTax.toFixed(2));
     
-    let finalTotal = totalItems + taxAmt;
+    let finalTotal = totalItems + totalTax + (Number(roundOff) || 0);
     const currency = data?.currencies?.find((c: any) => c.id === currencyId);
     if ((currency as any)?.roundingMode === "UP") {
       finalTotal = Math.ceil(finalTotal);
@@ -316,7 +342,7 @@ export default function PurchaseOrderEditPage() {
     }
     
     setAmountAfterTax(finalTotal.toFixed(2));
-  }, [items, taxRate, currencyId, data]);
+  }, [items, roundOff, currencyId, data]);
 
   function addItem() {
     setItems((cur) => [
@@ -340,6 +366,9 @@ export default function PurchaseOrderEditPage() {
         remark: "",
         hsnCode: "",
         hsnDescription: "",
+        taxTypeId: "",
+        taxRate: "0.00",
+        taxAmount: "0.00",
       },
     ]);
   }
@@ -357,7 +386,6 @@ export default function PurchaseOrderEditPage() {
     }
     if (!purchaserId) return setError("Purchaser is required");
     if (!currencyId) return setError("Currency is required");
-    if (!taxTypeId) return setError("Tax is required");
     if (!items.length) return setError("At least one item is required");
 
     for (let i = 0; i < items.length; i++) {
@@ -390,11 +418,13 @@ export default function PurchaseOrderEditPage() {
         mobileNo: supplierMobile,
         currencyId,
         exchangeRate: Number(exchangeRate),
-        taxTypeId,
-        taxRate: Number(taxRate),
+        taxTypeId: null,
+        taxRate: 0,
         amountBeforeTax: Number(amountBeforeTax),
         taxAmount: Number(taxAmount),
         amountAfterTax: Number(amountAfterTax),
+        roundOff: Number(roundOff),
+        supplierGst: supplierGst || null,
         millCertificate,
         certOfConformance,
         remark,
@@ -418,6 +448,9 @@ export default function PurchaseOrderEditPage() {
           remark: it.remark || null,
           hsnCode: it.hsnCode || null,
           hsnDescription: it.hsnDescription || null,
+          taxTypeId: it.taxTypeId || null,
+          taxRate: Number(it.taxRate) || 0,
+          taxAmount: Number(it.taxAmount) || 0,
         })),
       };
 
@@ -596,6 +629,16 @@ export default function PurchaseOrderEditPage() {
           </SearchableSelect>
         </Field>
 
+        <Field label="Supplier GST">
+          <input
+            type="text"
+            value={supplierGst}
+            disabled={readOnly}
+            onChange={(e) => setSupplierGst(e.target.value)}
+            className={inputCls}
+          />
+        </Field>
+
         <Field label="Supplier Email">
           <input
             type="email"
@@ -678,32 +721,6 @@ export default function PurchaseOrderEditPage() {
           />
         </Field>
 
-        <Field label="Tax Code" required>
-          <SearchableSelect
-            value={taxTypeId}
-            disabled={readOnly}
-            onChange={(e) => handleTaxTypeChange(e.target.value)}
-            className={inputCls}
-          >
-            <option value="">— Select —</option>
-            {data?.taxes?.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.taxType}
-              </option>
-            ))}
-          </SearchableSelect>
-        </Field>
-        <Field label="Tax Rate %">
-          <input
-            type="number"
-            step="0.01"
-            value={taxRate}
-            disabled={true}
-            readOnly
-            className={inputCls}
-          />
-        </Field>
-
       </div>
 
       {/* Items Section */}
@@ -734,6 +751,7 @@ export default function PurchaseOrderEditPage() {
                 <th className="px-3 py-2 text-right w-24">Qty</th>
                 <th className="px-3 py-2 text-right w-32">Unit Price</th>
                 <th className="px-3 py-2 text-right w-32">Amount</th>
+                <th className="px-3 py-2 text-left w-32">Tax</th>
                 <th className="px-3 py-2 text-right w-24">Conv</th>
                 <th className="px-3 py-2 text-left w-28">Int UOM</th>
                 <th className="px-3 py-2 text-right w-24">Int Qty</th>
@@ -885,6 +903,27 @@ export default function PurchaseOrderEditPage() {
                     </td>
 
                     <td className="px-3 py-2 align-top">
+                      <SearchableSelect
+                        value={it.taxTypeId}
+                        disabled={readOnly}
+                        onChange={(e) => updateItem(idx, { taxTypeId: e.target.value })}
+                        className={inputCls}
+                      >
+                        <option value="">— Select Tax —</option>
+                        {data?.taxes?.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.taxType} ({t.taxRate}%)
+                          </option>
+                        ))}
+                      </SearchableSelect>
+                      {Number(it.taxAmount) > 0 && (
+                        <div className="text-[10px] text-slate-500 mt-1 text-right">
+                          Tax: {it.taxAmount}
+                        </div>
+                      )}
+                    </td>
+
+                    <td className="px-3 py-2 align-top">
                       <input
                         type="number"
                         step="0.0001"
@@ -1002,6 +1041,17 @@ export default function PurchaseOrderEditPage() {
           <div className="flex items-center justify-between text-sm text-blue-700">
             <span>Tax Amount:</span>
             <span className="font-mono font-medium">{taxAmount}</span>
+          </div>
+          <div className="flex items-center justify-between text-sm text-blue-700">
+            <span className="self-center">Round Off:</span>
+            <input
+              type="number"
+              step="0.01"
+              value={roundOff}
+              disabled={readOnly}
+              onChange={(e) => setRoundOff(e.target.value)}
+              className={`${inputCls} w-24 text-right !py-1`}
+            />
           </div>
           <div className="flex items-center justify-between text-lg font-bold text-blue-900 border-t border-blue-100 pt-3">
             <span>Amount After Tax:</span>

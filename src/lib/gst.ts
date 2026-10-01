@@ -101,6 +101,8 @@ export function roundTo2(n: number): number {
 export type GstLineInput = {
   /** Taxable (pre-tax) amount for the line. */
   amount: number;
+  /** Item level tax rate. */
+  taxRate?: number;
 };
 
 export type GstLineBreakup = {
@@ -151,10 +153,11 @@ export function computeGstBreakup(params: {
       ? "intra"
       : "inter";
 
-  const rate = isSez ? (Number(params.sezTaxRate) || 0) : (Number(taxRatePercent) || 0);
+  const baseRate = isSez ? (Number(params.sezTaxRate) || 0) : (Number(taxRatePercent) || 0);
 
   const breakupLines: GstLineBreakup[] = lines.map((l) => {
     const taxable = Number(l.amount) || 0;
+    const rate = isSez ? baseRate : (l.taxRate !== undefined && !isNaN(l.taxRate) ? l.taxRate : baseRate);
     const lineTax = roundTo2((taxable * rate) / 100);
     if (supplyType === "intra") {
       const cgst = roundTo2(lineTax / 2);

@@ -45,7 +45,10 @@ async function computeBreakupForData(data: any): Promise<GstBreakup> {
   ]);
   const posStateCode = resolvePosStateCode(customer?.placeOfSupply, customer?.gstin);
   return computeGstBreakup({
-    lines: (data.items || []).map((it: any) => ({ amount: Number(it.amount) || 0 })),
+    lines: (data.items || []).map((it: any) => ({ 
+      amount: Number(it.amount) || 0,
+      taxRate: Number(it.taxRate) || undefined
+    })),
     taxRatePercent: Number(data.taxRate) || 0,
     sellerGstin: company?.gstRegistrationNo,
     posStateCode,
@@ -69,6 +72,8 @@ function itemWithGst(item: any, line: { gstRate: number; cgstAmount: number; sgs
     amount: item.amount,
     remark: item.remark?.trim() || null,
     hsnCode: item.hsnCode?.trim() || null,
+    taxTypeId: item.taxTypeId || null,
+    taxAmount: item.taxAmount || 0,
     gstRate: line?.gstRate ?? 0,
     cgstAmount: line?.cgstAmount ?? 0,
     sgstAmount: line?.sgstAmount ?? 0,
@@ -286,6 +291,7 @@ export async function createInvoice(data: any) {
           taxAmount: data.taxAmount,
           amountAfterTax: data.amountAfterTax,
           balanceDue: data.amountAfterTax,
+          roundOff: data.roundOff || 0,
           bankDetails: data.bankDetails || null,
           remark: data.remark || null,
           preparedById: data.preparedById,
@@ -351,6 +357,7 @@ export async function updateInvoice(id: string, data: any) {
         taxAmount: data.taxAmount,
         amountAfterTax: data.amountAfterTax,
         balanceDue: data.amountAfterTax,
+        roundOff: data.roundOff || 0,
         bankDetails: data.bankDetails || null,
         remark: data.remark || null,
         preparedById: data.preparedById,
@@ -463,6 +470,7 @@ export async function reviseInvoice(id: string, data: any) {
         taxAmount: data.taxAmount,
         amountAfterTax: data.amountAfterTax,
         balanceDue: data.amountAfterTax,
+        roundOff: data.roundOff || 0,
         bankDetails: data.bankDetails || null,
         remark: data.remark || null,
         preparedById: data.preparedById,

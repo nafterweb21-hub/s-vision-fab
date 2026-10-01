@@ -163,18 +163,20 @@ model Employee {
 }
 
 model TaxProfile {
-  id             String          @id @default(cuid())
-  taxType        String          @unique
-  taxRate        Float
-  status         String          @default("Active")
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-  goodsReceives  GoodsReceive[]
-  goodsReturns   GoodsReturn[]
-  purchaseOrders PurchaseOrder[]
-  quotations     Quotation[]
-  salesOrders    SalesOrder[]
-  invoices       Invoice[]
+  id                 String              @id @default(cuid())
+  taxType            String              @unique
+  taxRate            Float
+  status             String              @default("Active")
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  goodsReceives      GoodsReceive[]
+  goodsReturns       GoodsReturn[]
+  purchaseOrders     PurchaseOrder[]
+  quotations         Quotation[]
+  salesOrders        SalesOrder[]
+  invoices           Invoice[]
+  purchaseOrderItems PurchaseOrderItem[]
+  invoiceItems       InvoiceItem[]
 }
 
 model CustomerProfile {
@@ -596,34 +598,34 @@ model WorkOrder {
 }
 
 model WorkOrderRework {
-  id                  String    @id @default(cuid())
-  reworkNo            String    @unique
-  workOrderNo         String
-  originalQty         Decimal
-  acceptedQty         Decimal   @default(0)
-  rejectedQty         Decimal
-  reworkedQty         Decimal   @default(0)
-  finalApprovedQty    Decimal   @default(0)
-  status              String    @default("Rework In Progress")
-  
-  rejectedById        String?
-  rejectedAt          DateTime
-  rejectionReason     String?
+  id               String  @id @default(cuid())
+  reworkNo         String  @unique
+  workOrderNo      String
+  originalQty      Decimal
+  acceptedQty      Decimal @default(0)
+  rejectedQty      Decimal
+  reworkedQty      Decimal @default(0)
+  finalApprovedQty Decimal @default(0)
+  status           String  @default("Rework In Progress")
 
-  reworkStartTime     DateTime?
-  reworkEndTime       DateTime?
+  rejectedById    String?
+  rejectedAt      DateTime
+  rejectionReason String?
 
-  reInspectedById     String?
-  reInspectedAt       DateTime?
-  reInspectionResult  String?
-  reInspectionRemark  String?
+  reworkStartTime DateTime?
+  reworkEndTime   DateTime?
 
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  reInspectedById    String?
+  reInspectedAt      DateTime?
+  reInspectionResult String?
+  reInspectionRemark String?
 
-  workOrder           WorkOrder @relation(fields: [workOrderNo], references: [workOrderNo])
-  rejectedBy          Employee? @relation("ReworkRejectedBy", fields: [rejectedById], references: [id])
-  reInspectedBy       Employee? @relation("ReworkReInspectedBy", fields: [reInspectedById], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workOrder     WorkOrder @relation(fields: [workOrderNo], references: [workOrderNo])
+  rejectedBy    Employee? @relation("ReworkRejectedBy", fields: [rejectedById], references: [id])
+  reInspectedBy Employee? @relation("ReworkReInspectedBy", fields: [reInspectedById], references: [id])
 }
 
 model WorkOrderInProcess {
@@ -991,11 +993,13 @@ model PurchaseOrder {
   purchaseRequisitionId String?
   currencyId            String
   exchangeRate          Decimal
-  taxTypeId             String
+  taxTypeId             String?
   taxRate               Decimal
   amountBeforeTax       Decimal                @default(0)
   taxAmount             Decimal                @default(0)
   amountAfterTax        Decimal                @default(0)
+  roundOff              Decimal                @default(0)
+  supplierGst           String?
   millCertificate       Boolean                @default(false)
   certOfConformance     Boolean                @default(false)
   contactPersonId       String?
@@ -1019,7 +1023,7 @@ model PurchaseOrder {
   purchaseRequisition   PurchaseRequisition?   @relation(fields: [purchaseRequisitionId], references: [id])
   purchaser             Employee               @relation(fields: [purchaserId], references: [id])
   supplier              SupplierProfile        @relation(fields: [supplierId], references: [id])
-  taxType               TaxProfile             @relation(fields: [taxTypeId], references: [id])
+  taxType               TaxProfile?            @relation(fields: [taxTypeId], references: [id])
   workOrder             WorkOrder?             @relation(fields: [workOrderNo], references: [workOrderNo])
   items                 PurchaseOrderItem[]
   subconReturnTrackings SubconReturnTracking[]
@@ -1041,13 +1045,16 @@ model PurchaseOrderItem {
   poUomId                   String
   unitPrice                 Decimal                  @default(0)
   amount                    Decimal                  @default(0)
+  taxTypeId                 String?
+  taxRate                   Decimal                  @default(0)
+  taxAmount                 Decimal                  @default(0)
   conversion                Decimal                  @default(1)
   internalUomId             String?
   internalQuantity          Decimal                  @default(0)
   deliveryDate              DateTime                 @default(now())
   remark                    String                   @default("")
-    hsnCode                   String?
-    hsnDescription            String?
+  hsnCode                   String?
+  hsnDescription            String?
   materialProfileId         String?
   purchaseRequisitionItemId String?
   sortOrder                 Int                      @default(0)
@@ -1064,6 +1071,7 @@ model PurchaseOrderItem {
   masterRoutingProcess      ProcessProfile?          @relation(fields: [masterRoutingProcessId], references: [id])
   materialProfile           MaterialProfile?         @relation(fields: [materialProfileId], references: [id])
   poUom                     UomProfile               @relation("PoItemPoUom", fields: [poUomId], references: [id])
+  taxType                   TaxProfile?              @relation(fields: [taxTypeId], references: [id])
   purchaseOrder             PurchaseOrder            @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
   purchaseRequisitionItem   PurchaseRequisitionItem? @relation(fields: [purchaseRequisitionItemId], references: [id])
   woRoutingProcess          RoutingProcess?          @relation(fields: [woRoutingProcessId], references: [id])
@@ -1355,10 +1363,11 @@ model Invoice {
   currencyId      String
   exchangeRate    Decimal
   amountBeforeTax Decimal
-  taxTypeId       String
+  taxTypeId       String?
   taxRate         Decimal
   taxAmount       Decimal
   amountAfterTax  Decimal
+  roundOff        Decimal  @default(0)
   amountPaid      Decimal  @default(0) // System calculated from Receipt records
   balanceDue      Decimal
   bankDetails     String?
@@ -1372,23 +1381,23 @@ model Invoice {
   vehicleNumber   String?
 
   // GST tax breakup (derived from taxRate + place of supply). "intra" => CGST+SGST, "inter" => IGST.
-  supplyType      String?  // intra | inter
-  cgstAmount      Decimal  @default(0)
-  sgstAmount      Decimal  @default(0)
-  igstAmount      Decimal  @default(0)
+  supplyType String? // intra | inter
+  cgstAmount Decimal @default(0)
+  sgstAmount Decimal @default(0)
+  igstAmount Decimal @default(0)
 
   // GST e-invoicing (IRP / IRN). See src/lib/einvoice.
   einvoiceStatus       String    @default("Not Generated") // Not Generated | Generated | Cancelled | Failed
   irn                  String?   @unique
   ackNo                String?
   ackDate              DateTime?
-  signedInvoice        String?   // signed invoice JWT returned by IRP
-  signedQrCode         String?   // signed QR JWT returned by IRP (rendered as QR image)
+  signedInvoice        String? // signed invoice JWT returned by IRP
+  signedQrCode         String? // signed QR JWT returned by IRP (rendered as QR image)
   einvoiceGeneratedAt  DateTime?
   einvoiceCancelledAt  DateTime?
   einvoiceCancelReason String?
-  einvoiceError        String?   // last IRP error message, when status = Failed
-  ewbNo                String?   // e-way bill number, if generated alongside
+  einvoiceError        String? // last IRP error message, when status = Failed
+  ewbNo                String? // e-way bill number, if generated alongside
 
   company       CompanyProfile        @relation(fields: [companyId], references: [id])
   customer      CustomerProfile       @relation(fields: [customerId], references: [id])
@@ -1396,7 +1405,7 @@ model Invoice {
   billTo        CustomerAddress?      @relation(fields: [billToId], references: [id])
   paymentTerm   PaymentTermProfile    @relation(fields: [paymentTermId], references: [id])
   currency      Currency              @relation(fields: [currencyId], references: [id])
-  taxType       TaxProfile            @relation(fields: [taxTypeId], references: [id])
+  taxType       TaxProfile?           @relation(fields: [taxTypeId], references: [id])
   preparedBy    Employee              @relation("InvoicePreparedBy", fields: [preparedById], references: [id])
 
   items          InvoiceItem[]
@@ -1418,8 +1427,10 @@ model InvoiceItem {
   amount      Decimal
   remark      String?
   hsnCode     String?
+  taxTypeId   String?
   // Per-line GST breakup, computed from the invoice's tax rate + supply type.
   gstRate     Decimal  @default(0) // total GST % applied to this line (e.g. 18)
+  taxAmount   Decimal  @default(0)
   cgstAmount  Decimal  @default(0)
   sgstAmount  Decimal  @default(0)
   igstAmount  Decimal  @default(0)
@@ -1430,6 +1441,7 @@ model InvoiceItem {
   workOrder WorkOrder?           @relation(fields: [workOrderNo], references: [workOrderNo])
   part      FinishedGoodProfile? @relation(fields: [partId], references: [id])
   uom       UomProfile?          @relation(fields: [uomId], references: [id])
+  taxType   TaxProfile?          @relation(fields: [taxTypeId], references: [id])
 }
 
 model InvoiceDeliveryOrder {
@@ -1469,17 +1481,17 @@ model Receipt {
 }
 
 model RoleProfile {
-  id                   String           @id @default(cuid())
-  name                 String           @unique
-  permissions          String[]
-  remark               String?
-  status               String           @default("Active")
-  createdAt            DateTime         @default(now())
-  updatedAt            DateTime         @updatedAt
-  users                User[]
-  rolePermissions      RolePermission[]
-  employees            Employee[]       @relation("EmployeeRole")
-  allowedSubProcesses  ProcessProfile[] @relation("ProcessProfileRoles")
+  id                  String           @id @default(cuid())
+  name                String           @unique
+  permissions         String[]
+  remark              String?
+  status              String           @default("Active")
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  users               User[]
+  rolePermissions     RolePermission[]
+  employees           Employee[]       @relation("EmployeeRole")
+  allowedSubProcesses ProcessProfile[] @relation("ProcessProfileRoles")
 }
 
 model SubconRejectTracking {
@@ -1503,15 +1515,15 @@ model SubconRejectTracking {
 }
 
 model DesignationProfile {
-  id             String     @id @default(cuid())
-  designation    String     @unique
-  remark         String?
-  status         String     @default("Active")
-  createdBy      String?
-  updatedBy      String?
-  isDeleted      Boolean    @default(false)
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
+  id          String   @id @default(cuid())
+  designation String   @unique
+  remark      String?
+  status      String   @default("Active")
+  createdBy   String?
+  updatedBy   String?
+  isDeleted   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model BankProfile {
@@ -1537,27 +1549,27 @@ model AppModule {
   status      String   @default("Active")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  
+
   permissions RolePermission[]
 }
 
 model RolePermission {
-  id          String   @id @default(cuid())
-  roleId      String
-  moduleId    String
-  
-  canView     Boolean  @default(false)
-  canCreate   Boolean  @default(false)
-  canEdit     Boolean  @default(false)
-  canDelete   Boolean  @default(false)
-  canApprove  Boolean  @default(false)
-  canExport   Boolean  @default(false)
+  id       String @id @default(cuid())
+  roleId   String
+  moduleId String
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  canView    Boolean @default(false)
+  canCreate  Boolean @default(false)
+  canEdit    Boolean @default(false)
+  canDelete  Boolean @default(false)
+  canApprove Boolean @default(false)
+  canExport  Boolean @default(false)
 
-  role        RoleProfile @relation(fields: [roleId], references: [id], onDelete: Cascade)
-  module      AppModule   @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  role   RoleProfile @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  module AppModule   @relation(fields: [moduleId], references: [id], onDelete: Cascade)
 
   @@unique([roleId, moduleId])
 }
@@ -1572,24 +1584,24 @@ model RolePermission {
 /// from the document trail (PO / GR / GRN / MC) by `getStockAggregates`, the
 /// same source Inventory Summary reads, so the two screens cannot disagree.
 model StockItem {
-  id                String           @id @default(cuid())
-  materialProfileId String           @unique
+  id                String                    @id @default(cuid())
+  materialProfileId String                    @unique
   itemType          String
   materialTypeId    String?
   grade             String?
   uomId             String
-  openingStock      Decimal          @default(0)
-  reorderLevel      Decimal          @default(0)
-  unitCost          Decimal          @default(0)
+  openingStock      Decimal                   @default(0)
+  reorderLevel      Decimal                   @default(0)
+  unitCost          Decimal                   @default(0)
   supplierId        String?
   warehouse         String?
-  status            String           @default("Active")
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
-  materialProfile   MaterialProfile  @relation(fields: [materialProfileId], references: [id])
-  materialType      MaterialType?    @relation(fields: [materialTypeId], references: [id])
-  uom               UomProfile       @relation(fields: [uomId], references: [id])
-  supplier          SupplierProfile? @relation(fields: [supplierId], references: [id])
+  status            String                    @default("Active")
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+  materialProfile   MaterialProfile           @relation(fields: [materialProfileId], references: [id])
+  materialType      MaterialType?             @relation(fields: [materialTypeId], references: [id])
+  uom               UomProfile                @relation(fields: [uomId], references: [id])
+  supplier          SupplierProfile?          @relation(fields: [supplierId], references: [id])
   consumptionItems  MaterialConsumptionItem[]
 
   @@index([itemType])
@@ -1661,48 +1673,48 @@ model FixedAsset {
 }
 
 model TermsAndConditionProfile {
-  id          String       @id @default(cuid())
-  name        String       @unique
-  content     String
-  remark      String?
-  status      String       @default("Active")
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  id        String   @id @default(cuid())
+  name      String   @unique
+  content   String
+  remark    String?
+  status    String   @default("Active")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model FileCategoryProfile {
-  id          String       @id @default(cuid())
-  name        String       @unique
-  remark      String?
-  status      String       @default("Active")
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  files       FileProfile[]
+  id        String        @id @default(cuid())
+  name      String        @unique
+  remark    String?
+  status    String        @default("Active")
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  files     FileProfile[]
 }
 
 model FileProfile {
-  id               String              @id @default(cuid())
-  fileCategory     FileCategoryProfile @relation(fields: [fileCategoryId], references: [id], onDelete: Cascade)
-  fileCategoryId   String
-  workOrder        WorkOrder?          @relation(fields: [workOrderNo], references: [workOrderNo], onDelete: Cascade)
-  workOrderNo      String?
-  fileName         String
-  fileType         String
-  fileSize         Int
-  fileUrl          String
-  createdAt        DateTime            @default(now())
-  updatedAt        DateTime            @updatedAt
+  id             String              @id @default(cuid())
+  fileCategory   FileCategoryProfile @relation(fields: [fileCategoryId], references: [id], onDelete: Cascade)
+  fileCategoryId String
+  workOrder      WorkOrder?          @relation(fields: [workOrderNo], references: [workOrderNo], onDelete: Cascade)
+  workOrderNo    String?
+  fileName       String
+  fileType       String
+  fileSize       Int
+  fileUrl        String
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
 }
 
 model GeneralSetting {
-  id                   String   @id @default(cuid())
-  logoUrl              String?
-  enableSignature      Boolean  @default(false)
-  signatureUrl         String?
+  id                      String   @id @default(cuid())
+  logoUrl                 String?
+  enableSignature         Boolean  @default(false)
+  signatureUrl            String?
   invoiceBackgroundUrl    String?
   enableInvoiceBackground Boolean  @default(false)
   invoiceFooterUrl        String?
   enableInvoiceFooter     Boolean  @default(false)
   createdAt               DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  updatedAt               DateTime @updatedAt
 }

@@ -353,16 +353,31 @@ export default async function PrintInvoicePage(
                 <td className="text-right font-bold border-t-2 border-[#63a0d4] bg-[#f7fbff]">{fmt(inv.amountBeforeTax)}</td>
               </tr>
               
-              {inv.taxType && Number(inv.taxType.taxRate) > 0 && (
+              {Number(inv.taxAmount) > 0 && (
                 <tr className="tax-row">
                   <td></td>
                   <td className="text-right font-bold italic pr-4">
-                    {inv.taxType.taxType} ({inv.taxType.taxRate}%)
+                    {inv.taxType && Number(inv.taxType.taxRate) > 0 
+                      ? `${inv.taxType.taxType} (${inv.taxType.taxRate}%)` 
+                      : "Total Tax"}
                   </td>
                   <td></td>
                   <td></td>
                   <td></td>
                   <td className="text-right bg-[#f7fbff]">{fmt(inv.taxAmount)}</td>
+                </tr>
+              )}
+              
+              {Number(inv.roundOff) !== 0 && (
+                <tr className="tax-row">
+                  <td></td>
+                  <td className="text-right font-bold italic pr-4">
+                    Round Off
+                  </td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td className="text-right bg-[#f7fbff]">{fmt(inv.roundOff)}</td>
                 </tr>
               )}
               
