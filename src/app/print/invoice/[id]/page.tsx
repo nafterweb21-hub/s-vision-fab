@@ -172,9 +172,11 @@ export default async function PrintInvoicePage(
   const consigneeStateDisplay = (inv.consigneeState && inv.consigneeState.trim()) ? inv.consigneeState.trim() : shipToDisplayState;
 
   // Place of supply with code for Buyer column
-  const posDisplay = customerPlace
-    ? (posState ? `${customerPlace} ( ${posState} )` : customerPlace)
-    : (posState && GST_STATE_CODES[posState] ? `${GST_STATE_CODES[posState]} ( ${posState} )` : "-");
+  // customer.placeOfSupply may already include the code (e.g. "Tamil Nadu ( 33 )"), so
+  // build the label from the canonical state name whenever the code is known.
+  const posDisplay = posState
+    ? `${GST_STATE_CODES[posState] || customerPlace.replace(/\s*\(\s*\d+\s*\)\s*$/, "")} ( ${posState} )`
+    : (customerPlace || "-");
 
   // Delivery Challan details from linked Delivery Orders
   const challanNo = inv.deliveryOrders?.length
