@@ -236,7 +236,8 @@ model CustomerAddress {
   customer        CustomerProfile @relation(fields: [customerId], references: [id], onDelete: Cascade)
   billToOrders    SalesOrder[]    @relation("BillTo")
   deliverToOrders SalesOrder[]    @relation("DeliverTo")
-  invoices        Invoice[]
+  billToInvoices  Invoice[]       @relation("InvoiceBillTo")
+  shipToInvoices  Invoice[]       @relation("InvoiceShipTo")
 }
 
 model MaterialCategory {
@@ -1358,6 +1359,12 @@ model Invoice {
   fax             String?
   email           String?
   billToId        String?
+  shipToId        String?
+  consigneeName    String?
+  consigneeGstin   String?
+  consigneePhone   String?
+  consigneeState   String?
+  consigneeCountry String?  @default("India")
   paymentTermId   String
   dueDate         DateTime
   currencyId      String
@@ -1402,7 +1409,8 @@ model Invoice {
   company       CompanyProfile        @relation(fields: [companyId], references: [id])
   customer      CustomerProfile       @relation(fields: [customerId], references: [id])
   contactPerson CustomerContactPerson @relation(fields: [contactPersonId], references: [id])
-  billTo        CustomerAddress?      @relation(fields: [billToId], references: [id])
+  billTo        CustomerAddress?      @relation("InvoiceBillTo", fields: [billToId], references: [id])
+  shipTo        CustomerAddress?      @relation("InvoiceShipTo", fields: [shipToId], references: [id])
   paymentTerm   PaymentTermProfile    @relation(fields: [paymentTermId], references: [id])
   currency      Currency              @relation(fields: [currencyId], references: [id])
   taxType       TaxProfile?           @relation(fields: [taxTypeId], references: [id])

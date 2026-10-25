@@ -63,9 +63,13 @@ export function collectEInvoiceIssues(input: {
 /** Compute the GST breakup for a loaded invoice using its flat tax rate. */
 export function breakupForInvoice(invoice: any, company: any, customer: any): GstBreakup {
   const posStateCode = resolvePosStateCode(customer?.placeOfSupply, customer?.gstin);
+  const invoiceTaxRate = Number(invoice.taxRate) || Number(invoice.taxType?.taxRate) || 0;
   return computeGstBreakup({
-    lines: invoice.items.map((it: any) => ({ amount: Number(it.amount) || 0 })),
-    taxRatePercent: Number(invoice.taxRate) || 0,
+    lines: (invoice.items || []).map((it: any) => ({
+      amount: Number(it.amount) || 0,
+      taxRate: Number(it.gstRate || it.taxRate) || (invoiceTaxRate > 0 ? invoiceTaxRate : undefined),
+    })),
+    taxRatePercent: invoiceTaxRate,
     sellerGstin: company?.gstRegistrationNo,
     posStateCode,
     isSez: customer?.isSez,

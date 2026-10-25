@@ -36,7 +36,7 @@ async function computeBreakupForData(data: any): Promise<GstBreakup> {
   const [company, customer] = await Promise.all([
     prisma.companyProfile.findUnique({
       where: { id: data.companyId },
-      select: { gstRegistrationNo: true, sezTaxRate: true },
+      select: { gstRegistrationNo: true, sezTaxRate: true, address: true },
     }),
     prisma.customerProfile.findUnique({
       where: { id: data.customerId },
@@ -44,13 +44,50 @@ async function computeBreakupForData(data: any): Promise<GstBreakup> {
     }),
   ]);
   const posStateCode = resolvePosStateCode(customer?.placeOfSupply, customer?.gstin);
+
+  let taxRatePercent = Number(data.taxRate) || 0;
+  if (taxRatePercent === 0 && data.taxTypeId) {
+    const tax = await prisma.taxProfile.findUnique({
+      where: { id: data.taxTypeId },
+      select: { taxRate: true }
+    });
+    if (tax) taxRatePercent = Number(tax.taxRate) || 0;
+  }
+  if (taxRatePercent === 0 && data.items?.length > 0) {
+    const itemWithRate = data.items.find((it: any) => Number(it.taxRate) > 0);
+    if (itemWithRate) taxRatePercent = Number(itemWithRate.taxRate) || 0;
+  }
+
+  // Pre-fetch tax profiles for any items with taxTypeId but no taxRate
+  const missingTaxTypeIds = Array.from(new Set(
+    (data.items || [])
+      .filter((it: any) => (it.taxRate === undefined || isNaN(Number(it.taxRate)) || Number(it.taxRate) === 0) && it.taxTypeId)
+      .map((it: any) => it.taxTypeId)
+  )) as string[];
+
+  const itemTaxMap = new Map<string, number>();
+  if (missingTaxTypeIds.length > 0) {
+    const taxes = await prisma.taxProfile.findMany({
+      where: { id: { in: missingTaxTypeIds } },
+      select: { id: true, taxRate: true }
+    });
+    taxes.forEach((t) => itemTaxMap.set(t.id, Number(t.taxRate)));
+  }
+
   return computeGstBreakup({
-    lines: (data.items || []).map((it: any) => ({ 
-      amount: Number(it.amount) || 0,
-      taxRate: Number(it.taxRate) || undefined
-    })),
-    taxRatePercent: Number(data.taxRate) || 0,
+    lines: (data.items || []).map((it: any) => {
+      let r = Number(it.taxRate);
+      if ((isNaN(r) || r === 0) && it.taxTypeId && itemTaxMap.has(it.taxTypeId)) {
+        r = itemTaxMap.get(it.taxTypeId)!;
+      }
+      return {
+        amount: Number(it.amount) || 0,
+        taxRate: !isNaN(r) && r > 0 ? r : (taxRatePercent > 0 ? taxRatePercent : 0),
+      };
+    }),
+    taxRatePercent,
     sellerGstin: company?.gstRegistrationNo,
+    sellerAddress: company?.address,
     posStateCode,
     isSez: customer?.isSez,
     sezTaxRate: Number(company?.sezTaxRate) || 0,
@@ -59,6 +96,7 @@ async function computeBreakupForData(data: any): Promise<GstBreakup> {
 
 /** Merge a computed line breakup into an invoice item's create payload. */
 function itemWithGst(item: any, line: { gstRate: number; cgstAmount: number; sgstAmount: number; igstAmount: number } | undefined) {
+  const lineTax = Math.round(((line?.cgstAmount ?? 0) + (line?.sgstAmount ?? 0) + (line?.igstAmount ?? 0) + Number.EPSILON) * 100) / 100;
   return {
     lineNo: item.lineNo,
     // Trim before the null-coalesce: a whitespace-only workOrderNo is not a
@@ -73,7 +111,7 @@ function itemWithGst(item: any, line: { gstRate: number; cgstAmount: number; sgs
     remark: item.remark?.trim() || null,
     hsnCode: item.hsnCode?.trim() || null,
     taxTypeId: item.taxTypeId || null,
-    taxAmount: item.taxAmount || 0,
+    taxAmount: lineTax,
     gstRate: line?.gstRate ?? 0,
     cgstAmount: line?.cgstAmount ?? 0,
     sgstAmount: line?.sgstAmount ?? 0,
@@ -106,14 +144,27 @@ export async function getInvoice(id: string) {
         customer: true,
         contactPerson: true,
         billTo: true,
+        shipTo: true,
         paymentTerm: true,
         currency: true,
         taxType: true,
         preparedBy: true,
-        items: true,
+        items: {
+          orderBy: { lineNo: "asc" },
+          include: {
+            part: true,
+            uom: true,
+            taxType: true,
+            workOrder: true,
+          },
+        },
         deliveryOrders: {
           include: {
-            deliveryOrder: true,
+            deliveryOrder: {
+              include: {
+                salesOrder: { select: { orderNo: true } },
+              },
+            },
           },
         },
       },
@@ -148,21 +199,31 @@ export async function getInvoiceFormData() {
   }
 }
 
-export async function getPendingDOs(customerId: string) {
+export async function getPendingDOs(customerId: string, currentInvoiceId?: string) {
   try {
-    // Fetch DOs for this customer that are 'Submitted' and not yet linked to an active Invoice
-    // In our schema, we can check if it has any invoiceLinks where invoice is not Voided/Old Version
+    // Fetch DOs for this customer that are 'Submitted' and not yet linked to another active Invoice
     const dos = await prisma.deliveryOrder.findMany({
       where: {
         customerId,
         status: "Submitted",
-        invoiceLinks: {
-          none: {
-            invoice: {
-              status: { notIn: ["Void", "Old Version"] },
+        OR: [
+          {
+            invoiceLinks: {
+              none: {
+                invoice: {
+                  status: { notIn: ["Void", "Old Version"] },
+                },
+              },
             },
           },
-        },
+          ...(currentInvoiceId ? [{
+            invoiceLinks: {
+              some: {
+                invoiceId: currentInvoiceId,
+              },
+            },
+          }] : []),
+        ],
       },
       include: {
         items: true,
@@ -192,9 +253,12 @@ export async function getDOItemsForInvoice(doIds: string[]) {
           include: {
             salesOrder: {
               include: {
+                taxType: true,
                 items: {
                   include: {
                     batches: true,
+                    part: true,
+                    uom: true,
                   },
                 },
               },
@@ -210,20 +274,26 @@ export async function getDOItemsForInvoice(doIds: string[]) {
       // Work Order usually links to SalesOrderItemBatch which links to SalesOrderItem
       let soUnitPrice = 0;
       let partId = null;
-      let description = item.workOrder.jobDescription || "";
+      let description = item.workOrder?.jobDescription || "";
+      let hsnCode = "";
+      let taxTypeId = item.deliveryOrder?.salesOrder?.taxTypeId || null;
+      let taxRate = item.deliveryOrder?.salesOrder?.taxRate || 0;
 
-      const soItems = item.deliveryOrder.salesOrder.items;
+      const soItems = item.deliveryOrder?.salesOrder?.items || [];
       for (const soItem of soItems) {
         const batch = soItem.batches.find((b) => b.workOrderNo === item.workOrderNo);
         if (batch) {
           soUnitPrice = Number(soItem.unitPrice || 0);
           partId = soItem.partId;
+          if (soItem.part) {
+            description = description || soItem.part.description || "";
+          }
           break;
         }
       }
 
       const quantity = Number(item.quantity || 0);
-      const amount = quantity * soUnitPrice;
+      const amount = Math.round((quantity * soUnitPrice + Number.EPSILON) * 100) / 100;
 
       return {
         lineNo: index + 1,
@@ -235,7 +305,9 @@ export async function getDOItemsForInvoice(doIds: string[]) {
         unitPrice: soUnitPrice,
         amount,
         remark: "",
-        hsnCode: "",
+        hsnCode,
+        taxTypeId,
+        taxRate,
       };
     });
 
@@ -259,6 +331,16 @@ export async function createInvoice(data: any) {
     }
 
     const breakup = await computeBreakupForData(data);
+    const finalTaxRate = Number(data.taxRate) > 0
+      ? Number(data.taxRate)
+      : (breakup.totals.taxable > 0 && breakup.totals.tax > 0
+          ? Math.round((breakup.totals.tax / breakup.totals.taxable) * 10000) / 100
+          : (data.items?.find((it: any) => Number(it.taxRate) > 0)?.taxRate || 0));
+
+    const finalAmountBeforeTax = breakup.totals.taxable;
+    const finalTaxAmount = breakup.totals.tax;
+    const finalRoundOff = Number(data.roundOff || 0);
+    const finalAmountAfterTax = Math.round((finalAmountBeforeTax + finalTaxAmount + finalRoundOff + Number.EPSILON) * 100) / 100;
 
     // The number is taken and the invoice written in one transaction: the
     // counter's row lock only holds for as long as the transaction does.
@@ -281,17 +363,23 @@ export async function createInvoice(data: any) {
           fax: data.fax || null,
           email: data.email || null,
           billToId: data.billToId || null,
+          shipToId: data.shipToId || null,
+          consigneeName: data.consigneeName || null,
+          consigneeGstin: data.consigneeGstin || null,
+          consigneePhone: data.consigneePhone || null,
+          consigneeState: data.consigneeState || null,
+          consigneeCountry: data.consigneeCountry || "India",
           paymentTermId: data.paymentTermId,
           dueDate,
           currencyId: data.currencyId,
           exchangeRate: data.exchangeRate,
-          amountBeforeTax: data.amountBeforeTax,
-          taxTypeId: data.taxTypeId,
-          taxRate: data.taxRate,
-          taxAmount: data.taxAmount,
-          amountAfterTax: data.amountAfterTax,
-          balanceDue: data.amountAfterTax,
-          roundOff: data.roundOff || 0,
+          amountBeforeTax: finalAmountBeforeTax,
+          taxTypeId: data.taxTypeId || null,
+          taxRate: finalTaxRate,
+          taxAmount: finalTaxAmount,
+          amountAfterTax: finalAmountAfterTax,
+          balanceDue: finalAmountAfterTax,
+          roundOff: finalRoundOff,
           bankDetails: data.bankDetails || null,
           remark: data.remark || null,
           preparedById: data.preparedById,
@@ -306,7 +394,7 @@ export async function createInvoice(data: any) {
             create: data.items.map((item: any, i: number) => itemWithGst(item, breakup.lines[i])),
           },
           deliveryOrders: {
-            create: data.doIds.map((doId: string) => ({
+            create: (data.doIds || []).map((doId: string) => ({
               deliveryOrderId: doId,
             })),
           },
@@ -334,6 +422,16 @@ export async function updateInvoice(id: string, data: any) {
     }
 
     const breakup = await computeBreakupForData(data);
+    const finalTaxRate = Number(data.taxRate) > 0
+      ? Number(data.taxRate)
+      : (breakup.totals.taxable > 0 && breakup.totals.tax > 0
+          ? Math.round((breakup.totals.tax / breakup.totals.taxable) * 10000) / 100
+          : (data.items?.find((it: any) => Number(it.taxRate) > 0)?.taxRate || 0));
+
+    const finalAmountBeforeTax = breakup.totals.taxable;
+    const finalTaxAmount = breakup.totals.tax;
+    const finalRoundOff = Number(data.roundOff || 0);
+    const finalAmountAfterTax = Math.round((finalAmountBeforeTax + finalTaxAmount + finalRoundOff + Number.EPSILON) * 100) / 100;
 
     const invoice = await prisma.invoice.update({
       where: { id },
@@ -347,17 +445,23 @@ export async function updateInvoice(id: string, data: any) {
         fax: data.fax || null,
         email: data.email || null,
         billToId: data.billToId || null,
+        shipToId: data.shipToId || null,
+        consigneeName: data.consigneeName || null,
+        consigneeGstin: data.consigneeGstin || null,
+        consigneePhone: data.consigneePhone || null,
+        consigneeState: data.consigneeState || null,
+        consigneeCountry: data.consigneeCountry || "India",
         paymentTermId: data.paymentTermId,
         dueDate,
         currencyId: data.currencyId,
         exchangeRate: data.exchangeRate,
-        amountBeforeTax: data.amountBeforeTax,
-        taxTypeId: data.taxTypeId,
-        taxRate: data.taxRate,
-        taxAmount: data.taxAmount,
-        amountAfterTax: data.amountAfterTax,
-        balanceDue: data.amountAfterTax,
-        roundOff: data.roundOff || 0,
+        amountBeforeTax: finalAmountBeforeTax,
+        taxTypeId: data.taxTypeId || null,
+        taxRate: finalTaxRate,
+        taxAmount: finalTaxAmount,
+        amountAfterTax: finalAmountAfterTax,
+        balanceDue: finalAmountAfterTax,
+        roundOff: finalRoundOff,
         bankDetails: data.bankDetails || null,
         remark: data.remark || null,
         preparedById: data.preparedById,
@@ -373,7 +477,7 @@ export async function updateInvoice(id: string, data: any) {
         },
         deliveryOrders: {
           deleteMany: {},
-          create: data.doIds.map((doId: string) => ({
+          create: (data.doIds || []).map((doId: string) => ({
             deliveryOrderId: doId,
           })),
         },
@@ -446,6 +550,16 @@ export async function reviseInvoice(id: string, data: any) {
     }
 
     const breakup = await computeBreakupForData(data);
+    const finalTaxRate = Number(data.taxRate) > 0
+      ? Number(data.taxRate)
+      : (breakup.totals.taxable > 0 && breakup.totals.tax > 0
+          ? Math.round((breakup.totals.tax / breakup.totals.taxable) * 10000) / 100
+          : (data.items?.find((it: any) => Number(it.taxRate) > 0)?.taxRate || 0));
+
+    const finalAmountBeforeTax = breakup.totals.taxable;
+    const finalTaxAmount = breakup.totals.tax;
+    const finalRoundOff = Number(data.roundOff || 0);
+    const finalAmountAfterTax = Math.round((finalAmountBeforeTax + finalTaxAmount + finalRoundOff + Number.EPSILON) * 100) / 100;
 
     const invoice = await prisma.invoice.create({
       data: {
@@ -455,22 +569,28 @@ export async function reviseInvoice(id: string, data: any) {
         companyId: data.companyId,
         invoiceType: data.invoiceType,
         customerId: data.customerId,
-        contactPersonId: data.contactPersonId,
+        contactPersonId: data.contactPersonId || null,
         tel: data.tel || null,
         fax: data.fax || null,
         email: data.email || null,
         billToId: data.billToId || null,
+        shipToId: data.shipToId || null,
+        consigneeName: data.consigneeName || null,
+        consigneeGstin: data.consigneeGstin || null,
+        consigneePhone: data.consigneePhone || null,
+        consigneeState: data.consigneeState || null,
+        consigneeCountry: data.consigneeCountry || "India",
         paymentTermId: data.paymentTermId,
         dueDate,
         currencyId: data.currencyId,
         exchangeRate: data.exchangeRate,
-        amountBeforeTax: data.amountBeforeTax,
-        taxTypeId: data.taxTypeId,
-        taxRate: data.taxRate,
-        taxAmount: data.taxAmount,
-        amountAfterTax: data.amountAfterTax,
-        balanceDue: data.amountAfterTax,
-        roundOff: data.roundOff || 0,
+        amountBeforeTax: finalAmountBeforeTax,
+        taxTypeId: data.taxTypeId || null,
+        taxRate: finalTaxRate,
+        taxAmount: finalTaxAmount,
+        amountAfterTax: finalAmountAfterTax,
+        balanceDue: finalAmountAfterTax,
+        roundOff: finalRoundOff,
         bankDetails: data.bankDetails || null,
         remark: data.remark || null,
         preparedById: data.preparedById,

@@ -74,6 +74,85 @@ export function stateNameForCode(code: string | null | undefined): string {
 }
 
 /**
+ * Resolve a 2-digit GST state code from a GSTIN or free-text place/address.
+ * Checks GSTIN first, then place/address string, then known cities/districts.
+ */
+export function resolveStateCode(
+  gstin?: string | null,
+  placeOrAddress?: string | null,
+): string | null {
+  // 1. Try GSTIN
+  const fromGst = stateCodeFromGstin(gstin);
+  if (fromGst) return fromGst;
+
+  // 2. Try text / address
+  const text = (placeOrAddress ?? "").trim();
+  if (!text) return null;
+
+  // Check leading 2-digits if it matches a state code (e.g., "33-Tamil Nadu" or "33")
+  const leading = text.match(/^(\d{2})/);
+  if (leading && GST_STATE_CODES[leading[1]]) return leading[1];
+
+  const lower = text.toLowerCase();
+
+  // Check all state names
+  for (const [code, name] of Object.entries(GST_STATE_CODES)) {
+    if (lower.includes(name.toLowerCase())) return code;
+  }
+
+  // Common Indian industrial clusters / cities to state code mapping
+  const cityStateMap: Record<string, string> = {
+    katpadi: "33", // Tamil Nadu (Vellore district)
+    vellore: "33",
+    chennai: "33",
+    coimbatore: "33",
+    madurai: "33",
+    hosur: "33",
+    salem: "33",
+    tiruchirappalli: "33",
+    trichy: "33",
+    ranipet: "33",
+    kanchipuram: "33",
+    bengaluru: "29", // Karnataka
+    bangalore: "29",
+    mysuru: "29",
+    mysore: "29",
+    mumbai: "27", // Maharashtra
+    pune: "27",
+    thane: "27",
+    nagpur: "27",
+    hyderabad: "36", // Telangana
+    delhi: "07", // Delhi
+    gurugram: "06", // Haryana
+    gurgaon: "06",
+    faridabad: "06",
+    noida: "09", // Uttar Pradesh
+    ahmedabad: "24", // Gujarat
+    vadodara: "24",
+    surat: "24",
+    kolkata: "19", // West Bengal
+  };
+
+  for (const [city, code] of Object.entries(cityStateMap)) {
+    if (lower.includes(city)) return code;
+  }
+
+  return null;
+}
+
+/**
+ * Resolve the seller's state code from company profile.
+ * Falls back to "33" (Tamil Nadu, home state of Vision Fab / Vision One).
+ */
+export function resolveSellerStateCode(
+  company?: { gstRegistrationNo?: string | null; address?: string | null } | null,
+): string {
+  if (!company) return "33";
+  const resolved = resolveStateCode(company.gstRegistrationNo, company.address);
+  return resolved || "33";
+}
+
+/**
  * Resolve a 2-digit POS state code from a customer's free-text "place of supply"
  * field, falling back to the buyer's GSTIN state code. Accepts values like
  * "33", "33-Tamil Nadu", or "Tamil Nadu".
@@ -82,15 +161,8 @@ export function resolvePosStateCode(
   placeOfSupply: string | null | undefined,
   buyerGstin: string | null | undefined,
 ): string | null {
-  const pos = (placeOfSupply ?? "").trim();
-  if (pos) {
-    const leading = pos.match(/^(\d{2})/);
-    if (leading && GST_STATE_CODES[leading[1]]) return leading[1];
-    const lower = pos.toLowerCase();
-    for (const [code, name] of Object.entries(GST_STATE_CODES)) {
-      if (name.toLowerCase() === lower) return code;
-    }
-  }
+  const fromPos = resolveStateCode(null, placeOfSupply);
+  if (fromPos) return fromPos;
   return stateCodeFromGstin(buyerGstin);
 }
 
@@ -129,35 +201,41 @@ export type GstBreakup = {
 /**
  * Compute the CGST/SGST/IGST breakup for an invoice.
  *
- * A single overall GST rate (`taxRatePercent`) is applied to each line's
- * taxable amount, then split by supply type. Per-line rounding keeps the
- * printed line tax and the totals internally consistent.
+ * Applies per-line GST rate (or header taxRatePercent fallback) to each line's
+ * taxable amount, split by supply type (intra => CGST+SGST, inter => IGST).
  */
 export function computeGstBreakup(params: {
   lines: GstLineInput[];
   taxRatePercent: number;
-  sellerGstin: string | null | undefined;
+  sellerGstin?: string | null;
+  sellerAddress?: string | null;
+  sellerStateCode?: string | null;
   posStateCode: string | null | undefined;
   isSez?: boolean;
   sezTaxRate?: number;
 }): GstBreakup {
   const { lines, taxRatePercent, isSez } = params;
-  const sellerStateCode = stateCodeFromGstin(params.sellerGstin);
+  const sellerStateCode =
+    params.sellerStateCode ??
+    resolveSellerStateCode({ gstRegistrationNo: params.sellerGstin, address: params.sellerAddress });
   const posStateCode = params.posStateCode ?? null;
 
-  // Intra-state only when both state codes are known AND equal. When the POS
-  // cannot be determined we default to inter-state (IGST), which is the safer
-  // assumption for the IRP schema.
+  // Intra-state when both state codes are known AND equal (and not SEZ).
+  // Supplies to SEZ are always inter-state (IGST) per GST rules.
   const supplyType: "intra" | "inter" =
-    sellerStateCode && posStateCode && sellerStateCode === posStateCode
-      ? "intra"
-      : "inter";
+    isSez
+      ? "inter"
+      : (sellerStateCode && posStateCode && sellerStateCode === posStateCode
+          ? "intra"
+          : "inter");
 
   const baseRate = isSez ? (Number(params.sezTaxRate) || 0) : (Number(taxRatePercent) || 0);
 
   const breakupLines: GstLineBreakup[] = lines.map((l) => {
-    const taxable = Number(l.amount) || 0;
-    const rate = isSez ? baseRate : (l.taxRate !== undefined && !isNaN(l.taxRate) ? l.taxRate : baseRate);
+    const taxable = roundTo2(Number(l.amount) || 0);
+    const rate = isSez
+      ? baseRate
+      : (l.taxRate !== undefined && !isNaN(l.taxRate) ? Number(l.taxRate) : baseRate);
     const lineTax = roundTo2((taxable * rate) / 100);
     if (supplyType === "intra") {
       const cgst = roundTo2(lineTax / 2);
@@ -169,7 +247,7 @@ export function computeGstBreakup(params: {
 
   const totals = breakupLines.reduce(
     (acc, l, i) => {
-      acc.taxable += Number(lines[i].amount) || 0;
+      acc.taxable += roundTo2(Number(lines[i].amount) || 0);
       acc.cgst += l.cgstAmount;
       acc.sgst += l.sgstAmount;
       acc.igst += l.igstAmount;

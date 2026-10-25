@@ -203,6 +203,7 @@ export const SearchableSelect = React.forwardRef<HTMLSelectElement, SearchableSe
       <div
         className={`flex items-center justify-between cursor-pointer w-full truncate ${className} ${disabled ? "opacity-60 cursor-not-allowed" : ""}`}
         onClick={() => !disabled && setOpen(!open)}
+        title={selectedOption ? selectedOption.label : undefined}
       >
         <span className="truncate pr-4 sm:pr-4 block text-[10px] sm:text-sm">
           {selectedOption ? selectedOption.label : <span className="opacity-50">Select...</span>}

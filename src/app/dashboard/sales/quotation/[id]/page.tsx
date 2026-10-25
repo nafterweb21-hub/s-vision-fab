@@ -507,15 +507,23 @@ export default function QuotationEditPage() {
           )}
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm min-w-[950px] table-fixed">
+            <colgroup>
+              <col className="w-auto min-w-[320px]" />
+              <col style={{ width: "140px" }} />
+              <col style={{ width: "160px" }} />
+              <col style={{ width: "120px" }} />
+              <col style={{ width: "140px" }} />
+              {!readOnly && <col style={{ width: "52px" }} />}
+            </colgroup>
             <thead className="text-xs text-blue-500 bg-blue-50/50 uppercase tracking-wider">
               <tr>
-                <th className="px-3 py-2 text-left">Finished Good</th>
-                <th className="px-3 py-2 text-left w-32">UOM</th>
-                <th className="px-3 py-2 text-right w-32">Unit Price</th>
-                <th className="px-3 py-2 text-right w-24">Qty</th>
-                <th className="px-3 py-2 text-right w-32">Price</th>
-                {!readOnly && <th className="w-10"></th>}
+                <th className="px-3 py-2 text-left min-w-[320px]">Finished Good</th>
+                <th className="px-3 py-2 text-left w-[140px]">UOM</th>
+                <th className="px-3 py-2 text-right w-[160px]">Unit Price</th>
+                <th className="px-3 py-2 text-right w-[120px]">Qty</th>
+                <th className="px-3 py-2 text-right w-[140px]">Price</th>
+                {!readOnly && <th className="w-[52px] text-center"></th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-blue-100">
@@ -524,7 +532,7 @@ export default function QuotationEditPage() {
                   Number(it.unitPrice || 0) * Number(it.quantity || 0);
                 return (
                   <tr key={idx}>
-                    <td className="px-3 py-2 align-top">
+                    <td className="px-3 py-2 align-top min-w-0">
                       <SearchableSelect
                         value={it.partId}
                         disabled={readOnly}
@@ -539,7 +547,7 @@ export default function QuotationEditPage() {
                         ))}
                       </SearchableSelect>
                     </td>
-                    <td className="px-3 py-2 align-top">
+                    <td className="px-3 py-2 align-top w-[140px]">
                       <SearchableSelect
                         value={it.uomId}
                         disabled={readOnly}
@@ -554,31 +562,31 @@ export default function QuotationEditPage() {
                         ))}
                       </SearchableSelect>
                     </td>
-                    <td className="px-3 py-2 align-top">
+                    <td className="px-3 py-2 align-top w-[160px]">
                       <input
                         type="number"
                         step="0.01"
                         value={it.unitPrice}
                         disabled={readOnly}
                         onChange={(e) => updateItem(idx, { unitPrice: e.target.value })}
-                        className={`${inputCls} text-right`}
+                        className={`${inputCls} text-right w-full`}
                       />
                     </td>
-                    <td className="px-3 py-2 align-top">
+                    <td className="px-3 py-2 align-top w-[120px]">
                       <input
                         type="number"
                         min={0}
                         value={it.quantity}
                         disabled={readOnly}
                         onChange={(e) => updateItem(idx, { quantity: e.target.value })}
-                        className={`${inputCls} text-right`}
+                        className={`${inputCls} text-right w-full`}
                       />
                     </td>
-                    <td className="px-3 py-2 align-top text-right font-mono text-blue-900">
+                    <td className="px-3 py-2 align-top text-right font-mono text-blue-900 w-[140px] whitespace-nowrap pt-3">
                       {line.toFixed(2)}
                     </td>
                     {!readOnly && (
-                      <td className="px-2 py-2 align-top">
+                      <td className="px-2 py-2 align-top w-[52px] text-center pt-2.5">
                         <button
                           onClick={() => removeItem(idx)}
                           className="p-1.5 rounded-md hover:bg-rose-50 text-rose-500"

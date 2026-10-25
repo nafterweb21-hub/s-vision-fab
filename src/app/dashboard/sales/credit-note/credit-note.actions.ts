@@ -24,7 +24,7 @@ async function computeBreakupForData(data: any): Promise<GstBreakup> {
   const [company, customer] = await Promise.all([
     prisma.companyProfile.findUnique({
       where: { id: data.companyId },
-      select: { gstRegistrationNo: true, sezTaxRate: true },
+      select: { gstRegistrationNo: true, sezTaxRate: true, address: true },
     }),
     prisma.customerProfile.findUnique({
       where: { id: data.customerId },
@@ -33,9 +33,13 @@ async function computeBreakupForData(data: any): Promise<GstBreakup> {
   ]);
   const posStateCode = resolvePosStateCode(customer?.placeOfSupply, customer?.gstin);
   return computeGstBreakup({
-    lines: (data.items || []).map((it: any) => ({ amount: Number(it.amount) || 0 })),
+    lines: (data.items || []).map((it: any) => ({
+      amount: Number(it.amount) || 0,
+      taxRate: Number(it.taxRate) || Number(it.gstRate) || (Number(data.taxRate) > 0 ? Number(data.taxRate) : 0),
+    })),
     taxRatePercent: Number(data.taxRate) || 0,
     sellerGstin: company?.gstRegistrationNo,
+    sellerAddress: company?.address,
     posStateCode,
     isSez: customer?.isSez,
     sezTaxRate: Number(company?.sezTaxRate) || 0,
@@ -44,6 +48,7 @@ async function computeBreakupForData(data: any): Promise<GstBreakup> {
 
 /** Merge a computed line breakup into an invoice item's create payload. */
 function itemWithGst(item: any, line: { gstRate: number; cgstAmount: number; sgstAmount: number; igstAmount: number } | undefined) {
+  const lineTax = Math.round(((line?.cgstAmount ?? 0) + (line?.sgstAmount ?? 0) + (line?.igstAmount ?? 0) + Number.EPSILON) * 100) / 100;
   return {
     lineNo: item.lineNo,
     // Trim before the null-coalesce: a whitespace-only workOrderNo is not a
@@ -57,6 +62,8 @@ function itemWithGst(item: any, line: { gstRate: number; cgstAmount: number; sgs
     amount: item.amount,
     remark: item.remark?.trim() || null,
     hsnCode: item.hsnCode?.trim() || null,
+    taxTypeId: item.taxTypeId || null,
+    taxAmount: lineTax,
     gstRate: line?.gstRate ?? 0,
     cgstAmount: line?.cgstAmount ?? 0,
     sgstAmount: line?.sgstAmount ?? 0,
@@ -88,6 +95,7 @@ export async function getInvoice(id: string) {
         customer: true,
         contactPerson: true,
         billTo: true,
+        shipTo: true,
         paymentTerm: true,
         currency: true,
         taxType: true,
@@ -95,7 +103,11 @@ export async function getInvoice(id: string) {
         items: true,
         deliveryOrders: {
           include: {
-            deliveryOrder: true,
+            deliveryOrder: {
+              include: {
+                salesOrder: { select: { orderNo: true } },
+              },
+            },
           },
         },
       },
@@ -130,21 +142,31 @@ export async function getInvoiceFormData() {
   }
 }
 
-export async function getPendingDOs(customerId: string) {
+export async function getPendingDOs(customerId: string, currentInvoiceId?: string) {
   try {
-    // Fetch DOs for this customer that are 'Submitted' and not yet linked to an active Invoice
-    // In our schema, we can check if it has any invoiceLinks where invoice is not Voided/Old Version
+    // Fetch DOs for this customer that are 'Submitted' and not yet linked to another active Invoice
     const dos = await prisma.deliveryOrder.findMany({
       where: {
         customerId,
         status: "Submitted",
-        invoiceLinks: {
-          none: {
-            invoice: {
-              status: { notIn: ["Void", "Old Version"] },
+        OR: [
+          {
+            invoiceLinks: {
+              none: {
+                invoice: {
+                  status: { notIn: ["Void", "Old Version"] },
+                },
+              },
             },
           },
-        },
+          ...(currentInvoiceId ? [{
+            invoiceLinks: {
+              some: {
+                invoiceId: currentInvoiceId,
+              },
+            },
+          }] : []),
+        ],
       },
       include: {
         items: true,
@@ -263,12 +285,18 @@ export async function createInvoice(data: any) {
           fax: data.fax || null,
           email: data.email || null,
           billToId: data.billToId || null,
+          shipToId: data.shipToId || null,
+          consigneeName: data.consigneeName || null,
+          consigneeGstin: data.consigneeGstin || null,
+          consigneePhone: data.consigneePhone || null,
+          consigneeState: data.consigneeState || null,
+          consigneeCountry: data.consigneeCountry || "India",
           paymentTermId: data.paymentTermId,
           dueDate,
           currencyId: data.currencyId,
           exchangeRate: data.exchangeRate,
           amountBeforeTax: data.amountBeforeTax,
-          taxTypeId: data.taxTypeId,
+          taxTypeId: data.taxTypeId || null,
           taxRate: data.taxRate,
           taxAmount: data.taxAmount,
           amountAfterTax: data.amountAfterTax,
@@ -328,12 +356,18 @@ export async function updateInvoice(id: string, data: any) {
         fax: data.fax || null,
         email: data.email || null,
         billToId: data.billToId || null,
+        shipToId: data.shipToId || null,
+        consigneeName: data.consigneeName || null,
+        consigneeGstin: data.consigneeGstin || null,
+        consigneePhone: data.consigneePhone || null,
+        consigneeState: data.consigneeState || null,
+        consigneeCountry: data.consigneeCountry || "India",
         paymentTermId: data.paymentTermId,
         dueDate,
         currencyId: data.currencyId,
         exchangeRate: data.exchangeRate,
         amountBeforeTax: data.amountBeforeTax,
-        taxTypeId: data.taxTypeId,
+        taxTypeId: data.taxTypeId || null,
         taxRate: data.taxRate,
         taxAmount: data.taxAmount,
         amountAfterTax: data.amountAfterTax,
@@ -440,6 +474,12 @@ export async function reviseInvoice(id: string, data: any) {
         fax: data.fax || null,
         email: data.email || null,
         billToId: data.billToId || null,
+        shipToId: data.shipToId || null,
+        consigneeName: data.consigneeName || null,
+        consigneeGstin: data.consigneeGstin || null,
+        consigneePhone: data.consigneePhone || null,
+        consigneeState: data.consigneeState || null,
+        consigneeCountry: data.consigneeCountry || "India",
         paymentTermId: data.paymentTermId,
         dueDate,
         currencyId: data.currencyId,
