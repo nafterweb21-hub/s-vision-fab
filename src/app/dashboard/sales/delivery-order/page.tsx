@@ -2,7 +2,7 @@
 import { SearchableSelect } from "@/components/SearchableSelect";
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { Plus, Search, Loader2, Edit2, AlertCircle, Package, Printer } from "lucide-react";
+import { Plus, Search, Loader2, Edit2, AlertCircle, Package, Printer, Mail } from "lucide-react";
 export default function DeliveryOrderListPage() {
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -177,6 +177,22 @@ export default function DeliveryOrderListPage() {
                           title="Print"
                         >
                           <Printer size={14} />
+                        </Link>
+                        <Link
+                          href={`/print/delivery-order-label/${order.id}?type=envelope`}
+                          target="_blank"
+                          className="inline-flex items-center justify-center p-1.5 rounded-lg border border-indigo-200 hover:bg-indigo-100 text-indigo-600 transition-colors active:scale-95"
+                          title="Envelope"
+                        >
+                          <Mail size={14} />
+                        </Link>
+                        <Link
+                          href={`/print/delivery-order-label/${order.id}?type=shipping`}
+                          target="_blank"
+                          className="inline-flex items-center justify-center p-1.5 rounded-lg border border-indigo-200 hover:bg-indigo-100 text-indigo-600 transition-colors active:scale-95"
+                          title="Shipping Label"
+                        >
+                          <Package size={14} />
                         </Link>
                         <Link
                           href={`/dashboard/sales/delivery-order/form?id=${order.id}`}

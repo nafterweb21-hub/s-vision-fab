@@ -13,6 +13,8 @@ import {
   AlertCircle,
   FileText,
   Printer,
+  Mail,
+  Package,
   Copy,
   Send,
   Ban,
@@ -54,7 +56,8 @@ export default function DebitNoteListPage() {
 
   const filteredInvoices = invoices.filter((inv) => {
     const matchesSearch = inv.invoiceNo.toLowerCase().includes(search.toLowerCase()) || 
-                          (inv.customer?.customerName || "").toLowerCase().includes(search.toLowerCase());
+                          (inv.customer?.customerName || "").toLowerCase().includes(search.toLowerCase()) ||
+                          (inv.poNo || "").toLowerCase().includes(search.toLowerCase());
     const matchesStatus = tab === "All" || inv.status === tab;
     return matchesSearch && matchesStatus;
   });
@@ -152,6 +155,12 @@ export default function DebitNoteListPage() {
     window.open(`/print/invoice/${selected.id}`, "_blank");
   };
 
+  const onPrintLabel = (type: "envelope" | "shipping") => {
+    if (!selected) return;
+    if (selected.status !== "Submitted" && selected.status !== "Draft") return hotToast.error("Only Submitted or Draft records can be printed");
+    window.open(`/print/invoice-label/${selected.id}?type=${type}`, "_blank");
+  };
+
   const onGenerateEInvoice = async () => {
     if (!selected) return;
     if (selected.status !== "Submitted") return hotToast.error("Submit the debit note before generating an e-invoice");
@@ -228,6 +237,8 @@ export default function DebitNoteListPage() {
         <ToolbarBtn icon={<GitBranch size={14} />} label="Revise" onClick={onRevise} disabled={!selected || actionLoading} />
         <ToolbarBtn icon={<Copy size={14} />} label="Copy" onClick={onCopy} disabled={!selected || actionLoading} />
         <ToolbarBtn icon={<Printer size={14} />} label="Print Debit Note" onClick={onPrint} disabled={!selected || actionLoading} />
+        <ToolbarBtn icon={<Mail size={14} />} label="Envelope" onClick={() => onPrintLabel("envelope")} disabled={!selected || actionLoading} />
+        <ToolbarBtn icon={<Package size={14} />} label="Shipping" onClick={() => onPrintLabel("shipping")} disabled={!selected || actionLoading} />
         <ToolbarBtn icon={<QrCode size={14} />} label="Generate E-Invoice" onClick={onGenerateEInvoice} disabled={!selected || actionLoading} primary />
         <ToolbarBtn icon={<XCircle size={14} />} label="Cancel E-Invoice" onClick={onCancelEInvoice} disabled={!selected || actionLoading} />
       </div>
@@ -255,7 +266,7 @@ export default function DebitNoteListPage() {
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-blue-400" />
           <input
             type="text"
-            placeholder="Search by Debit Note No or Customer Name..."
+            placeholder="Search by Debit Note No, Customer Name or PO No..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-9 pr-4 py-2 text-sm bg-blue-50 border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors"
@@ -295,6 +306,7 @@ export default function DebitNoteListPage() {
                   <th className="px-3 py-3">Debit Note No</th>
                   <th className="px-3 py-3">Date</th>
                   <th className="px-3 py-3">Customer</th>
+                  <th className="px-3 py-3">PO No</th>
                   <th className="px-3 py-3">Vehicle Number</th>
                   <th className="px-3 py-3">Type</th>
                   <th className="px-3 py-3">E-Invoice</th>
@@ -335,6 +347,9 @@ export default function DebitNoteListPage() {
                     </td>
                     <td className="px-3 py-3 font-medium text-blue-700">
                       {inv.customer?.customerName || "—"}
+                    </td>
+                    <td className="px-3 py-3 text-blue-700">
+                      {inv.poNo || "—"}
                     </td>
                     <td className="px-3 py-3 text-blue-700">
                       {inv.vehicleNumber || "—"}

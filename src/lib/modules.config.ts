@@ -120,7 +120,7 @@ export const APP_MODULES: AppModuleDef[] = [
     group: 'Sales',
     pathPrefixes: ['/dashboard/sales/delivery-order'],
     apiPrefixes: ['/api/sales/delivery-order'],
-    exportPrefixes: ['/print/delivery-order', '/print/delivery-label'],
+    exportPrefixes: ['/print/delivery-order', '/print/delivery-order-label', '/print/delivery-label'],
   },
   {
     code: 'SALES_REPORT',

@@ -9,8 +9,10 @@ export type LabelSize = "large" | "medium" | "small";
 export type LabelData = {
   to: { name: string; address: string; gstin: string; contactPerson: string; phone: string };
   from: { name: string; address: string; gstin: string; contactPerson: string; phone: string; email: string };
-  invoiceNo: string;
-  invoiceDate: string;
+  /** Document name as printed in "DOCUMENT DETAILS", e.g. "INVOICE", "CREDIT NOTE", "D.O.". */
+  docLabel: string;
+  docNo: string;
+  docDate: string;
   poNo: string;
   logoUrl: string;
 };
@@ -40,7 +42,11 @@ function E({ children, className }: { children: React.ReactNode; className?: str
   );
 }
 
-export default function InvoiceLabel({
+/**
+ * Envelope / shipping label shared by the invoice, credit note, debit note and
+ * delivery order printouts. Type and size are picked on screen.
+ */
+export default function AddressLabel({
   data,
   initialType,
   initialSize,
@@ -192,14 +198,14 @@ export default function InvoiceLabel({
               <div className="sec">
                 <div className="cap">DOCUMENT DETAILS</div>
                 <div className="docs">
-                  <span className="k">INVOICE NO.:</span>
-                  <E>{data.invoiceNo}</E>
+                  <span className="k">{data.docLabel} NO.:</span>
+                  <E>{data.docNo}</E>
                   <span />
                   <span />
                   <span className="k">P.O. NO.:</span>
                   <E>{data.poNo || "-"}</E>
-                  <span className="k">INVOICE DATE:</span>
-                  <E>{data.invoiceDate}</E>
+                  <span className="k">{data.docLabel} DATE:</span>
+                  <E>{data.docDate}</E>
                 </div>
               </div>
             </div>

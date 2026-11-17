@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import { hasDifferentShipTo } from "@/lib/invoice-ship-to";
-import InvoiceLabel, { type LabelData, type LabelKind, type LabelSize } from "./InvoiceLabel";
+import AddressLabel, { type LabelData, type LabelKind, type LabelSize } from "@/app/print/AddressLabel";
 
 export const dynamic = "force-dynamic";
 
@@ -12,10 +12,18 @@ function fmtDate(d: Date | string | null | undefined) {
   return `${String(dt.getDate()).padStart(2, "0")}-${m[dt.getMonth()]}-${dt.getFullYear()}`;
 }
 
+// Credit and debit notes are Invoice rows too; name the document by its type.
+function docLabel(invoiceType?: string | null) {
+  const t = (invoiceType || "").toLowerCase();
+  if (t.includes("credit")) return "CREDIT NOTE";
+  if (t.includes("debit")) return "DEBIT NOTE";
+  return "INVOICE";
+}
+
 const clean = (v?: string | null) => (v && v.trim() ? v.trim() : "");
 
 /**
- * Envelope / shipping (packing slip) label for an invoice. The type and size
+ * Envelope / shipping (packing slip) label for an invoice, credit note or debit note. The type and size
  * are picked on screen; `?type=` and `?size=` only set the initial choice.
  */
 export default async function PrintInvoiceLabelPage({
@@ -75,8 +83,9 @@ export default async function PrintInvoiceLabelPage({
       phone: clean(company?.phoneNo),
       email: clean(company?.email),
     },
-    invoiceNo: inv.invoiceNo,
-    invoiceDate: fmtDate(inv.invoiceDate),
+    docLabel: docLabel(inv.invoiceType),
+    docNo: inv.invoiceNo,
+    docDate: fmtDate(inv.invoiceDate),
     poNo: clean(inv.poNo),
     logoUrl,
   };
@@ -84,5 +93,5 @@ export default async function PrintInvoiceLabelPage({
   const type: LabelKind = sp.type === "shipping" ? "shipping" : "envelope";
   const size: LabelSize = sp.size === "medium" || sp.size === "small" ? sp.size : "large";
 
-  return <InvoiceLabel data={data} initialType={type} initialSize={size} />;
+  return <AddressLabel data={data} initialType={type} initialSize={size} />;
 }
