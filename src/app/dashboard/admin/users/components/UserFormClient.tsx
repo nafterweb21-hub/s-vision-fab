@@ -135,7 +135,7 @@ export default function UserFormClient({
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 p-6">
+    <div className="flex w-full flex-1 flex-col gap-4 py-3">
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-blue-900">
           {isEdit ? "Edit User" : "Add User"}

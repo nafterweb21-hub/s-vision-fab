@@ -5,6 +5,7 @@ import { RecordStatus } from "@/lib/status";
 export async function GET() {
   try {
     const [
+      customers,
       companies,
       employees,
       workOrders,
@@ -17,9 +18,28 @@ export async function GET() {
       mainProcesses,
       processProfiles,
     ] = await Promise.all([
+      prisma.customerProfile.findMany({
+        where: { status: RecordStatus.Active },
+        select: {
+          id: true,
+          customerName: true,
+          gstin: true,
+          pan: true,
+          placeOfSupply: true,
+          addresses: {
+            where: { status: RecordStatus.Active },
+            select: { id: true, address: true, state: true, isDefault: true },
+          },
+          contactPersons: {
+            where: { status: RecordStatus.Active },
+            select: { id: true, contactPersonName: true, telNo: true, faxNo: true, email: true, isDefault: true },
+          },
+        },
+        orderBy: { customerName: "asc" },
+      }),
       prisma.companyProfile.findMany({
         where: { status: "Active" },
-        select: { id: true, companyName: true, allowPoForWo: true },
+        select: { id: true, companyName: true, allowPoForWo: true, address: true, gstRegistrationNo: true, phoneNo: true, faxNo: true, email: true },
         orderBy: { companyName: "asc" },
       }),
       prisma.employee.findMany({
@@ -36,6 +56,7 @@ export async function GET() {
         select: { 
           workOrderNo: true, 
           jobDescription: true,
+          customerId: true,
           inProcesses: {
             include: {
               routingProcesses: {
@@ -106,6 +127,7 @@ export async function GET() {
     ]);
 
     return NextResponse.json({
+      customers,
       companies,
       employees,
       workOrders,

@@ -78,7 +78,7 @@ export default async function QcApprovalTimesheetsPage({
   const totalOrderQty = Number(workOrder.quantity) || 0;
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
+    <div className="py-3 space-y-4 w-full">
       <div className="flex items-center gap-4">
         <Link
           href="/dashboard/qc/approval"

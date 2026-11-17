@@ -482,7 +482,7 @@ export default function CustomerProfilePage() {
   );
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 bg-white text-black p-6 md:p-8 rounded-2xl shadow-sm border border-blue-100">
+    <div className="space-y-4 bg-white text-black p-4 rounded-2xl shadow-sm border border-blue-100 w-full">
       {/* Top Banner/Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>

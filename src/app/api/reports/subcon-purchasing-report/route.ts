@@ -95,8 +95,10 @@ export async function GET(req: NextRequest) {
               }
             },
             subconRequestForms: {
+              where: { status: "Submitted" },
               include: {
-                subconReturnTrackings: true
+                subconReturnTrackings: { where: { status: "Submitted" } },
+                subconRejectTrackings: { where: { status: "Submitted" } }
               }
             }
           }
@@ -125,19 +127,28 @@ export async function GET(req: NextRequest) {
       });
 
       for (const item of filteredItems) {
+        // Only Submitted SRF / SRT / SRJ count — Draft and Void are excluded
+        // by the include filters above.
         let totalAcknowledged = 0;
         let totalReturned = 0;
+        let totalRejected = 0;
 
         for (const srf of item.subconRequestForms) {
           totalAcknowledged += Number(srf.quantity || 0);
           for (const srt of srf.subconReturnTrackings) {
             totalReturned += Number(srt.returnedQty || 0);
           }
+          for (const srj of srf.subconRejectTrackings) {
+            totalRejected += Number(srj.rejectedQty || 0);
+          }
         }
 
         const qty = Number(item.quantity || 0);
+        // Outstanding = Not Acknowledged + Not Returned, so the two buckets are
+        // disjoint: not yet handed to the subcon vs. handed over but not back.
+        // Rejected qty is a subset of returned qty and does not affect either.
         const notAcknowledged = Math.max(0, qty - totalAcknowledged);
-        const notReturned = Math.max(0, qty - totalReturned);
+        const notReturned = Math.max(0, totalAcknowledged - totalReturned);
 
         reportData.push({
           company: po.company?.companyName || "",
@@ -170,6 +181,7 @@ export async function GET(req: NextRequest) {
           
           qtyAcknowledged: totalAcknowledged,
           qtyReturned: totalReturned,
+          qtyRejected: totalRejected,
           qtyNotAcknowledged: notAcknowledged,
           qtyNotReturned: notReturned,
           

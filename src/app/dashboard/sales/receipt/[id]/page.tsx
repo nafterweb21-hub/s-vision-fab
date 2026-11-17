@@ -89,7 +89,7 @@ export default function ReceiptViewPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 p-6 lg:p-8">
+    <div className="space-y-4 py-3 w-full">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Link

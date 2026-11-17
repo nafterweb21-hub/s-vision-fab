@@ -281,7 +281,7 @@ export default function QuotationEditPage() {
   }
 
   return (
-    <div className="p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
+    <div className="py-3 space-y-4 w-full">
       <div className="flex items-center justify-between pb-6 border-b border-blue-200">
         <div>
           <div className="flex items-center gap-2 text-xs text-blue-400 font-semibold uppercase mb-1">
@@ -494,9 +494,9 @@ export default function QuotationEditPage() {
       </div>
 
       {/* Items */}
-      <div className="bg-white border border-blue-200 rounded-xl shadow-sm overflow-hidden">
-        <div className="px-6 py-3 border-b border-blue-200 flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-blue-900">Quote Items</h3>
+      <div className="bg-white border border-blue-200 rounded-xl shadow-sm p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-base font-bold text-blue-900">Quote Items</h3>
           {!readOnly && (
             <button
               onClick={addItem}
@@ -507,23 +507,23 @@ export default function QuotationEditPage() {
           )}
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[950px] table-fixed">
+          <table className="w-full table-fixed text-[13px] text-left min-w-[760px]">
             <colgroup>
-              <col className="w-auto min-w-[320px]" />
-              <col style={{ width: "140px" }} />
-              <col style={{ width: "160px" }} />
-              <col style={{ width: "120px" }} />
-              <col style={{ width: "140px" }} />
-              {!readOnly && <col style={{ width: "52px" }} />}
+              <col />
+              <col className="w-28" />
+              <col className="w-28" />
+              <col className="w-24" />
+              <col className="w-28" />
+              {!readOnly && <col className="w-9" />}
             </colgroup>
-            <thead className="text-xs text-blue-500 bg-blue-50/50 uppercase tracking-wider">
+            <thead className="text-[11px] text-blue-500 bg-blue-50/50 uppercase tracking-wide border-b border-blue-200">
               <tr>
-                <th className="px-3 py-2 text-left min-w-[320px]">Finished Good</th>
-                <th className="px-3 py-2 text-left w-[140px]">UOM</th>
-                <th className="px-3 py-2 text-right w-[160px]">Unit Price</th>
-                <th className="px-3 py-2 text-right w-[120px]">Qty</th>
-                <th className="px-3 py-2 text-right w-[140px]">Price</th>
-                {!readOnly && <th className="w-[52px] text-center"></th>}
+                <th className="px-1.5 py-2 text-left">Finished Good</th>
+                <th className="px-1.5 py-2 text-left">UOM</th>
+                <th className="px-1.5 py-2 text-right">Unit Price</th>
+                <th className="px-1.5 py-2 text-right">Qty</th>
+                <th className="px-1.5 py-2 text-right">Price</th>
+                {!readOnly && <th className="px-1.5 py-2"></th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-blue-100">
@@ -531,13 +531,14 @@ export default function QuotationEditPage() {
                 const line =
                   Number(it.unitPrice || 0) * Number(it.quantity || 0);
                 return (
-                  <tr key={idx}>
-                    <td className="px-3 py-2 align-top min-w-0">
+                  <tr key={idx} className="hover:bg-blue-50/30 align-top">
+                    <td className="px-1.5 py-1.5 min-w-0">
                       <SearchableSelect
+                        compact
                         value={it.partId}
                         disabled={readOnly}
                         onChange={(e) => updateItem(idx, { partId: e.target.value })}
-                        className={inputCls}
+                        className={itemInputCls}
                       >
                         <option value="">— Select —</option>
                         {data?.finishedGoods.map((fg) => (
@@ -547,12 +548,13 @@ export default function QuotationEditPage() {
                         ))}
                       </SearchableSelect>
                     </td>
-                    <td className="px-3 py-2 align-top w-[140px]">
+                    <td className="px-1.5 py-1.5">
                       <SearchableSelect
+                        compact
                         value={it.uomId}
                         disabled={readOnly}
                         onChange={(e) => updateItem(idx, { uomId: e.target.value })}
-                        className={inputCls}
+                        className={itemInputCls}
                       >
                         <option value="">—</option>
                         {data?.uoms.map((u) => (
@@ -562,37 +564,37 @@ export default function QuotationEditPage() {
                         ))}
                       </SearchableSelect>
                     </td>
-                    <td className="px-3 py-2 align-top w-[160px]">
+                    <td className="px-1.5 py-1.5">
                       <input
                         type="number"
                         step="0.01"
                         value={it.unitPrice}
                         disabled={readOnly}
                         onChange={(e) => updateItem(idx, { unitPrice: e.target.value })}
-                        className={`${inputCls} text-right w-full`}
+                        className={`${itemInputCls} text-right tabular-nums`}
                       />
                     </td>
-                    <td className="px-3 py-2 align-top w-[120px]">
+                    <td className="px-1.5 py-1.5">
                       <input
                         type="number"
                         min={0}
                         value={it.quantity}
                         disabled={readOnly}
                         onChange={(e) => updateItem(idx, { quantity: e.target.value })}
-                        className={`${inputCls} text-right w-full`}
+                        className={`${itemInputCls} text-right tabular-nums`}
                       />
                     </td>
-                    <td className="px-3 py-2 align-top text-right font-mono text-blue-900 w-[140px] whitespace-nowrap pt-3">
+                    <td className="px-1.5 py-1.5 pt-2.5 text-right font-semibold text-blue-900 tabular-nums">
                       {line.toFixed(2)}
                     </td>
                     {!readOnly && (
-                      <td className="px-2 py-2 align-top w-[52px] text-center pt-2.5">
+                      <td className="px-1 py-1.5 text-center">
                         <button
                           onClick={() => removeItem(idx)}
-                          className="p-1.5 rounded-md hover:bg-rose-50 text-rose-500"
+                          className="p-1 rounded-md hover:bg-rose-50 text-rose-500"
                           title="Remove"
                         >
-                          <Trash2 size={14} />
+                          <Trash2 size={15} />
                         </button>
                       </td>
                     )}
@@ -717,6 +719,10 @@ export default function QuotationEditPage() {
 
 const inputCls =
   "w-full px-3 py-2 text-sm bg-blue-50 border border-blue-200 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 disabled:bg-slate-100 disabled:text-slate-500";
+
+// Compact variant for the line-items table.
+const itemInputCls =
+  "w-full px-2 py-1 text-[13px] bg-blue-50 border border-blue-200 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 disabled:bg-slate-100 disabled:text-slate-500";
 
 function Field({
   label,

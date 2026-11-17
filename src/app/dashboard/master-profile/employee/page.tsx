@@ -173,7 +173,7 @@ export default function EmployeeProfilePage() {
   ];
 
   return (
-    <div className="flex-1 flex flex-col p-6 space-y-6 max-w-7xl mx-auto w-full">
+    <div className="flex-1 flex flex-col py-3 space-y-4 w-full">
       {/* Toast Notification Banner */}
       {notification && (
         <div

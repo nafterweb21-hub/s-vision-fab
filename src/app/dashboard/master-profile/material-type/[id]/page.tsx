@@ -67,7 +67,7 @@ export default function EditMaterialTypePage() {
   }
 
   return (
-    <div className="flex-1 p-6 max-w-7xl mx-auto w-full bg-blue-50 ">
+    <div className="flex-1 p-4 w-full bg-blue-50">
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-blue-900 ">

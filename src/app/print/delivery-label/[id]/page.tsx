@@ -31,6 +31,15 @@ export default async function DeliveryLabelPrint({
   const poNumber = wo.customerPoRef || "-";
   const euc = "NIL";
 
+  // The vehicle lives on the Delivery Order, not the Work Order: use the most
+  // recent non-void DO that carries this work order.
+  const latestDoItem = await prisma.deliveryOrderItem.findFirst({
+    where: { workOrderNo: wo.workOrderNo, deliveryOrder: { status: { not: "Void" } } },
+    orderBy: { deliveryOrder: { createdAt: "desc" } },
+    select: { deliveryOrder: { select: { vehicleNo: true } } },
+  });
+  const vehicleNo = latestDoItem?.deliveryOrder.vehicleNo || "-";
+
   const formattedExpiry = expiryDate 
     ? new Date(expiryDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-')
     : "-";
@@ -162,7 +171,11 @@ export default async function DeliveryLabelPrint({
           <div className="info-value">{formattedExpiry}</div>
 
           <div className="info-label">EUC :</div>
-          <div className="info-value">{euc}</div>
+          <div className="info-value multi-col">
+            <span style={{ minWidth: '80px' }}>{euc}</span>
+            <span className="info-label">Vehicle No :</span>
+            <span>{vehicleNo}</span>
+          </div>
         </div>
 
         <div className="bottom-section">

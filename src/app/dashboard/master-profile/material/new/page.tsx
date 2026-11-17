@@ -102,7 +102,7 @@ export default function CreateMaterialPage() {
   };
 
   return (
-    <div className="flex-1 w-full mx-auto max-w-7xl space-y-6 bg-blue-50 p-6 text-blue-900 ">
+    <div className="flex-1 w-full space-y-4 bg-blue-50 p-4 text-blue-900">
       {/* Header */}
       <div className="flex items-center gap-4 border-b border-blue-200 pb-4">
         <Link

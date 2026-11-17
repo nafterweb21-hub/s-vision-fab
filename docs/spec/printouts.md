@@ -17,7 +17,7 @@ Universal rules for all printouts:
 
 Source module: Work Order. Form code `V-OPS-001 Rev F`.
 
-Shows: `WORK ORDER SHEET` heading, WO No (with **barcode** of the WO No), Customer, Delivery Date, Internal Quo No, Customer Ref No, Project Code, Job Description, Qty.
+Shows: `WORK ORDER SHEET` heading, WO No (with **barcode** of the WO No), Customer, Delivery Date, Internal Quo No, Customer Ref No, Project Code, Part Name, Job Description, Qty.
 
 ---
 

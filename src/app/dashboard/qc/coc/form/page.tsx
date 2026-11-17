@@ -237,7 +237,7 @@ export default function CertificateOfConformityFormPage() {
   const doWorkOrders = selectedDO ? selectedDO.items.map((i: any) => i.workOrder) : [];
 
   return (
-    <div className="p-6 lg:p-8 max-w-6xl mx-auto space-y-6 pb-24">
+    <div className="py-3 space-y-4 pb-24 w-full">
       <div className="flex items-center justify-between pb-6 border-b border-blue-200">
         <div className="flex items-center gap-4">
           <Link href="/dashboard/qc/coc" className="p-2 bg-blue-50 text-blue-500 hover:bg-blue-100 rounded-full transition-colors">
@@ -372,7 +372,14 @@ export default function CertificateOfConformityFormPage() {
             <label className="text-sm font-semibold text-blue-900">Work Order <span className="text-rose-500">*</span></label>
             <SearchableSelect
               value={formData.workOrderNo}
-              onChange={(e) => setFormData({ ...formData, workOrderNo: e.target.value })}
+              onChange={(e) => {
+                const picked = doWorkOrders.find((w: any) => w?.workOrderNo === e.target.value);
+                setFormData({
+                  ...formData,
+                  workOrderNo: e.target.value,
+                  partName: formData.partName || picked?.partName || "",
+                });
+              }}
               disabled={!isDraft || !formData.deliveryOrderId}
               className="w-full px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-60"
             >

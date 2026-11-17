@@ -228,10 +228,19 @@ export default function PurchaseOrderSubconApprovalListPage() {
 }
 
 function StatusPill({ status }: { status: string }) {
-  const cls =
-    status === "Pending For Approval"
-      ? "bg-sky-50 text-sky-700 border-sky-200"
-      : "bg-blue-50 text-blue-700 border-blue-200";
+  let cls = "bg-blue-50 text-blue-700 border-blue-200";
+  if (status === "Pending First Tier Approval") {
+    cls = "bg-amber-50 text-amber-800 border-amber-300";
+  } else if (status === "Pending Second Tier Approval") {
+    cls = "bg-indigo-50 text-indigo-800 border-indigo-300";
+  } else if (status === "Pending For Approval") {
+    cls = "bg-sky-50 text-sky-700 border-sky-200";
+  } else if (status === "Issued") {
+    cls = "bg-emerald-50 text-emerald-800 border-emerald-300";
+  } else if (status === "Rejected") {
+    cls = "bg-rose-50 text-rose-800 border-rose-300";
+  }
+
   return (
     <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${cls}`}>
       {status}

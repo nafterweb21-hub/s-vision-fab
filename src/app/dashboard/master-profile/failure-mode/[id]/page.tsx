@@ -87,7 +87,7 @@ export default function EditFailureModeProfilePage() {
   }
 
   return (
-    <div className="flex-1 flex flex-col p-6 space-y-6 max-w-3xl mx-auto w-full bg-blue-50">
+    <div className="flex-1 flex flex-col p-4 space-y-4 w-full bg-blue-50">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-blue-900 ">

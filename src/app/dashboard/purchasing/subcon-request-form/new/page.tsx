@@ -211,7 +211,7 @@ export default function NewSubconRequestFormPage() {
 
   // Form View
   return (
-    <div className="p-6 lg:p-8 space-y-6 max-w-5xl mx-auto">
+    <div className="py-3 space-y-4 w-full">
       <div className="flex items-center justify-between pb-6 border-b border-blue-200">
         <div>
           <div className="flex items-center gap-2 text-xs text-blue-400 font-semibold tracking-wider uppercase mb-1">

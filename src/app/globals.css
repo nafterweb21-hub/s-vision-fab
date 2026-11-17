@@ -137,6 +137,17 @@ input[type="number"] {
   appearance: textfield !important;
 }
 
+/*
+ * Let table text wrap inside the app shell instead of forcing sideways scroll.
+ * Unlayered on purpose so it wins over Tailwind's `whitespace-nowrap` utility
+ * (utilities live in a cascade layer). Print pages render outside <main>.
+ */
+main table th,
+main table td {
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+
 /* Print utility classes */
 @media print {
   .no-print {

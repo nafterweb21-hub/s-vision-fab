@@ -43,7 +43,7 @@ export default function NewPaymentTermPage() {
   };
 
   return (
-    <div className="flex-1 p-6 max-w-2xl mx-auto w-full bg-blue-50 text-blue-900 ">
+    <div className="flex-1 p-4 w-full bg-blue-50 text-blue-900">
       <div className="mb-6">
         <div className="flex items-center gap-2 text-sm text-blue-500 mb-2">
           <Link href="/dashboard/profiles/payment-term" className="hover:text-cyan-600 transition-colors">

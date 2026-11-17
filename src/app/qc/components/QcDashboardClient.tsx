@@ -388,6 +388,11 @@ export default function QcDashboardClient({ initialAwaiting, initialWorkOrders, 
                           </div>
                           <div className="font-bold text-blue-950 text-[10px] sm:text-xs md:text-base tracking-wide truncate">
                             {wo?.workOrderNo || "Unknown WO"}
+                            {ts.qcStatus === "Rejected" && (
+                              <span className="ml-1.5 align-middle px-1 md:px-1.5 py-0.5 bg-rose-50 text-rose-700 text-[7px] md:text-[9px] uppercase font-bold tracking-widest rounded border border-rose-100">
+                                Re-inspect
+                              </span>
+                            )}
                           </div>
                         </div>
                         <span className="px-1.5 md:px-2.5 py-0.5 md:py-1 bg-blue-50 text-blue-700 text-[7px] md:text-[9px] uppercase font-bold tracking-widest rounded md:rounded-lg border border-blue-100 shadow-inner shrink-0">

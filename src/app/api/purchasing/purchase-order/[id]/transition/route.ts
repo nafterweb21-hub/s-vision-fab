@@ -1,6 +1,16 @@
 import { NextResponse } from "next/server";
+import { copyPoShipTo } from "@/lib/po-ship-to";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/authz";
+import { determineApprovalRequirement } from "@/lib/po-approval-logic";
+
+const REVISABLE_STATUSES = [
+  "Pending For Approval",
+  "Pending First Tier Approval",
+  "Pending Second Tier Approval",
+  "Approved",
+  "Issued",
+];
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { error: authError } = await requirePermission("PURCHASE_ORDER", "e");
@@ -22,16 +32,25 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         if (po.status !== "Draft" && po.status !== "Rejected") {
           throw new Error("Only Draft or Rejected PO can be submitted.");
         }
-        if (!po.email) {
-          throw new Error("Cannot send for approval when supplier email is blank.");
-        }
-        // Ideally we should figure out approval tiers from ApprovalLevelProfile.
-        // For now, just change status.
+        // Supplier email is optional for every PO type.
+        
+        const moduleName = po.type === "SUBCON" ? "Purchase Order - Subcon" : "Purchase Order - Material";
+        const approvalReq = await determineApprovalRequirement(moduleName, Number(po.amountAfterTax || 0), tx);
+
         await tx.purchaseOrder.update({
           where: { id: po.id },
-          data: { status: "Pending For Approval" },
+          data: {
+            status: approvalReq.initialStatus,
+            approvalTier: approvalReq.requiredTiers,
+            firstApproverId: null,
+            firstApproverName: null,
+            firstApprovedAt: null,
+            secondApproverId: null,
+            secondApproverName: null,
+            secondApprovedAt: null,
+          },
         });
-        return NextResponse.json({ success: true, status: "Pending For Approval" });
+        return NextResponse.json({ success: true, status: approvalReq.initialStatus });
       }
 
       if (action === "void") {
@@ -46,11 +65,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       }
 
       if (action === "revise") {
-        if (po.status !== "Approved" && po.status !== "Issued") {
-          throw new Error("Only Approved or Issued PO can be revised.");
+        if (!REVISABLE_STATUSES.includes(po.status)) {
+          throw new Error("Only PO pending approval, Approved or Issued can be revised.");
         }
-        
-        // Mark current as Old Version
+
+        // Mark current as Old Version. A PO still pending approval drops out of
+        // the approval queue here, which cancels its in-flight approval; the new
+        // revision starts as Draft and goes through approval afresh on submit.
         await tx.purchaseOrder.update({
           where: { id: po.id },
           data: { status: "Old Version" },
@@ -75,8 +96,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             amountBeforeTax: po.amountBeforeTax,
             taxAmount: po.taxAmount,
             amountAfterTax: po.amountAfterTax,
+            roundOff: po.roundOff,
+            supplierGst: po.supplierGst,
+            type: po.type,
             millCertificate: po.millCertificate,
             certOfConformance: po.certOfConformance,
+            ...copyPoShipTo(po),
             contactPersonId: po.contactPersonId,
             telNo: po.telNo,
             faxNo: po.faxNo,
@@ -85,31 +110,66 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             purchaserId: po.purchaserId,
             receiveStatus: po.receiveStatus,
             remark: po.remark,
-            status: "Revised",
-            items: {
-              create: items.map(it => ({
-                fromMaterialProfile: it.fromMaterialProfile,
-                material: it.material,
-                description: it.description,
-                supplierMaterialNo: it.supplierMaterialNo,
-                shape: it.shape,
-                size: it.size,
-                quantity: it.quantity,
-                poUomId: it.poUomId,
-                unitPrice: it.unitPrice,
-                amount: it.amount,
-                conversion: it.conversion,
-                internalUomId: it.internalUomId,
-                internalQuantity: it.internalQuantity,
-                deliveryDate: it.deliveryDate,
-                remark: it.remark,
-                materialProfileId: it.materialProfileId,
-                purchaseRequisitionItemId: it.purchaseRequisitionItemId,
-                sortOrder: it.sortOrder,
-              })),
-            }
+            status: "Draft",
           }
         });
+
+        // Copy lines one by one so each old line id maps to its new copy.
+        const itemIdMap = new Map<string, string>();
+        for (const it of items) {
+          const copy = await tx.purchaseOrderItem.create({
+            data: {
+              purchaseOrderId: newPo.id,
+              fromMaterialProfile: it.fromMaterialProfile,
+              material: it.material,
+              description: it.description,
+              supplierMaterialNo: it.supplierMaterialNo,
+              shape: it.shape,
+              size: it.size,
+              quantity: it.quantity,
+              poUomId: it.poUomId,
+              unitPrice: it.unitPrice,
+              amount: it.amount,
+              taxTypeId: it.taxTypeId,
+              taxRate: it.taxRate,
+              taxAmount: it.taxAmount,
+              hsnCode: it.hsnCode,
+              hsnDescription: it.hsnDescription,
+              conversion: it.conversion,
+              internalUomId: it.internalUomId,
+              internalQuantity: it.internalQuantity,
+              deliveryDate: it.deliveryDate,
+              remark: it.remark,
+              materialProfileId: it.materialProfileId,
+              purchaseRequisitionItemId: it.purchaseRequisitionItemId,
+              sortOrder: it.sortOrder,
+              masterMainProcessId: it.masterMainProcessId,
+              masterRoutingProcessId: it.masterRoutingProcessId,
+              woRoutingProcessId: it.woRoutingProcessId,
+              hardness: it.hardness,
+              thickness: it.thickness,
+            },
+          });
+          itemIdMap.set(it.id, copy.id);
+        }
+
+        // Move Subcon Request Forms (and their return/reject tracking) to the
+        // new revision so they follow the live PO rather than the Old Version.
+        for (const [oldItemId, newItemId] of itemIdMap) {
+          await tx.subconRequestForm.updateMany({
+            where: { purchaseOrderItemId: oldItemId },
+            data: { purchaseOrderItemId: newItemId },
+          });
+        }
+        await tx.subconReturnTracking.updateMany({
+          where: { purchaseOrderId: po.id },
+          data: { purchaseOrderId: newPo.id },
+        });
+        await tx.subconRejectTracking.updateMany({
+          where: { purchaseOrderId: po.id },
+          data: { purchaseOrderId: newPo.id },
+        });
+
         return NextResponse.json(newPo);
       }
 

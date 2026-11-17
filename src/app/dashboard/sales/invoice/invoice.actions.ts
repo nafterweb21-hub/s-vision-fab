@@ -304,7 +304,8 @@ export async function getDOItemsForInvoice(doIds: string[]) {
         uomId: item.uomId,
         unitPrice: soUnitPrice,
         amount,
-        remark: "",
+        // Carry the DO line's description onto the invoice line's description field
+        remark: item.description || "",
         hsnCode,
         taxTypeId,
         taxRate,

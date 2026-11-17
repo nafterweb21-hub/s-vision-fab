@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import PrintToolbar from "@/app/print/PrintToolbar";
 import EInvoiceQr from "./EInvoiceQr";
 import { resolveSellerStateCode, resolvePosStateCode, resolveStateCode, GST_STATE_CODES, roundTo2 } from "@/lib/gst";
+import { hasDifferentShipTo } from "@/lib/invoice-ship-to";
 
 export const dynamic = "force-dynamic";
 
@@ -144,7 +145,8 @@ export default async function PrintInvoicePage(
   const customerPlace = inv.customer.placeOfSupply || "";
   const customerPhone = inv.tel || inv.contactPerson?.telNo || inv.contactPerson?.mobileNo || "-";
 
-  // Consignee details (Ship To)
+  // Consignee details (Ship To) — only printed when the invoice has a separate ship-to
+  const showShipTo = hasDifferentShipTo(inv);
   const consigneeName = (inv.consigneeName && inv.consigneeName.trim()) ? inv.consigneeName.trim() : customerName;
   const consigneeGstin = (inv.consigneeGstin && inv.consigneeGstin.trim()) ? inv.consigneeGstin.trim() : customerGstin;
   const consigneePhone = (inv.consigneePhone && inv.consigneePhone.trim()) ? inv.consigneePhone.trim() : customerPhone;
@@ -243,8 +245,9 @@ export default async function PrintInvoicePage(
     computedSgstTotal += lineSgst;
     computedIgstTotal += lineIgst;
 
+    // Club lines by tax rate; the HSN cell lists every distinct HSN in the group.
     const hsn = (it.hsnCode || "").trim() || "—";
-    const key = `${hsn}_${rate}`;
+    const key = String(rate);
     if (!hsnGroupsMap.has(key)) {
       hsnGroupsMap.set(key, {
         hsn,
@@ -256,6 +259,10 @@ export default async function PrintInvoicePage(
       });
     }
     const grp = hsnGroupsMap.get(key)!;
+    const groupHsns = grp.hsn.split(", ");
+    if (hsn !== "—" && !groupHsns.includes(hsn)) {
+      grp.hsn = [...groupHsns.filter((h) => h !== "—"), hsn].join(", ");
+    }
     grp.taxable = roundTo2(grp.taxable + lineTaxable);
     grp.cgst = roundTo2(grp.cgst + lineCgst);
     grp.sgst = roundTo2(grp.sgst + lineSgst);
@@ -308,18 +315,76 @@ export default async function PrintInvoicePage(
   const uniqueRates = Array.from(new Set(itemDetails.map(it => it.rate)));
   const singleRate = uniqueRates.length === 1 ? uniqueRates[0] : null;
 
+  // Paginate items ourselves so the header + party-details section prints on every page.
+  // (Browsers won't repeat a <thead> taller than ~1/4 of the page, which this section is.)
+  // Capacity is measured in ~17px text lines; long names and remarks take extra lines.
+  const itemLines = (it: { displayName: string; remark?: string | null }) => {
+    const nameLines = Math.max(1, Math.ceil(it.displayName.length / 55));
+    const remarkLines = (it.remark?.trim() || "")
+      .split("\n")
+      .filter((l, i, arr) => arr.length > 1 || l)
+      .reduce((n, l) => n + Math.max(1, Math.ceil(l.length / 60)), 0);
+    return nameLines + remarkLines;
+  };
+  const hasIrnBlock = inv.einvoiceStatus === "Generated" && Boolean(inv.irn);
+  const hasFooterImage = Boolean(settings?.enableInvoiceFooter && settings?.invoiceFooterUrl);
+  // Last page also carries the totals, HSN summary and bank/signature block.
+  // Kept conservative: blank space below the items is filled by CSS (the table stretches), not by these numbers.
+  const reservedLines = (hasIrnBlock ? 6 : 0) + (hasFooterImage ? 9 : 0);
+  const LAST_PAGE_LINES = Math.max(6, 16 - reservedLines);
+  const FULL_PAGE_LINES = Math.max(10, 34 - reservedLines);
+
+  type ItemPage = { start: number; items: typeof itemDetails; lines: number };
+  const itemPages: ItemPage[] = [];
+  {
+    let cursor = 0;
+    const linesFrom = (from: number) => itemDetails.slice(from).reduce((n, it) => n + itemLines(it), 0);
+    while (cursor < itemDetails.length && linesFrom(cursor) > LAST_PAGE_LINES) {
+      const page: ItemPage = { start: cursor, items: [], lines: 0 };
+      // Fill a continuation page, always leaving at least one item for the last page.
+      while (cursor < itemDetails.length - 1) {
+        const l = itemLines(itemDetails[cursor]);
+        if (page.items.length > 0 && page.lines + l > FULL_PAGE_LINES) break;
+        page.items.push(itemDetails[cursor]);
+        page.lines += l;
+        cursor++;
+      }
+      itemPages.push(page);
+    }
+    const rest = itemDetails.slice(cursor);
+    itemPages.push({ start: cursor, items: rest, lines: rest.reduce((n, it) => n + itemLines(it), 0) });
+  }
+
+
+  const pageStyle = settings?.enableInvoiceBackground && settings?.invoiceBackgroundUrl
+    ? {
+        backgroundImage: `url('${settings.invoiceBackgroundUrl.startsWith("/uploads") ? `/api${settings.invoiceBackgroundUrl}` : settings.invoiceBackgroundUrl}')`,
+        backgroundSize: "100% 100%",
+        backgroundRepeat: "no-repeat",
+        backgroundPosition: "center",
+      }
+    : {};
+
   const invoiceTitle = inv.invoiceType === "Credit Note" 
     ? "CREDIT NOTE" 
     : inv.invoiceType === "Debit Note" 
       ? "DEBIT NOTE" 
       : "TAX INVOICE";
 
+  const footerImage = settings?.enableInvoiceFooter && settings?.invoiceFooterUrl ? (
+    <img
+      src={settings.invoiceFooterUrl.startsWith("/uploads") ? `/api${settings.invoiceFooterUrl}` : settings.invoiceFooterUrl}
+      alt="Invoice Footer"
+      style={{ maxWidth: "100%", height: "auto", maxHeight: "150px", display: "block", margin: "0 auto" }}
+    />
+  ) : null;
+
   return (
     <>
       <style>{`
         @page { size: A4; margin: 0; }
-        body { margin: 0; padding: 0; background: #fff; color: #111; font-family: var(--print-font); }
-        .page { width: 210mm; min-height: 297mm; padding: 12mm 12mm; box-sizing: border-box; position: relative; }
+        body { margin: 0; padding: 0; background: #fff; color: #000; font-family: Arial, Helvetica, sans-serif; }
+        .page { width: 210mm; min-height: 297mm; padding: 10mm 16mm; box-sizing: border-box; position: relative; }
         .print-actions { position: fixed; top: 12px; right: 12px; z-index: 100; }
         @media screen {
           body { background: #f1f1f1; }
@@ -327,71 +392,93 @@ export default async function PrintInvoicePage(
           .print-actions button { padding: 8px 14px; font-size: 13px; font-weight: 600; background: #c69200; color: #fff; border: 0; border-radius: 6px; cursor: pointer; }
         }
         @media print { .print-actions { display: none; } }
-        
-        .header { display: flex; justify-content: space-between; margin-bottom: 5mm; }
-        .header-left { width: 40%; }
-        .header-left img { max-width: 100%; height: auto; max-height: 60px; }
-        .tagline { font-size: 11px; font-weight: 600; margin-top: 2px; }
-        .header-right { width: 55%; text-align: left; }
-        .company-name { color: #d00000; font-size: 20px; font-weight: bold; margin-bottom: 4px; }
-        .company-details { font-size: 10px; line-height: 1.3; font-weight: 500; }
-        
-        .main-box { border: 1.5px solid #63a0d4; border-radius: 0; }
-        
-        .title-bar { display: flex; align-items: center; justify-content: space-between; padding: 4px 8px; border-bottom: 1.5px solid #63a0d4; }
+
+        /* Each .page is one printed sheet with its own header section (items are paginated server-side). */
+        .invoice-footer { margin-top: 12px; text-align: center; width: 100%; }
+        @media print {
+          @page { size: A4; margin: 10mm 16mm; }
+          .invoice-footer { position: fixed; left: 0; right: 0; bottom: 0; margin: 0; }
+          /* One printed sheet: A4 height minus the 10mm top/bottom @page margins (1mm slack). */
+          .page { width: auto; min-height: 276mm; padding: 0; break-after: page; }
+          .page:last-of-type { break-after: auto; }
+          /* The footer image is fixed to the bottom of every sheet; keep content clear of it. */
+          .page.has-footer { padding-bottom: 42mm; }
+          .items-table tr { break-inside: avoid; }
+          .footer-section { break-inside: avoid; }
+          .items-table .summary-rows { break-inside: avoid; }
+        }
+
+        .page { font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #000; }
+
+        .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 3mm; }
+        .header-left { width: 42%; }
+        .header-left img { max-width: 100%; height: auto; max-height: 62px; }
+        .tagline { font-size: 10px; font-weight: bold; letter-spacing: 0.5px; margin-top: 2px; }
+        .header-right { width: 54%; text-align: left; }
+        .company-name { color: #000; font-size: 22px; font-weight: bold; margin-bottom: 3px; }
+        .company-details { font-size: 10.5px; line-height: 1.35; }
+
+        /* clone: when the box splits across printed pages, each page's piece gets its own
+           top and bottom border instead of being left open at the page break. */
+        .main-box { border: 1px solid #000; border-top: none; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+        /* Sheet is a column: header, top-box, then main-box takes the rest. Inside it the items table
+           grows, and the extra height goes to the filler row (every other row is pinned to 1px, which
+           still grows to fit its content), so the column rules run down to the totals. */
+        .page { display: flex; flex-direction: column; }
+        .main-box { flex: 1 1 auto; display: flex; flex-direction: column; }
+        .main-box > .items-table { flex: 1 1 auto; }
+        .items-table tr { height: 1px; }
+        .items-table tr.filler-row { height: auto; }
+        /* Repeating top section (title bar + party details) sits above main-box and carries the box's top edge;
+           its info grid's bottom border separates it from the items. */
+        .top-box { border: 1px solid #000; border-bottom: none; }
+        @media print { .top-box { break-inside: avoid; } }
+
+        .title-bar { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 3px 6px; border-bottom: 1px solid #000; }
         .title-bar .gstin { font-weight: bold; font-size: 14px; }
-        .title-bar .invoice-title { color: #0070c0; font-size: 16px; font-weight: bold; }
-        .title-bar .original { font-size: 10px; font-weight: bold; }
-        
-        .info-grid-3 { display: grid; grid-template-columns: 36% 36% 28%; border-bottom: 1.5px solid #63a0d4; }
-        .col-buyer { border-right: 1.5px solid #63a0d4; padding: 0; }
-        .col-consignee { border-right: 1.5px solid #63a0d4; padding: 0; }
-        .col-dispatch { padding: 0; }
-        
-        .col-header { background: #d9e8f5; font-size: 10px; font-weight: bold; text-align: center; padding: 3px 4px; border-bottom: 1px solid #63a0d4; }
-        .info-subtable { width: 100%; border-collapse: collapse; font-size: 9.5px; }
-        .info-subtable td { padding: 2.5px 5px; vertical-align: top; font-weight: 600; line-height: 1.25; }
-        .info-subtable td:first-child { font-weight: bold; width: 52px; color: #111; }
-        
-        .dispatch-table { width: 100%; border-collapse: collapse; font-size: 9.5px; }
-        .dispatch-table td { padding: 2.5px 5px; vertical-align: top; font-weight: 600; line-height: 1.25; }
-        .dispatch-table td:first-child { font-weight: bold; width: 72px; color: #111; }
-        
-        .items-table { width: 100%; border-collapse: collapse; text-align: center; font-size: 10px; }
-        .items-table th { background: #e6f2ff; border-bottom: 1.5px solid #63a0d4; border-right: 1.5px solid #63a0d4; padding: 4px; font-weight: bold; }
+        .title-bar .invoice-title { font-size: 17px; font-weight: bold; letter-spacing: 0.5px; }
+        .title-bar .original { justify-self: end; font-size: 10px; font-weight: bold; border: 1px solid #000; padding: 2px 6px; }
+
+        .info-grid-3 { display: grid; grid-template-columns: 34% 33% 33%; border-bottom: 1px solid #000; }
+        .info-grid-3.no-ship-to { grid-template-columns: 52% 48%; }
+        .col-buyer { border-right: 1px solid #000; }
+        .col-consignee { border-right: 1px solid #000; }
+
+        .col-header { font-size: 11px; font-weight: bold; text-align: center; padding: 2px 4px; border-bottom: 1px solid #000; }
+        .info-subtable { width: 100%; border-collapse: collapse; font-size: 10.5px; }
+        .info-subtable td { padding: 2px 5px; vertical-align: top; line-height: 1.3; }
+        .info-subtable td:first-child { width: 58px; }
+
+        .dispatch-table { width: 100%; border-collapse: collapse; font-size: 10.5px; }
+        .dispatch-table td { padding: 3px 5px; vertical-align: top; line-height: 1.3; border-bottom: 1px solid #000; }
+        .dispatch-table td:nth-child(odd) { width: 60px; border-right: 1px solid #000; }
+        .dispatch-table td:nth-child(2) { border-right: 1px solid #000; }
+        .dispatch-table tr:last-child td { border-bottom: none; }
+
+        .items-table { width: 100%; border-collapse: collapse; text-align: center; font-size: 10.5px; }
+        .items-table th { border-bottom: 1px solid #000; border-right: 1px solid #000; padding: 3px; font-weight: bold; }
         .items-table th:last-child { border-right: none; }
-        .items-table td { border-right: 1.5px solid #63a0d4; padding: 4px; vertical-align: top; font-weight: 600; }
+        .items-table td { border-right: 1px solid #000; padding: 2px 4px; vertical-align: top; }
         .items-table td:last-child { border-right: none; }
-        
+
         .items-table .text-left { text-align: left; }
         .items-table .text-right { text-align: right; }
         .items-table .font-bold { font-weight: bold; }
-        
-        .items-table tbody tr.item-row td { padding-bottom: 2px; padding-top: 4px; }
-        .items-table tbody tr.subtotal-row td { padding-top: 4px; padding-bottom: 2px; }
+
+        .items-table tbody tr.item-row td { padding-top: 2px; padding-bottom: 2px; line-height: 1.3; }
+        .items-table tbody tr.subtotal-row td { padding-top: 6px; padding-bottom: 2px; }
+        .items-table tbody tr.subtotal-row td:last-child { border-top: 1px solid #000; }
         .items-table tbody tr.tax-row td { padding-top: 2px; padding-bottom: 2px; }
-        
-        .totals-row td { border-top: 1.5px solid #63a0d4; padding: 4px; font-weight: bold; background: #e6f2ff; }
-        
-        .has-bg .items-table th,
-        .has-bg .totals-row td,
-        .has-bg .bg-\\[\\#f7fbff\\] {
-          background-color: transparent !important;
-        }
+
+        .totals-row td { border-top: 1px solid #000; padding: 4px; font-weight: bold; }
       `}</style>
 
       <PrintToolbar doc="invoice" id={id} label="Print Invoice" />
 
-      <div className={`page ${settings?.enableInvoiceBackground && settings?.invoiceBackgroundUrl ? "has-bg" : ""}`} style={
-        settings?.enableInvoiceBackground && settings?.invoiceBackgroundUrl
-          ? {
-              backgroundImage: `url('${settings.invoiceBackgroundUrl.startsWith("/uploads") ? `/api${settings.invoiceBackgroundUrl}` : settings.invoiceBackgroundUrl}')`,
-              backgroundSize: "100% 100%",
-              backgroundRepeat: "no-repeat",
-              backgroundPosition: "center",
-            }
-          : {}
-      }>
+      {itemPages.map((pg, pageIdx) => {
+        const isLastPage = pageIdx === itemPages.length - 1;
+        return (
+      <div key={pageIdx} className={`page ${settings?.enableInvoiceBackground && settings?.invoiceBackgroundUrl ? "has-bg" : ""}${hasFooterImage ? " has-footer" : ""}`} style={pageStyle}>
         <div className="header">
           <div className="header-left">
             <img 
@@ -412,10 +499,8 @@ export default async function PrintInvoicePage(
             </div>
           </div>
         </div>
-        
-        <div style={{ borderBottom: "2px solid #000", marginBottom: "4px" }}></div>
 
-        <div className="main-box">
+        <div className="top-box">
           <div className="title-bar">
             <div className="gstin">GSTIN : {gstRegistrationNo}</div>
             <div className="invoice-title">{invoiceTitle}</div>
@@ -430,8 +515,8 @@ export default async function PrintInvoicePage(
                 alignItems: "center",
                 gap: "8px",
                 padding: "6px 8px",
-                borderBottom: "1.5px solid #63a0d4",
-                fontSize: "10px",
+                borderBottom: "1px solid #000",
+                fontSize: "11px",
               }}
             >
               <div style={{ lineHeight: 1.5 }}>
@@ -453,24 +538,26 @@ export default async function PrintInvoicePage(
             </div>
           )}
 
-          <div className="info-grid-3">
-            {/* Column 1: Details of Buyer | Billed to : */}
+          <div className={showShipTo ? "info-grid-3" : "info-grid-3 no-ship-to"}>
+            {/* Column 1: Customer (Billed to) */}
             <div className="col-buyer">
-              <div className="col-header">Details of Buyer | Billed to :</div>
+              <div className="col-header">{showShipTo ? "Customer Detail | Billed to" : "Customer Detail"}</div>
               <table className="info-subtable">
                 <tbody>
                   <tr>
-                    <td>Name</td>
-                    <td>{customerName}</td>
+                    <td>M/S</td>
+                    <td className="font-bold">{customerName}</td>
                   </tr>
                   <tr>
                     <td>Address</td>
                     <td style={{ whiteSpace: "pre-line" }}>{billToAddress}</td>
                   </tr>
-                  <tr>
-                    <td>Phone</td>
-                    <td>{customerPhone}</td>
-                  </tr>
+                  {customerPhone && customerPhone !== "-" && (
+                    <tr>
+                      <td>Phone</td>
+                      <td>{customerPhone}</td>
+                    </tr>
+                  )}
                   <tr>
                     <td>GSTIN</td>
                     <td>{customerGstin || "-"}</td>
@@ -487,14 +574,15 @@ export default async function PrintInvoicePage(
               </table>
             </div>
 
-            {/* Column 2: Details of Consignee | Shipped to : */}
+            {/* Column 2: Consignee (Shipped to) — only when a separate ship-to exists */}
+            {showShipTo && (
             <div className="col-consignee">
-              <div className="col-header">Details of Consignee | Shipped to :</div>
+              <div className="col-header">Consignee Detail | Shipped to</div>
               <table className="info-subtable">
                 <tbody>
                   <tr>
-                    <td>Name</td>
-                    <td>{consigneeName}</td>
+                    <td>M/S</td>
+                    <td className="font-bold">{consigneeName}</td>
                   </tr>
                   <tr>
                     <td>Address</td>
@@ -519,6 +607,7 @@ export default async function PrintInvoicePage(
                 </tbody>
               </table>
             </div>
+            )}
 
             {/* Column 3: Invoice & Dispatch Details */}
             <div className="col-dispatch">
@@ -527,38 +616,32 @@ export default async function PrintInvoicePage(
                   <tr>
                     <td>Invoice No.</td>
                     <td className="font-bold">{inv.invoiceNo?.split("-R")[0]}</td>
-                  </tr>
-                  <tr>
                     <td>Invoice Date</td>
                     <td>{fmtDate(inv.invoiceDate)}</td>
                   </tr>
                   <tr>
+                    <td>P.O. No.</td>
+                    <td>{inv.poNo || "-"}</td>
                     <td>Due Date</td>
                     <td>{fmtDate(inv.dueDate)}</td>
                   </tr>
                   <tr>
                     <td>Challan No.</td>
                     <td>{challanNo || "-"}</td>
-                  </tr>
-                  <tr>
                     <td>Challan Date</td>
                     <td>{challanDate || "-"}</td>
                   </tr>
                   <tr>
-                    <td>P.O. No.</td>
-                    <td>{inv.poNo || "-"}</td>
+                    <td>Vehicle No.</td>
+                    <td colSpan={3}>{inv.vehicleNumber || "-"}</td>
                   </tr>
-                  {inv.vehicleNumber ? (
-                    <tr>
-                      <td>Vehicle No.</td>
-                      <td>{inv.vehicleNumber}</td>
-                    </tr>
-                  ) : null}
                 </tbody>
               </table>
             </div>
           </div>
+        </div>
 
+        <div className="main-box">
           <table className="items-table">
             <thead>
               <tr>
@@ -571,17 +654,39 @@ export default async function PrintInvoicePage(
               </tr>
             </thead>
             <tbody>
-              {itemDetails.map((it, idx) => (
+              {pg.items.map((it, idx) => (
                 <tr key={it.id} className="item-row">
-                  <td>{idx + 1}</td>
-                  <td className="text-left font-bold">{it.displayName}</td>
+                  <td>{pg.start + idx + 1}</td>
+                  <td className="text-left">
+                    <div>{it.displayName}</div>
+                    {it.remark?.trim() && (
+                      <div style={{ whiteSpace: "pre-line", fontWeight: "normal", fontSize: "10px", marginTop: "1px" }}>
+                        {it.remark.trim()}
+                      </div>
+                    )}
+                  </td>
                   <td>{it.hsnCode || "—"}</td>
                   <td className="text-right">{fmt(it.lineQty)} {it.uom?.uomName || ""}</td>
                   <td className="text-right">{fmt(it.lineUnitPrice)}</td>
-                  <td className="text-right bg-[#f7fbff]">{fmt(it.lineTaxable)}</td>
+                  <td className="text-right">{fmt(it.lineTaxable)}</td>
                 </tr>
               ))}
-              
+            {!isLastPage ? (
+            <>
+              <tr className="filler-row">
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+              </tr>
+              <tr className="totals-row">
+                <td colSpan={6} className="text-right">Continued on next page…</td>
+              </tr>
+            </>
+            ) : (
+            <>
               {/* Subtotal row */}
               <tr className="subtotal-row">
                 <td></td>
@@ -589,7 +694,7 @@ export default async function PrintInvoicePage(
                 <td></td>
                 <td></td>
                 <td></td>
-                <td className="text-right font-bold border-t-2 border-[#63a0d4] bg-[#f7fbff]">{fmt(totalTaxable)}</td>
+                <td className="text-right font-bold">{fmt(totalTaxable)}</td>
               </tr>
               
               {/* Tax rows based on Intra vs Inter state supply */}
@@ -597,35 +702,35 @@ export default async function PrintInvoicePage(
                 <>
                   <tr className="tax-row">
                     <td></td>
-                    <td className="text-right font-bold italic pr-2">
+                    <td className="text-right pr-2">
                       CGST {singleRate !== null ? `(${fmt(singleRate / 2)}%)` : ""}
                     </td>
                     <td></td>
                     <td></td>
                     <td></td>
-                    <td className="text-right bg-[#f7fbff]">{fmt(totalCgst)}</td>
+                    <td className="text-right">{fmt(totalCgst)}</td>
                   </tr>
                   <tr className="tax-row">
                     <td></td>
-                    <td className="text-right font-bold italic pr-2">
+                    <td className="text-right pr-2">
                       SGST {singleRate !== null ? `(${fmt(singleRate / 2)}%)` : ""}
                     </td>
                     <td></td>
                     <td></td>
                     <td></td>
-                    <td className="text-right bg-[#f7fbff]">{fmt(totalSgst)}</td>
+                    <td className="text-right">{fmt(totalSgst)}</td>
                   </tr>
                 </>
               ) : (
                 <tr className="tax-row">
                   <td></td>
-                  <td className="text-right font-bold italic pr-2">
+                  <td className="text-right pr-2">
                     IGST {singleRate !== null ? `(${fmt(singleRate)}%)` : ""}
                   </td>
                   <td></td>
                   <td></td>
                   <td></td>
-                  <td className="text-right bg-[#f7fbff]">{fmt(totalIgst)}</td>
+                  <td className="text-right">{fmt(totalIgst)}</td>
                 </tr>
               )}
               
@@ -633,23 +738,23 @@ export default async function PrintInvoicePage(
               {roundOff !== 0 && (
                 <tr className="tax-row">
                   <td></td>
-                  <td className="text-right font-bold italic pr-2">
+                  <td className="text-right pr-2">
                     Round Off
                   </td>
                   <td></td>
                   <td></td>
                   <td></td>
-                  <td className="text-right bg-[#f7fbff]">{fmt(roundOff)}</td>
+                  <td className="text-right">{fmt(roundOff)}</td>
                 </tr>
               )}
               
-              <tr style={{ height: "30px" }}>
+              <tr className="filler-row">
                 <td></td>
                 <td></td>
                 <td></td>
                 <td></td>
                 <td></td>
-                <td className="bg-[#f7fbff]"></td>
+                <td ></td>
               </tr>
               
               <tr className="totals-row">
@@ -658,101 +763,104 @@ export default async function PrintInvoicePage(
                 <td></td>
                 <td className="text-right">{currencySymbol} {fmt(grandTotal)}</td>
               </tr>
+            </>
+            )}
             </tbody>
           </table>
 
+          {isLastPage && (
           <div className="footer-section">
-            <div style={{ borderTop: "1.5px solid #63a0d4", borderBottom: "1.5px solid #63a0d4", padding: "4px", display: "flex", justifyContent: "space-between" }}>
+            <div style={{ borderTop: "1px solid #000", borderBottom: "1px solid #000", padding: "4px", display: "flex", justifyContent: "space-between" }}>
               <div>
                 <div>Total in words</div>
                 <div className="font-bold uppercase">{currencyToWords(grandTotal, currencyCode)}</div>
               </div>
-              <div className="font-bold text-[9px] pr-2 mt-2">(E &amp; O.E.)</div>
+              <div className="font-bold text-[10px] pr-2 mt-2">(E &amp; O.E.)</div>
             </div>
 
             {isInterState ? (
-              <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "center", fontSize: "10px", borderBottom: "1.5px solid #63a0d4" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "center", fontSize: "11px", borderBottom: "1px solid #000" }}>
                 <thead>
                   <tr>
-                    <th rowSpan={2} style={{ width: "34%", borderRight: "1.5px solid #63a0d4", borderBottom: "1.5px solid #63a0d4", padding: "4px" }}>HSN / SAC</th>
-                    <th rowSpan={2} style={{ width: "24%", borderRight: "1.5px solid #63a0d4", borderBottom: "1.5px solid #63a0d4", padding: "4px" }}>Taxable Value</th>
-                    <th colSpan={2} style={{ width: "30%", borderRight: "1.5px solid #63a0d4", borderBottom: "1.5px solid #63a0d4", padding: "4px" }}>IGST</th>
-                    <th rowSpan={2} style={{ width: "12%", borderBottom: "1.5px solid #63a0d4", padding: "4px" }}>Total</th>
+                    <th rowSpan={2} style={{ width: "34%", borderRight: "1px solid #000", borderBottom: "1px solid #000", padding: "4px" }}>HSN / SAC</th>
+                    <th rowSpan={2} style={{ width: "24%", borderRight: "1px solid #000", borderBottom: "1px solid #000", padding: "4px" }}>Taxable Value</th>
+                    <th colSpan={2} style={{ width: "30%", borderRight: "1px solid #000", borderBottom: "1px solid #000", padding: "4px" }}>IGST</th>
+                    <th rowSpan={2} style={{ width: "12%", borderBottom: "1px solid #000", padding: "4px" }}>Total</th>
                   </tr>
                   <tr>
-                    <th style={{ borderRight: "1.5px solid #63a0d4", borderBottom: "1.5px solid #63a0d4", padding: "4px" }}>%</th>
-                    <th style={{ borderRight: "1.5px solid #63a0d4", borderBottom: "1.5px solid #63a0d4", padding: "4px" }}>Amount</th>
+                    <th style={{ borderRight: "1px solid #000", borderBottom: "1px solid #000", padding: "4px" }}>%</th>
+                    <th style={{ borderRight: "1px solid #000", borderBottom: "1px solid #000", padding: "4px" }}>Amount</th>
                   </tr>
                 </thead>
                 <tbody>
                   {hsnRows.map((row, idx) => (
                     <tr key={idx}>
-                      <td style={{ borderRight: "1.5px solid #63a0d4", borderBottom: "1.5px solid #63a0d4", padding: "4px" }}>{row.hsn}</td>
-                      <td style={{ borderRight: "1.5px solid #63a0d4", borderBottom: "1.5px solid #63a0d4", padding: "4px" }} className="text-right">{fmt(row.taxable)}</td>
-                      <td style={{ borderRight: "1.5px solid #63a0d4", borderBottom: "1.5px solid #63a0d4", padding: "4px" }} className="text-right">{fmt(row.rate)}</td>
-                      <td style={{ borderRight: "1.5px solid #63a0d4", borderBottom: "1.5px solid #63a0d4", padding: "4px" }} className="text-right">{fmt(row.igst)}</td>
-                      <td style={{ borderBottom: "1.5px solid #63a0d4", padding: "4px" }} className="text-right">{fmt(row.igst)}</td>
+                      <td style={{ borderRight: "1px solid #000", borderBottom: "1px solid #000", padding: "4px" }}>{row.hsn}</td>
+                      <td style={{ borderRight: "1px solid #000", borderBottom: "1px solid #000", padding: "4px" }} className="text-right">{fmt(row.taxable)}</td>
+                      <td style={{ borderRight: "1px solid #000", borderBottom: "1px solid #000", padding: "4px" }} className="text-right">{fmt(row.rate)}</td>
+                      <td style={{ borderRight: "1px solid #000", borderBottom: "1px solid #000", padding: "4px" }} className="text-right">{fmt(row.igst)}</td>
+                      <td style={{ borderBottom: "1px solid #000", padding: "4px" }} className="text-right">{fmt(row.igst)}</td>
                     </tr>
                   ))}
                   <tr>
-                    <td style={{ borderRight: "1.5px solid #63a0d4", padding: "4px" }} className="text-right font-bold pr-4">Total</td>
-                    <td style={{ borderRight: "1.5px solid #63a0d4", padding: "4px" }} className="text-right font-bold">{fmt(totalTaxable)}</td>
-                    <td style={{ borderRight: "1.5px solid #63a0d4", padding: "4px" }}></td>
-                    <td style={{ borderRight: "1.5px solid #63a0d4", padding: "4px" }} className="text-right font-bold">{fmt(totalIgst)}</td>
+                    <td style={{ borderRight: "1px solid #000", padding: "4px" }} className="text-right font-bold pr-4">Total</td>
+                    <td style={{ borderRight: "1px solid #000", padding: "4px" }} className="text-right font-bold">{fmt(totalTaxable)}</td>
+                    <td style={{ borderRight: "1px solid #000", padding: "4px" }}></td>
+                    <td style={{ borderRight: "1px solid #000", padding: "4px" }} className="text-right font-bold">{fmt(totalIgst)}</td>
                     <td style={{ padding: "4px" }} className="text-right font-bold">{fmt(totalIgst)}</td>
                   </tr>
                 </tbody>
               </table>
             ) : (
-              <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "center", fontSize: "10px", borderBottom: "1.5px solid #63a0d4" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "center", fontSize: "11px", borderBottom: "1px solid #000" }}>
                 <thead>
                   <tr>
-                    <th rowSpan={2} style={{ width: "25%", borderRight: "1.5px solid #63a0d4", borderBottom: "1.5px solid #63a0d4", padding: "4px" }}>HSN / SAC</th>
-                    <th rowSpan={2} style={{ width: "15%", borderRight: "1.5px solid #63a0d4", borderBottom: "1.5px solid #63a0d4", padding: "4px" }}>Taxable Value</th>
-                    <th colSpan={2} style={{ width: "24%", borderRight: "1.5px solid #63a0d4", borderBottom: "1.5px solid #63a0d4", padding: "4px" }}>CGST</th>
-                    <th colSpan={2} style={{ width: "24%", borderRight: "1.5px solid #63a0d4", borderBottom: "1.5px solid #63a0d4", padding: "4px" }}>SGST</th>
-                    <th rowSpan={2} style={{ width: "12%", borderBottom: "1.5px solid #63a0d4", padding: "4px" }}>Total</th>
+                    <th rowSpan={2} style={{ width: "25%", borderRight: "1px solid #000", borderBottom: "1px solid #000", padding: "4px" }}>HSN / SAC</th>
+                    <th rowSpan={2} style={{ width: "15%", borderRight: "1px solid #000", borderBottom: "1px solid #000", padding: "4px" }}>Taxable Value</th>
+                    <th colSpan={2} style={{ width: "24%", borderRight: "1px solid #000", borderBottom: "1px solid #000", padding: "4px" }}>CGST</th>
+                    <th colSpan={2} style={{ width: "24%", borderRight: "1px solid #000", borderBottom: "1px solid #000", padding: "4px" }}>SGST</th>
+                    <th rowSpan={2} style={{ width: "12%", borderBottom: "1px solid #000", padding: "4px" }}>Total</th>
                   </tr>
                   <tr>
-                    <th style={{ borderRight: "1.5px solid #63a0d4", borderBottom: "1.5px solid #63a0d4", padding: "4px" }}>%</th>
-                    <th style={{ borderRight: "1.5px solid #63a0d4", borderBottom: "1.5px solid #63a0d4", padding: "4px" }}>Amount</th>
-                    <th style={{ borderRight: "1.5px solid #63a0d4", borderBottom: "1.5px solid #63a0d4", padding: "4px" }}>%</th>
-                    <th style={{ borderRight: "1.5px solid #63a0d4", borderBottom: "1.5px solid #63a0d4", padding: "4px" }}>Amount</th>
+                    <th style={{ borderRight: "1px solid #000", borderBottom: "1px solid #000", padding: "4px" }}>%</th>
+                    <th style={{ borderRight: "1px solid #000", borderBottom: "1px solid #000", padding: "4px" }}>Amount</th>
+                    <th style={{ borderRight: "1px solid #000", borderBottom: "1px solid #000", padding: "4px" }}>%</th>
+                    <th style={{ borderRight: "1px solid #000", borderBottom: "1px solid #000", padding: "4px" }}>Amount</th>
                   </tr>
                 </thead>
                 <tbody>
                   {hsnRows.map((row, idx) => (
                     <tr key={idx}>
-                      <td style={{ borderRight: "1.5px solid #63a0d4", borderBottom: "1.5px solid #63a0d4", padding: "4px" }}>{row.hsn}</td>
-                      <td style={{ borderRight: "1.5px solid #63a0d4", borderBottom: "1.5px solid #63a0d4", padding: "4px" }} className="text-right">{fmt(row.taxable)}</td>
-                      <td style={{ borderRight: "1.5px solid #63a0d4", borderBottom: "1.5px solid #63a0d4", padding: "4px" }} className="text-right">{fmt(row.rate / 2)}</td>
-                      <td style={{ borderRight: "1.5px solid #63a0d4", borderBottom: "1.5px solid #63a0d4", padding: "4px" }} className="text-right">{fmt(row.cgst)}</td>
-                      <td style={{ borderRight: "1.5px solid #63a0d4", borderBottom: "1.5px solid #63a0d4", padding: "4px" }} className="text-right">{fmt(row.rate / 2)}</td>
-                      <td style={{ borderRight: "1.5px solid #63a0d4", borderBottom: "1.5px solid #63a0d4", padding: "4px" }} className="text-right">{fmt(row.sgst)}</td>
-                      <td style={{ borderBottom: "1.5px solid #63a0d4", padding: "4px" }} className="text-right">{fmt(row.cgst + row.sgst)}</td>
+                      <td style={{ borderRight: "1px solid #000", borderBottom: "1px solid #000", padding: "4px" }}>{row.hsn}</td>
+                      <td style={{ borderRight: "1px solid #000", borderBottom: "1px solid #000", padding: "4px" }} className="text-right">{fmt(row.taxable)}</td>
+                      <td style={{ borderRight: "1px solid #000", borderBottom: "1px solid #000", padding: "4px" }} className="text-right">{fmt(row.rate / 2)}</td>
+                      <td style={{ borderRight: "1px solid #000", borderBottom: "1px solid #000", padding: "4px" }} className="text-right">{fmt(row.cgst)}</td>
+                      <td style={{ borderRight: "1px solid #000", borderBottom: "1px solid #000", padding: "4px" }} className="text-right">{fmt(row.rate / 2)}</td>
+                      <td style={{ borderRight: "1px solid #000", borderBottom: "1px solid #000", padding: "4px" }} className="text-right">{fmt(row.sgst)}</td>
+                      <td style={{ borderBottom: "1px solid #000", padding: "4px" }} className="text-right">{fmt(row.cgst + row.sgst)}</td>
                     </tr>
                   ))}
                   <tr>
-                    <td style={{ borderRight: "1.5px solid #63a0d4", padding: "4px" }} className="text-right font-bold pr-4">Total</td>
-                    <td style={{ borderRight: "1.5px solid #63a0d4", padding: "4px" }} className="text-right font-bold">{fmt(totalTaxable)}</td>
-                    <td style={{ borderRight: "1.5px solid #63a0d4", padding: "4px" }}></td>
-                    <td style={{ borderRight: "1.5px solid #63a0d4", padding: "4px" }} className="text-right font-bold">{fmt(totalCgst)}</td>
-                    <td style={{ borderRight: "1.5px solid #63a0d4", padding: "4px" }}></td>
-                    <td style={{ borderRight: "1.5px solid #63a0d4", padding: "4px" }} className="text-right font-bold">{fmt(totalSgst)}</td>
+                    <td style={{ borderRight: "1px solid #000", padding: "4px" }} className="text-right font-bold pr-4">Total</td>
+                    <td style={{ borderRight: "1px solid #000", padding: "4px" }} className="text-right font-bold">{fmt(totalTaxable)}</td>
+                    <td style={{ borderRight: "1px solid #000", padding: "4px" }}></td>
+                    <td style={{ borderRight: "1px solid #000", padding: "4px" }} className="text-right font-bold">{fmt(totalCgst)}</td>
+                    <td style={{ borderRight: "1px solid #000", padding: "4px" }}></td>
+                    <td style={{ borderRight: "1px solid #000", padding: "4px" }} className="text-right font-bold">{fmt(totalSgst)}</td>
                     <td style={{ padding: "4px" }} className="text-right font-bold">{fmt(totalTax)}</td>
                   </tr>
                 </tbody>
               </table>
             )}
 
-            <div style={{ borderBottom: "1.5px solid #63a0d4", padding: "4px", fontSize: "10px", display: "flex" }}>
+            <div style={{ borderBottom: "1px solid #000", padding: "4px", fontSize: "11px", display: "flex" }}>
               <span style={{ marginRight: "4px" }}>Total Tax in words:</span>
               <span className="font-bold uppercase">{currencyToWords(totalTax, currencyCode)}</span>
             </div>
 
-            <div style={{ display: "flex", fontSize: "10px" }}>
-              <div style={{ width: "65%", borderRight: "1.5px solid #63a0d4", display: "flex", flexDirection: "column" }}>
-                <div style={{ textAlign: "center", fontWeight: "bold", padding: "2px", borderBottom: "1.5px solid #63a0d4" }}>Bank Details</div>
+            <div style={{ display: "flex", fontSize: "11px" }}>
+              <div style={{ width: "65%", borderRight: "1px solid #000", display: "flex", flexDirection: "column" }}>
+                <div style={{ textAlign: "center", fontWeight: "bold", padding: "2px", borderBottom: "1px solid #000" }}>Bank Details</div>
                 
                 <table style={{ width: "100%", borderCollapse: "collapse", padding: "4px" }}>
                   <tbody>
@@ -777,7 +885,7 @@ export default async function PrintInvoicePage(
                   </tbody>
                 </table>
                 
-                <div style={{ padding: "4px", borderTop: "1.5px solid #63a0d4", fontSize: "9px", lineHeight: "1.2", marginTop: "auto" }}>
+                <div style={{ padding: "4px", borderTop: "1px solid #000", fontSize: "10px", lineHeight: "1.2", marginTop: "auto" }}>
                   Subject to our home Jurisdiction.<br/>
                   Our Responsibility Ceases as soon as goods leaves our Premises.<br/>
                   Goods once sold will not taken back.<br/>
@@ -787,10 +895,10 @@ export default async function PrintInvoicePage(
               
               <div style={{ width: "35%", display: "flex", flexDirection: "column", justifyContent: "space-between", textAlign: "center", padding: "4px" }}>
                 <div>
-                  <div style={{ fontSize: "8px", fontWeight: "bold", paddingBottom: "2px" }}>
+                  <div style={{ fontSize: "9px", fontWeight: "bold", paddingBottom: "2px" }}>
                     Certified that the particulars given above are true and<br/>correct.
                   </div>
-                  <div style={{ fontWeight: "bold", fontSize: "12px", marginTop: "4px" }}>
+                  <div style={{ fontWeight: "bold", fontSize: "13px", marginTop: "4px" }}>
                     For {companyName}
                   </div>
                 </div>
@@ -802,25 +910,21 @@ export default async function PrintInvoicePage(
                       style={{ maxHeight: "40px", margin: "0 auto 4px auto", mixBlendMode: "multiply" }} 
                     />
                   )}
-                  <div style={{ fontSize: "8px", fontWeight: "bold", paddingBottom: "4px" }}>
+                  <div style={{ fontSize: "9px", fontWeight: "bold", paddingBottom: "4px" }}>
                     Authorised Signatory
                   </div>
                 </div>
               </div>
             </div>
           </div>
+          )}
         </div>
-        
-        {settings?.enableInvoiceFooter && settings?.invoiceFooterUrl && (
-          <div style={{ marginTop: "12px", textAlign: "center", width: "100%" }}>
-            <img
-              src={settings.invoiceFooterUrl.startsWith("/uploads") ? `/api${settings.invoiceFooterUrl}` : settings.invoiceFooterUrl}
-              alt="Invoice Footer"
-              style={{ maxWidth: "100%", height: "auto", maxHeight: "150px", display: "block", margin: "0 auto" }}
-            />
-          </div>
-        )}
+
+        {/* In print this is fixed to the bottom of every page, so render it once */}
+        {isLastPage && footerImage && <div className="invoice-footer">{footerImage}</div>}
       </div>
+        );
+      })}
     </>
   );
 }

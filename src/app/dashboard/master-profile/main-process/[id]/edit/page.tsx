@@ -72,7 +72,7 @@ export default function EditMainProcessPage() {
   }
 
   return (
-    <div className="flex-1 p-6 max-w-4xl mx-auto w-full">
+    <div className="flex-1 py-3 w-full">
       <div className="flex items-center gap-4 mb-6">
         <Link
           href="/dashboard/master-profile/main-process"

@@ -3,13 +3,16 @@ import { SearchableSelect } from "@/components/SearchableSelect";
 import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import PoBillShipTo, { emptyPoShipTo, poShipToFromRecord, validatePoShipTo, applyPoCustomer, type PoCustomer, type PoShipTo } from "@/components/purchasing/PoBillShipTo";
 import { Loader2, ArrowLeft, Plus, Trash2, Save, FileText } from "lucide-react";
 type FormData = {
   companies: { id: string; companyName: string; allowPoForWo: boolean }[];
+  customers: PoCustomer[];
   employees: { id: string; name: string; email: string; code: string }[];
   workOrders: {
     workOrderNo: string;
     jobDescription: string | null;
+    customerId: string | null;
     inProcesses: {
       routingProcesses: {
         id: string;
@@ -72,6 +75,14 @@ export default function PurchaseOrderSubconEditPage() {
   const [taxAmount, setTaxAmount] = useState("0.00");
   const [amountAfterTax, setAmountAfterTax] = useState("0.00");
   const [remark, setRemark] = useState("");
+  const [shipTo, setShipTo] = useState<PoShipTo>(emptyPoShipTo);
+
+  // Selecting a work order auto-fills Billed to with that work order's customer.
+  function handleWorkOrderChange(woNo: string) {
+    setWorkOrderNo(woNo);
+    const customerId = data?.workOrders?.find((w) => w.workOrderNo === woNo)?.customerId;
+    if (customerId) setShipTo((prev) => applyPoCustomer(prev, data?.customers, customerId));
+  }
   const [items, setItems] = useState<Item[]>([]);
 
   useEffect(() => {
@@ -103,6 +114,7 @@ export default function PurchaseOrderSubconEditPage() {
           setTaxAmount(Number(po.taxAmount || 0).toFixed(2));
           setAmountAfterTax(Number(po.amountAfterTax || 0).toFixed(2));
           setRemark(po.remark || "");
+          setShipTo(poShipToFromRecord(po));
           setItems(
             po.items.map((it: any) => ({
               id: it.id,
@@ -312,9 +324,13 @@ export default function PurchaseOrderSubconEditPage() {
       }
     }
 
+    const shipToError = validatePoShipTo(shipTo);
+    if (shipToError) return setError(shipToError);
+
     setSaving(true);
     try {
       const payload = {
+        ...shipTo,
         type: "SUBCON",
         companyId,
         supplierId,
@@ -335,6 +351,7 @@ export default function PurchaseOrderSubconEditPage() {
         amountAfterTax: Number(amountAfterTax),
         remark,
         items: items.map((it) => ({
+          id: it.id,
           woRoutingProcessId: workOrderNo ? it.woRoutingProcessId : null,
           masterMainProcessId: !workOrderNo ? it.masterMainProcessId : null,
           masterRoutingProcessId: !workOrderNo ? it.masterRoutingProcessId : null,
@@ -477,7 +494,7 @@ export default function PurchaseOrderSubconEditPage() {
           <SearchableSelect
             value={workOrderNo}
             disabled={readOnly || !isNew}
-            onChange={(e) => setWorkOrderNo(e.target.value)}
+            onChange={(e) => handleWorkOrderChange(e.target.value)}
             className={inputCls}
           >
             <option value="">{allowPoForWo ? "— None (Non Work Order) —" : "— Select Work Order —"}</option>
@@ -627,10 +644,17 @@ export default function PurchaseOrderSubconEditPage() {
 
       </div>
 
+      <PoBillShipTo
+        customers={data?.customers}
+        value={shipTo}
+        onChange={setShipTo}
+        readOnly={readOnly}
+      />
+
       {/* Items Section */}
-      <div className="bg-white border border-blue-200 rounded-xl shadow-sm overflow-hidden">
-        <div className="px-6 py-3 border-b border-blue-200 flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-blue-900">Purchase Order Subcon Items</h3>
+      <div className="bg-white border border-blue-200 rounded-xl shadow-sm p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-base font-bold text-blue-900">Purchase Order Subcon Items</h3>
           {!readOnly && (
             <button
               onClick={addItem}
@@ -641,195 +665,186 @@ export default function PurchaseOrderSubconEditPage() {
           )}
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="text-xs text-blue-500 bg-blue-50/50 uppercase tracking-wider">
+          <table className="w-full table-fixed text-[13px] text-left min-w-[720px]">
+            <colgroup>
+              <col />
+              <col className="w-24" />
+              <col className="w-24" />
+              <col className="w-28" />
+              <col className="w-32" />
+              {!readOnly && <col className="w-8" />}
+            </colgroup>
+            <thead className="text-[11px] text-blue-500 bg-blue-50/50 uppercase tracking-wide border-b border-blue-200 align-bottom">
               <tr>
-                {workOrderNo ? (
-                  <th className="px-3 py-2 text-left w-56">WO Process</th>
-                ) : (
-                  <>
-                    <th className="px-3 py-2 text-left w-48">Main Process</th>
-                    <th className="px-3 py-2 text-left w-48">Routing Process</th>
-                  </>
-                )}
-                <th className="px-3 py-2 text-left w-56">Description</th>
-                <th className="px-3 py-2 text-left w-24">Hardness</th>
-                <th className="px-3 py-2 text-left w-24">Thickness</th>
-                <th className="px-3 py-2 text-left w-28">PO UOM</th>
-                <th className="px-3 py-2 text-right w-24">Qty</th>
-                <th className="px-3 py-2 text-right w-32">Unit Price</th>
-                <th className="px-3 py-2 text-right w-32">Amount</th>
-                <th className="px-3 py-2 text-left w-40">Delivery Date</th>
-                <th className="px-3 py-2 text-left min-w-[150px]">Remark</th>
-                {!readOnly && <th className="w-10"></th>}
+                <th className="px-1.5 py-2 text-left">
+                  {workOrderNo ? "WO Process" : "Main · Routing Process"}
+                  <span className="block">Description</span>
+                </th>
+                <th className="px-1.5 py-2 text-left">Hardness<span className="block">Thickness</span></th>
+                <th className="px-1.5 py-2 text-left">Qty<span className="block">PO UOM</span></th>
+                <th className="px-1.5 py-2 text-right">Unit Price<span className="block">Amount</span></th>
+                <th className="px-1.5 py-2 text-left">Delivery Date<span className="block">Remark</span></th>
+                {!readOnly && <th className="px-1.5 py-2"></th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-blue-100">
               {items.map((it, idx) => {
                 return (
-                  <tr key={idx} className="hover:bg-blue-50/10">
-                    {workOrderNo ? (
-                      <td className="px-3 py-2 align-top">
-                        <SearchableSelect
-                          value={it.woRoutingProcessId}
+                  <tr key={idx} className="hover:bg-blue-50/10 align-top">
+                    <td className="px-1.5 py-1.5">
+                      <div className="flex flex-col gap-1">
+                        {workOrderNo ? (
+                          <SearchableSelect compact
+                            value={it.woRoutingProcessId}
+                            disabled={readOnly}
+                            onChange={(e) => updateItem(idx, { woRoutingProcessId: e.target.value })}
+                            className={cellCls}
+                          >
+                            <option value="">— Select WO Process —</option>
+                            {woRoutingProcesses.map(rp => (
+                              <option key={rp.id} value={rp.id}>
+                                {rp.mainProcess?.process} - {rp.routingProcess?.routingProcess}
+                              </option>
+                            ))}
+                          </SearchableSelect>
+                        ) : (
+                          <div className="flex gap-1">
+                            <div className="flex-1 min-w-0">
+                              <SearchableSelect compact
+                                value={it.masterMainProcessId}
+                                disabled={readOnly}
+                                onChange={(e) => updateItem(idx, { masterMainProcessId: e.target.value, masterRoutingProcessId: "" })}
+                                className={cellCls}
+                              >
+                                <option value="">— Select Main —</option>
+                                {data?.mainProcesses?.map((m) => (
+                                  <option key={m.id} value={m.id}>
+                                    {m.process}
+                                  </option>
+                                ))}
+                              </SearchableSelect>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <SearchableSelect compact
+                                value={it.masterRoutingProcessId}
+                                disabled={readOnly || !it.masterMainProcessId}
+                                onChange={(e) => updateItem(idx, { masterRoutingProcessId: e.target.value })}
+                                className={cellCls}
+                              >
+                                <option value="">— Select Routing —</option>
+                                {data?.processProfiles?.filter(p => p.mainProcessId === it.masterMainProcessId).map((p) => (
+                                  <option key={p.id} value={p.id}>
+                                    {p.routingProcess}
+                                  </option>
+                                ))}
+                              </SearchableSelect>
+                            </div>
+                          </div>
+                        )}
+                        <textarea
+                          rows={1}
+                          value={it.description}
                           disabled={readOnly}
-                          onChange={(e) => updateItem(idx, { woRoutingProcessId: e.target.value })}
-                          className={inputCls}
+                          onChange={(e) => updateItem(idx, { description: e.target.value })}
+                          className={cellCls + " block leading-snug break-words resize-none field-sizing-content"}
+                          placeholder="Description"
+                        />
+                      </div>
+                    </td>
+
+                    <td className="px-1.5 py-1.5">
+                      <div className="flex flex-col gap-1">
+                        <input
+                          type="text"
+                          value={it.hardness || ""}
+                          disabled={readOnly}
+                          onChange={(e) => updateItem(idx, { hardness: e.target.value })}
+                          className={cellCls}
+                          placeholder="Hardness"
+                        />
+                        <input
+                          type="text"
+                          value={it.thickness || ""}
+                          disabled={readOnly}
+                          onChange={(e) => updateItem(idx, { thickness: e.target.value })}
+                          className={cellCls}
+                          placeholder="Thickness"
+                        />
+                      </div>
+                    </td>
+
+                    <td className="px-1.5 py-1.5">
+                      <div className="flex flex-col gap-1">
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={it.quantity}
+                          disabled={readOnly}
+                          onChange={(e) => updateItem(idx, { quantity: e.target.value })}
+                          className={cellCls + " text-right tabular-nums"}
+                          placeholder="Qty"
+                        />
+                        <SearchableSelect compact
+                          value={it.poUomId}
+                          disabled={readOnly}
+                          onChange={(e) => updateItem(idx, { poUomId: e.target.value })}
+                          className={cellCls}
                         >
-                          <option value="">— Select WO Process —</option>
-                          {woRoutingProcesses.map(rp => (
-                            <option key={rp.id} value={rp.id}>
-                              {rp.mainProcess?.process} - {rp.routingProcess?.routingProcess}
+                          <option value="">— UOM —</option>
+                          {data?.uoms?.map((u) => (
+                            <option key={u.id} value={u.id}>
+                              {u.uomName}
                             </option>
                           ))}
                         </SearchableSelect>
-                      </td>
-                    ) : (
-                      <>
-                        <td className="px-3 py-2 align-top">
-                          <SearchableSelect
-                            value={it.masterMainProcessId}
-                            disabled={readOnly}
-                            onChange={(e) => updateItem(idx, { masterMainProcessId: e.target.value, masterRoutingProcessId: "" })}
-                            className={inputCls}
-                          >
-                            <option value="">— Select Main —</option>
-                            {data?.mainProcesses?.map((m) => (
-                              <option key={m.id} value={m.id}>
-                                {m.process}
-                              </option>
-                            ))}
-                          </SearchableSelect>
-                        </td>
-                        <td className="px-3 py-2 align-top">
-                          <SearchableSelect
-                            value={it.masterRoutingProcessId}
-                            disabled={readOnly || !it.masterMainProcessId}
-                            onChange={(e) => updateItem(idx, { masterRoutingProcessId: e.target.value })}
-                            className={inputCls}
-                          >
-                            <option value="">— Select Routing —</option>
-                            {data?.processProfiles?.filter(p => p.mainProcessId === it.masterMainProcessId).map((p) => (
-                              <option key={p.id} value={p.id}>
-                                {p.routingProcess}
-                              </option>
-                            ))}
-                          </SearchableSelect>
-                        </td>
-                      </>
-                    )}
-
-                    <td className="px-3 py-2 align-top">
-                      <textarea
-                        rows={1}
-                        value={it.description}
-                        disabled={readOnly}
-                        onChange={(e) => updateItem(idx, { description: e.target.value })}
-                        className={inputCls}
-                        placeholder="Description"
-                      />
+                      </div>
                     </td>
 
-                    <td className="px-3 py-2 align-top">
-                      <input
-                        type="text"
-                        value={it.hardness || ""}
-                        disabled={readOnly}
-                        onChange={(e) => updateItem(idx, { hardness: e.target.value })}
-                        className={inputCls}
-                        placeholder="Hardness"
-                      />
+                    <td className="px-1.5 py-1.5">
+                      <div className="flex flex-col gap-1">
+                        <input
+                          type="number"
+                          step="0.0001"
+                          value={it.unitPrice}
+                          disabled={readOnly}
+                          onChange={(e) => updateItem(idx, { unitPrice: e.target.value })}
+                          className={cellCls + " text-right tabular-nums"}
+                          placeholder="Unit Price"
+                        />
+                        <div className="px-2 py-1 text-right tabular-nums text-blue-900 font-semibold" title="Amount">
+                          {it.amount}
+                        </div>
+                      </div>
                     </td>
 
-                    <td className="px-3 py-2 align-top">
-                      <input
-                        type="text"
-                        value={it.thickness || ""}
-                        disabled={readOnly}
-                        onChange={(e) => updateItem(idx, { thickness: e.target.value })}
-                        className={inputCls}
-                        placeholder="Thickness"
-                      />
-                    </td>
-
-                    <td className="px-3 py-2 align-top">
-                      <SearchableSelect
-                        value={it.poUomId}
-                        disabled={readOnly}
-                        onChange={(e) => updateItem(idx, { poUomId: e.target.value })}
-                        className={inputCls}
-                      >
-                        <option value="">— UOM —</option>
-                        {data?.uoms?.map((u) => (
-                          <option key={u.id} value={u.id}>
-                            {u.uomName}
-                          </option>
-                        ))}
-                      </SearchableSelect>
-                    </td>
-
-                    <td className="px-3 py-2 align-top">
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={it.quantity}
-                        disabled={readOnly}
-                        onChange={(e) => updateItem(idx, { quantity: e.target.value })}
-                        className={inputCls + " text-right"}
-                      />
-                    </td>
-
-                    <td className="px-3 py-2 align-top">
-                      <input
-                        type="number"
-                        step="0.0001"
-                        value={it.unitPrice}
-                        disabled={readOnly}
-                        onChange={(e) => updateItem(idx, { unitPrice: e.target.value })}
-                        className={inputCls + " text-right"}
-                      />
-                    </td>
-
-                    <td className="px-3 py-2 align-top">
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={it.amount}
-                        disabled={true}
-                        readOnly
-                        className={inputCls + " text-right bg-slate-50 opacity-70"}
-                      />
-                    </td>
-
-                    <td className="px-3 py-2 align-top">
-                      <input
-                        type="date"
-                        value={it.deliveryDate}
-                        disabled={readOnly}
-                        onChange={(e) => updateItem(idx, { deliveryDate: e.target.value })}
-                        className={inputCls}
-                      />
-                    </td>
-
-                    <td className="px-3 py-2 align-top">
-                      <textarea
-                        rows={1}
-                        value={it.remark}
-                        disabled={readOnly}
-                        onChange={(e) => updateItem(idx, { remark: e.target.value })}
-                        className={inputCls}
-                        placeholder="Remark"
-                      />
+                    <td className="px-1.5 py-1.5">
+                      <div className="flex flex-col gap-1">
+                        <input
+                          type="date"
+                          value={it.deliveryDate}
+                          disabled={readOnly}
+                          onChange={(e) => updateItem(idx, { deliveryDate: e.target.value })}
+                          className={cellCls + " px-1"}
+                        />
+                        <textarea
+                          rows={1}
+                          value={it.remark}
+                          disabled={readOnly}
+                          onChange={(e) => updateItem(idx, { remark: e.target.value })}
+                          className={remarkCls}
+                          placeholder="Remark"
+                        />
+                      </div>
                     </td>
 
                     {!readOnly && (
-                      <td className="px-3 py-2 align-top text-center">
+                      <td className="px-0.5 py-1.5 text-center">
                         <button
                           onClick={() => removeItem(idx)}
-                          className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-md cursor-pointer mt-0.5"
+                          className="p-1 text-rose-500 hover:bg-rose-50 rounded-md cursor-pointer"
                           title="Remove item"
                         >
-                          <Trash2 size={16} />
+                          <Trash2 size={15} />
                         </button>
                       </td>
                     )}
@@ -839,19 +854,19 @@ export default function PurchaseOrderSubconEditPage() {
             </tbody>
             <tfoot className="bg-blue-50/30 border-t border-blue-200 text-blue-900 text-xs font-bold">
               <tr>
-                <td colSpan={workOrderNo ? 7 : 8} className="px-4 py-3 text-right">Amount Before Tax</td>
-                <td className="px-4 py-3 text-right">{amountBeforeTax}</td>
-                <td colSpan={3}></td>
+                <td colSpan={3} className="px-1.5 py-2 text-right tabular-nums">Amount Before Tax</td>
+                <td className="px-1.5 py-2 text-right tabular-nums">{amountBeforeTax}</td>
+                <td colSpan={readOnly ? 1 : 2}></td>
               </tr>
               <tr>
-                <td colSpan={workOrderNo ? 7 : 8} className="px-4 py-3 text-right">Tax Amount</td>
-                <td className="px-4 py-3 text-right">{taxAmount}</td>
-                <td colSpan={3}></td>
+                <td colSpan={3} className="px-1.5 py-2 text-right tabular-nums">Tax Amount</td>
+                <td className="px-1.5 py-2 text-right tabular-nums">{taxAmount}</td>
+                <td colSpan={readOnly ? 1 : 2}></td>
               </tr>
               <tr className="text-sm">
-                <td colSpan={workOrderNo ? 7 : 8} className="px-4 py-3 text-right text-blue-950 font-extrabold">Amount After Tax</td>
-                <td className="px-4 py-3 text-right text-blue-950 font-extrabold">{amountAfterTax}</td>
-                <td colSpan={3}></td>
+                <td colSpan={3} className="px-1.5 py-2 text-right tabular-nums text-blue-950 font-extrabold">Amount After Tax</td>
+                <td className="px-1.5 py-2 text-right tabular-nums text-blue-950 font-extrabold">{amountAfterTax}</td>
+                <td colSpan={readOnly ? 1 : 2}></td>
               </tr>
             </tfoot>
           </table>
@@ -879,3 +894,9 @@ function Field({ label, required, children }: { label: string; required?: boolea
 
 const inputCls =
   "w-full px-3 py-2 text-sm bg-blue-50/50 border border-blue-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors disabled:opacity-60 disabled:cursor-not-allowed";
+
+const cellCls =
+  "w-full px-2 py-1 text-[13px] bg-blue-50/50 border border-blue-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors disabled:opacity-60 disabled:cursor-not-allowed";
+
+const remarkCls =
+  "block w-full px-2 py-1 text-xs leading-snug bg-blue-50/50 border border-blue-200 rounded-md break-words resize-y field-sizing-content focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors disabled:opacity-60 disabled:cursor-not-allowed";

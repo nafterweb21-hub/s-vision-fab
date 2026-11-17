@@ -85,7 +85,7 @@ export default function SupplierProfilePage() {
   );
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 text-black p-4 md:p-6 lg:p-8">
+    <div className="space-y-4 text-black py-3 w-full">
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>

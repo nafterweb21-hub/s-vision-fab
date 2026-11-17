@@ -202,6 +202,7 @@ model CustomerProfile {
   roNumber       String?
   pan            String?
   placeOfSupply  String?
+  poBillTo       PurchaseOrder[]           @relation("PoBillToCustomer")
 }
 
 model CustomerContactPerson {
@@ -565,6 +566,7 @@ model WorkOrder {
   projectCode          String?
   deliveryDate         DateTime?
   jobDescription       String?
+  partName             String?
   quantity             Decimal?
   uom                  String?
   amount               Decimal?
@@ -581,6 +583,9 @@ model WorkOrder {
   rejectedQty          Decimal?
   reworkedQty          Decimal?
   finalApprovedQty     Decimal?
+  /// When true, each routing stage must pass QC (all its timesheets Approved) before the next stage unlocks.
+  /// New work orders default ON; rows that existed before this column was added were set OFF.
+  stageQc              Boolean                   @default(true)
   createdAt            DateTime                  @default(now())
   updatedAt            DateTime                  @updatedAt
   reworks              WorkOrderRework[]
@@ -1003,6 +1008,25 @@ model PurchaseOrder {
   supplierGst           String?
   millCertificate       Boolean                @default(false)
   certOfConformance     Boolean                @default(false)
+  // Bill-to: picked from a customer (addresses / contact persons), snapshotted as text.
+  billToCustomerId      String?
+  billToCustomer        CustomerProfile?       @relation("PoBillToCustomer", fields: [billToCustomerId], references: [id])
+  billToName            String?
+  billToAddress         String?
+  billToContactPerson   String?
+  billToPhone           String?
+  billToEmail           String?
+  billToFax             String?
+  billToGstin           String?
+  billToState           String?
+  // Ship-to: same as bill-to unless differentShipTo is on.
+  differentShipTo       Boolean                @default(false)
+  consigneeName         String?
+  consigneeAddress      String?
+  consigneeGstin        String?
+  consigneePhone        String?
+  consigneeState        String?
+  consigneeCountry      String?                @default("India")
   contactPersonId       String?
   telNo                 String                 @default("")
   faxNo                 String                 @default("")
@@ -1013,6 +1037,13 @@ model PurchaseOrder {
   remark                String                 @default("")
   status                String                 @default("Draft")
   approverName          String?
+  approvalTier          Int                    @default(1)
+  firstApproverId       String?
+  firstApproverName     String?
+  firstApprovedAt       DateTime?
+  secondApproverId      String?
+  secondApproverName    String?
+  secondApprovedAt      DateTime?
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
   type                  String                 @default("MATERIAL")
@@ -1155,8 +1186,8 @@ model GoodsReceive {
   purchaseOrderId String
   currencyId      String
   exchangeRate    Decimal
-  taxTypeId       String
-  taxRate         Decimal
+  taxTypeId       String?
+  taxRate         Decimal            @default(0)
   doNo            String?
   doDate          DateTime?
   invoiceNo       String?
@@ -1171,7 +1202,7 @@ model GoodsReceive {
   currency        Currency           @relation(fields: [currencyId], references: [id])
   purchaseOrder   PurchaseOrder      @relation(fields: [purchaseOrderId], references: [id])
   supplier        SupplierProfile    @relation(fields: [supplierId], references: [id])
-  taxType         TaxProfile         @relation(fields: [taxTypeId], references: [id])
+  taxType         TaxProfile?        @relation(fields: [taxTypeId], references: [id])
   items           GoodsReceiveItem[]
   goodsReturns    GoodsReturn[]
 }
@@ -1276,6 +1307,13 @@ model DeliveryOrder {
   customerId   String
   salesOrderId String
   cocRequired  Boolean                   @default(false)
+  poNo            String?
+  vehicleNo       String?
+  modeOfTransport String?
+  // Returnable delivery challan (not for sale — e.g. sent for testing and return).
+  // When set, the printout is titled "Returnable Delivery Challan" and shows returnableNote.
+  isReturnable    Boolean                   @default(false)
+  returnableNote  String?
   status       String                    @default("Draft")
   createdAt    DateTime                  @default(now())
   updatedAt    DateTime                  @updatedAt
@@ -1290,8 +1328,11 @@ model DeliveryOrderItem {
   id              String        @id @default(cuid())
   deliveryOrderId String
   workOrderNo     String
+  description     String?
   quantity        Decimal
   uomId           String?
+  // Declared value of the line (shown on returnable delivery challans).
+  totalValue      Decimal?
   deliveryDate    DateTime?
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
@@ -1347,45 +1388,45 @@ model CertificateOfConformity {
 }
 
 model Invoice {
-  id              String   @id @default(cuid())
-  invoiceNo       String   @unique // Format: INVYYXXXXX-RN
-  revision        Int      @default(0)
-  invoiceDate     DateTime
-  companyId       String
-  invoiceType     String // Customer Invoice / Credit Note / Debit Note
-  customerId      String
-  contactPersonId String
-  tel             String?
-  fax             String?
-  email           String?
-  billToId        String?
-  shipToId        String?
+  id               String   @id @default(cuid())
+  invoiceNo        String   @unique // Format: INVYYXXXXX-RN
+  revision         Int      @default(0)
+  invoiceDate      DateTime
+  companyId        String
+  invoiceType      String // Customer Invoice / Credit Note / Debit Note
+  customerId       String
+  contactPersonId  String
+  tel              String?
+  fax              String?
+  email            String?
+  billToId         String?
+  shipToId         String?
   consigneeName    String?
   consigneeGstin   String?
   consigneePhone   String?
   consigneeState   String?
   consigneeCountry String?  @default("India")
-  paymentTermId   String
-  dueDate         DateTime
-  currencyId      String
-  exchangeRate    Decimal
-  amountBeforeTax Decimal
-  taxTypeId       String?
-  taxRate         Decimal
-  taxAmount       Decimal
-  amountAfterTax  Decimal
-  roundOff        Decimal  @default(0)
-  amountPaid      Decimal  @default(0) // System calculated from Receipt records
-  balanceDue      Decimal
-  bankDetails     String?
-  remark          String?
-  preparedById    String
-  uploadUrl       String?
-  status          String   @default("Draft") // Draft, Submitted, Old Version, Void
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  poNo            String?
-  vehicleNumber   String?
+  paymentTermId    String
+  dueDate          DateTime
+  currencyId       String
+  exchangeRate     Decimal
+  amountBeforeTax  Decimal
+  taxTypeId        String?
+  taxRate          Decimal
+  taxAmount        Decimal
+  amountAfterTax   Decimal
+  roundOff         Decimal  @default(0)
+  amountPaid       Decimal  @default(0) // System calculated from Receipt records
+  balanceDue       Decimal
+  bankDetails      String?
+  remark           String?
+  preparedById     String
+  uploadUrl        String?
+  status           String   @default("Draft") // Draft, Submitted, Old Version, Void
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  poNo             String?
+  vehicleNumber    String?
 
   // GST tax breakup (derived from taxRate + place of supply). "intra" => CGST+SGST, "inter" => IGST.
   supplyType String? // intra | inter

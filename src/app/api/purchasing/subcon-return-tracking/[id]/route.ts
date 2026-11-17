@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma";
+import { assertRejectWithinReturned, RejectQtyError } from "@/lib/subcon-reject";
 
 export async function GET(
   request: Request,
@@ -92,6 +93,11 @@ export async function PUT(
         },
       });
 
+      // Voiding a return must not leave more rejected than returned on the SRF.
+      if (status === "Void") {
+        await assertRejectWithinReturned(tx, existingSrt.subconRequestFormId);
+      }
+
       // If status changed to Submitted or Void, update SRF receiveStatus
       if (status === "Submitted" || status === "Void") {
         const srf = await tx.subconRequestForm.findUnique({
@@ -149,6 +155,14 @@ export async function PUT(
 
     return NextResponse.json(updatedSrt);
   } catch (error: any) {
+    if (error instanceof RejectQtyError) {
+      return NextResponse.json(
+        {
+          error: `Cannot void this return: ${error.totalRejected} rejected qty is recorded against this SRF, which would exceed the remaining returned qty (${error.totalReturned}). Void the related Subcon Reject Tracking first.`,
+        },
+        { status: 400 }
+      );
+    }
     console.error("Error updating Subcon Return Tracking:", error);
     return NextResponse.json(
       { error: "Failed to update Subcon Return Tracking" },

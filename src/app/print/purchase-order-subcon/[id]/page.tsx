@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import PoBillShipToPrint from "../../purchase-order/PoBillShipToPrint";
 import { notFound } from "next/navigation";
 import PrintToolbar from "@/app/print/PrintToolbar";
 import CompanyLogo from "../../purchase-order/[id]/CompanyLogo";
@@ -113,7 +114,7 @@ export default async function PrintPurchaseOrderSubconPage(
           <div style={{ width: '40%' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
               <tbody>
-                <tr><td style={{ width: '35%', paddingBottom: '4px' }}>PO No</td><td style={{ width: '5%', paddingBottom: '4px' }}>:</td><td className="dyn" style={{ paddingBottom: '4px' }}>{po.poNo}-R{po.revision}</td></tr>
+                <tr><td style={{ width: '35%', paddingBottom: '4px' }}>PO No</td><td style={{ width: '5%', paddingBottom: '4px' }}>:</td><td className="dyn" style={{ paddingBottom: '4px' }}>{po.poNo}</td></tr>
                 <tr><td style={{ paddingBottom: '4px' }}>Date</td><td style={{ paddingBottom: '4px' }}>:</td><td className="dyn" style={{ paddingBottom: '4px' }}>{fmtDate(po.date)}</td></tr>
                 <tr><td style={{ paddingBottom: '4px' }}>Purchaser</td><td style={{ paddingBottom: '4px' }}>:</td><td className="dyn" style={{ paddingBottom: '4px' }}>{po.purchaser?.name}</td></tr>
                 <tr><td style={{ paddingBottom: '4px' }}>Email</td><td style={{ paddingBottom: '4px' }}>:</td><td className="dyn" style={{ paddingBottom: '4px' }}>{po.purchaser?.email}</td></tr>
@@ -121,6 +122,8 @@ export default async function PrintPurchaseOrderSubconPage(
             </table>
           </div>
         </div>
+
+        <PoBillShipToPrint company={po.company} po={po} />
 
         <table className="items-table">
           <thead>
@@ -199,7 +202,6 @@ export default async function PrintPurchaseOrderSubconPage(
               <td colSpan={3} style={{ padding: '6px', textAlign: 'right', fontWeight: 'bold' }}>
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
                   <span>Total :</span>
-                  <span style={{ width: '15px', textAlign: 'center' }}>$</span>
                 </div>
               </td>
               <td className="dyn" style={{ padding: '6px', textAlign: 'right', fontWeight: 'bold' }}>{formatNumber(po.amountBeforeTax)}</td>
@@ -208,7 +210,6 @@ export default async function PrintPurchaseOrderSubconPage(
               <td colSpan={3} style={{ padding: '6px', textAlign: 'right', fontWeight: 'bold' }}>
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
                   <span>{po.taxType?.taxType || 'GST'} @ {po.taxRate?.toString()}% :</span>
-                  <span style={{ width: '15px', textAlign: 'center' }}>$</span>
                 </div>
               </td>
               <td className="dyn" style={{ padding: '6px', textAlign: 'right', fontWeight: 'bold' }}>{formatNumber(po.taxAmount)}</td>
@@ -217,7 +218,6 @@ export default async function PrintPurchaseOrderSubconPage(
               <td colSpan={3} style={{ padding: '6px', textAlign: 'right', fontWeight: 'bold' }}>
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
                   <span>Total {po.currency?.code} :</span>
-                  <span style={{ width: '15px', textAlign: 'center' }}>$</span>
                 </div>
               </td>
               <td className="dyn" style={{ padding: '6px', textAlign: 'right', fontWeight: 'bold' }}>{formatNumber(po.amountAfterTax)}</td>

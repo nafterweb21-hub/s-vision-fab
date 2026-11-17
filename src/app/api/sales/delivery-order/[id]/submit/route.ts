@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/authz";
+import { toUserMessage } from "@/lib/api-error";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { error: authError } = await requirePermission("DELIVERY_ORDER", "e");
@@ -41,6 +42,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error("Submit Delivery Order Error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: toUserMessage(error, "Could not submit the delivery order. Please try again.") }, { status: 500 });
   }
 }

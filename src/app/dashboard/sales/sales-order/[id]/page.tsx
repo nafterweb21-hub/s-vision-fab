@@ -322,7 +322,7 @@ export default function SalesOrderFormPage() {
   }
 
   return (
-    <div className="p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
+    <div className="py-3 space-y-4 w-full">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -552,10 +552,10 @@ export default function SalesOrderFormPage() {
           </div>
 
           {/* Items Table */}
-          <div className="p-6 bg-white rounded-xl border border-blue-200 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-blue-900 flex items-center gap-2">
-                <FileText size={20} className="text-indigo-500" />
+          <div className="p-4 space-y-3 bg-white rounded-xl border border-blue-200 shadow-sm">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold text-blue-900 flex items-center gap-2">
+                <FileText size={18} className="text-indigo-500" />
                 Order Items
               </h3>
               <button
@@ -572,9 +572,9 @@ export default function SalesOrderFormPage() {
                 <p className="text-blue-500 text-sm">No items added to this order.</p>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {items.map((item, index) => (
-                  <div key={index} className="flex flex-col sm:flex-row gap-3 p-4 bg-blue-50 border border-blue-200 rounded-lg relative group">
+                  <div key={index} className="flex flex-col sm:flex-row gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg relative group">
                     <button
                       type="button"
                       onClick={() => removeItem(index)}
@@ -583,15 +583,16 @@ export default function SalesOrderFormPage() {
                       <X size={14} />
                     </button>
                     
-                    <div className="flex-1 space-y-4">
+                    <div className="flex-1 min-w-0 space-y-3">
                       {/* Item Level Info */}
-                      <div className="grid grid-cols-1 sm:grid-cols-5 gap-3 pb-4 border-b border-blue-200">
+                      <div className="grid grid-cols-1 sm:grid-cols-5 gap-x-2.5 gap-y-2 pb-3 border-b border-blue-200">
                         <div className="sm:col-span-2">
-                          <label className="block text-xs font-medium text-blue-500 mb-1">Part <span className="text-red-500">*</span></label>
+                          <label className="block text-[11px] font-medium text-blue-500 mb-0.5 uppercase tracking-wide">Part <span className="text-red-500">*</span></label>
                           <SearchableSelect
+                            compact
                             value={item.partId}
                             onChange={(e) => handleItemChange(index, "partId", e.target.value)}
-                            className="w-full px-2 py-1.5 text-sm bg-white border border-blue-200 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            className="w-full px-2 py-1 text-[13px] bg-white border border-blue-200 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500"
                           >
                             <option value="">Select Part</option>
                             {formDataCache?.finishedGoods?.map((fg: any) => (
@@ -600,31 +601,32 @@ export default function SalesOrderFormPage() {
                           </SearchableSelect>
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-blue-500 mb-1">Int. Quotation</label>
+                          <label className="block text-[11px] font-medium text-blue-500 mb-0.5 uppercase tracking-wide">Int. Quotation</label>
                           <input
                             type="text"
                             value={item.internalQuotationNo || ""}
                             onChange={(e) => handleItemChange(index, "internalQuotationNo", e.target.value)}
-                            className="w-full px-2 py-1.5 text-sm bg-white border border-blue-200 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            className="w-full px-2 py-1 text-[13px] bg-white border border-blue-200 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500"
                           />
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-blue-500 mb-1">Unit Price <span className="text-red-500">*</span></label>
+                          <label className="block text-[11px] font-medium text-blue-500 mb-0.5 uppercase tracking-wide">Unit Price <span className="text-red-500">*</span></label>
                           <input
                             type="number"
                             step="0.01"
                             min="0"
                             value={item.unitPrice || ""}
                             onChange={(e) => handleItemChange(index, "unitPrice", parseFloat(e.target.value) || 0)}
-                            className="w-full px-2 py-1.5 text-sm bg-white border border-blue-200 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            className="w-full px-2 py-1 text-[13px] bg-white border border-blue-200 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500"
                           />
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-blue-500 mb-1">UOM <span className="text-red-500">*</span></label>
+                          <label className="block text-[11px] font-medium text-blue-500 mb-0.5 uppercase tracking-wide">UOM <span className="text-red-500">*</span></label>
                           <SearchableSelect
+                            compact
                             value={item.uomId}
                             onChange={(e) => handleItemChange(index, "uomId", e.target.value)}
-                            className="w-full px-2 py-1.5 text-sm bg-white border border-blue-200 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            className="w-full px-2 py-1 text-[13px] bg-white border border-blue-200 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500"
                           >
                             <option value="">Select UOM</option>
                             {formDataCache?.uoms?.map((u: any) => (
@@ -633,53 +635,53 @@ export default function SalesOrderFormPage() {
                           </SearchableSelect>
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-blue-500 mb-1">Vendor Material No</label>
+                          <label className="block text-[11px] font-medium text-blue-500 mb-0.5 uppercase tracking-wide">Vendor Material No</label>
                           <input
                             type="text"
                             value={item.vendorMaterialNo || ""}
                             onChange={(e) => handleItemChange(index, "vendorMaterialNo", e.target.value)}
-                            className="w-full px-2 py-1.5 text-sm bg-white border border-blue-200 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            className="w-full px-2 py-1 text-[13px] bg-white border border-blue-200 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500"
                           />
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-blue-500 mb-1">Estimate No</label>
+                          <label className="block text-[11px] font-medium text-blue-500 mb-0.5 uppercase tracking-wide">Estimate No</label>
                           <input
                             type="text"
                             value={item.estimateNo || ""}
                             onChange={(e) => handleItemChange(index, "estimateNo", e.target.value)}
-                            className="w-full px-2 py-1.5 text-sm bg-white border border-blue-200 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            className="w-full px-2 py-1 text-[13px] bg-white border border-blue-200 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500"
                           />
                         </div>
                         <div className="sm:col-span-3">
-                          <label className="block text-xs font-medium text-blue-500 mb-1">Material Specification</label>
-                          <input
-                            type="text"
+                          <label className="block text-[11px] font-medium text-blue-500 mb-0.5 uppercase tracking-wide">Material Specification</label>
+                          <textarea
+                            rows={1}
                             value={item.materialSpecification || ""}
                             onChange={(e) => handleItemChange(index, "materialSpecification", e.target.value)}
-                            className="w-full px-2 py-1.5 text-sm bg-white border border-blue-200 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            className="block w-full px-2 py-1 text-[13px] leading-snug bg-white border border-blue-200 rounded-md break-words resize-y field-sizing-content focus:outline-none focus:ring-1 focus:ring-indigo-500"
                           />
                         </div>
                         <div className="sm:col-span-2">
-                          <label className="block text-xs font-medium text-blue-500 mb-1">Item Remark</label>
-                          <input
-                            type="text"
+                          <label className="block text-[11px] font-medium text-blue-500 mb-0.5 uppercase tracking-wide">Item Remark</label>
+                          <textarea
+                            rows={1}
                             value={item.remark || ""}
                             onChange={(e) => handleItemChange(index, "remark", e.target.value)}
-                            className="w-full px-2 py-1.5 text-sm bg-white border border-blue-200 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            className="block w-full px-2 py-1 text-xs leading-snug bg-white border border-blue-200 rounded-md break-words resize-y field-sizing-content focus:outline-none focus:ring-1 focus:ring-indigo-500"
                           />
                         </div>
                         <div className="sm:col-span-2">
-                          <label className="block text-xs font-medium text-blue-500 mb-1">Item Upload URL</label>
+                          <label className="block text-[11px] font-medium text-blue-500 mb-0.5 uppercase tracking-wide">Item Upload URL</label>
                           <input
                             type="text"
                             value={item.uploadUrl || ""}
                             onChange={(e) => handleItemChange(index, "uploadUrl", e.target.value)}
-                            className="w-full px-2 py-1.5 text-sm bg-white border border-blue-200 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            className="w-full px-2 py-1 text-[13px] bg-white border border-blue-200 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500"
                           />
                         </div>
                         <div className="flex flex-col justify-end pb-1">
-                          <span className="text-xs font-medium text-blue-500 mb-1">Total Quantity</span>
-                          <span className="text-sm font-bold text-indigo-700">{item.quantity}</span>
+                          <span className="text-[11px] font-medium text-blue-500 mb-0.5 uppercase tracking-wide">Total Quantity</span>
+                          <span className="text-[13px] font-bold text-indigo-700 tabular-nums">{item.quantity}</span>
                         </div>
                       </div>
 

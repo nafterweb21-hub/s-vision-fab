@@ -13,15 +13,21 @@ export async function GET(req: Request) {
     const status = url.searchParams.get("status") || "All";
     const type = url.searchParams.get("type");
 
-    const where: any = {
-      status: "Pending For Approval",
-    };
+    const PENDING_STATUSES = [
+      "Pending For Approval",
+      "Pending First Tier Approval",
+      "Pending Second Tier Approval",
+    ];
+
+    const where: any = {};
 
     if (type) {
       where.type = type;
     }
 
-    if (status !== "All") {
+    if (status === "All") {
+      where.status = { in: PENDING_STATUSES };
+    } else {
       where.status = status;
     }
 

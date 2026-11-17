@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma";
+import { assertRejectWithinReturned, RejectQtyError } from "@/lib/subcon-reject";
 
 export async function GET(
   request: Request,
@@ -92,56 +93,8 @@ export async function PUT(
         },
       });
 
-      // If status changed to Submitted or Void, update SRF receiveStatus
-      if (status === "Submitted" || status === "Void") {
-        const srf = await tx.subconRequestForm.findUnique({
-          where: { id: existingSrt.subconRequestFormId },
-          include: { subconRejectTrackings: true },
-        });
-
-        if (srf) {
-          const totalRejected = srf.subconRejectTrackings
-            .filter((t) => t.status === "Submitted")
-            .reduce((sum, t) => sum + Number(t.rejectedQty), 0);
-
-          let receiveStatus = "N/A";
-          if (totalRejected >= Number(srf.quantity)) {
-            receiveStatus = "Fully Received";
-          } else if (totalRejected > 0) {
-            receiveStatus = "Partially Received";
-          }
-
-          await tx.subconRequestForm.update({
-            where: { id: existingSrt.subconRequestFormId },
-            data: { receiveStatus },
-          });
-
-          // Check for Routing Process fullyReceived
-          if (receiveStatus === "Fully Received") {
-            const srfWithPOItem = await tx.subconRequestForm.findUnique({
-              where: { id: existingSrt.subconRequestFormId },
-              include: { purchaseOrderItem: true },
-            });
-            if (srfWithPOItem?.purchaseOrderItem?.woRoutingProcessId) {
-               await tx.routingProcess.update({
-                  where: { id: srfWithPOItem.purchaseOrderItem.woRoutingProcessId },
-                  data: { fullyReceived: true }
-               });
-            }
-          } else {
-             // If we voided and it's no longer fully received
-             const srfWithPOItem = await tx.subconRequestForm.findUnique({
-              where: { id: existingSrt.subconRequestFormId },
-              include: { purchaseOrderItem: true },
-            });
-            if (srfWithPOItem?.purchaseOrderItem?.woRoutingProcessId) {
-               await tx.routingProcess.update({
-                  where: { id: srfWithPOItem.purchaseOrderItem.woRoutingProcessId },
-                  data: { fullyReceived: false }
-               });
-            }
-          }
-        }
+      if (srt.status === "Submitted") {
+        await assertRejectWithinReturned(tx, srt.subconRequestFormId);
       }
 
       return srt;
@@ -149,6 +102,9 @@ export async function PUT(
 
     return NextResponse.json(updatedSrt);
   } catch (error: any) {
+    if (error instanceof RejectQtyError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
     console.error("Error updating Subcon Reject Tracking:", error);
     return NextResponse.json(
       { error: "Failed to update Subcon Reject Tracking" },

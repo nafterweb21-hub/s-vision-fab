@@ -42,7 +42,7 @@ export default function CreateFinishedGoodPage() {
   };
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 bg-white text-black">
+    <div className="space-y-4 bg-white text-black w-full">
       {/* Navigation & Header */}
       <div className="space-y-2">
         <Link

@@ -116,7 +116,7 @@ export default function ProcessRoleMappingPage() {
   }, [selected, allowedRoleIds]);
 
   return (
-    <div className="flex-1 p-6 max-w-4xl mx-auto w-full space-y-6">
+    <div className="flex-1 py-3 w-full space-y-4">
       {notification && (
         <div
           className={`fixed top-6 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl border text-sm font-semibold ${

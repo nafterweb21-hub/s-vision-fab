@@ -61,12 +61,14 @@ export const PRINT_DOCUMENTS: Record<PrintDocumentKey, PrintDocument> = {
   "delivery-label": {
     // The label stock is 102x51mm, not A4.
     pdf: { width: "102mm", height: "51mm", preferCSSPageSize: true },
+    // The label is printed per work order: the route param is the work order
+    // number, not a delivery order id.
     resolveName: async (id) => {
-      const row = await prisma.deliveryOrder.findUnique({
-        where: { id },
-        select: { doNo: true },
+      const row = await prisma.workOrder.findUnique({
+        where: { workOrderNo: id },
+        select: { workOrderNo: true },
       });
-      return row && `Delivery Label ${row.doNo}`;
+      return row && `Delivery Label ${row.workOrderNo}`;
     },
   },
   "delivery-order": {

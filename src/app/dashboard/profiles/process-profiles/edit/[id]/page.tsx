@@ -100,7 +100,7 @@ export default function EditProcessProfilePage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 animate-fade-in">
+    <div className="space-y-4 animate-fade-in w-full">
       <h2 className="text-2xl font-bold">Edit Process Profile</h2>
       {errorMsg && (
         <div className="rounded bg-rose-50 p-4 text-rose-800 ">

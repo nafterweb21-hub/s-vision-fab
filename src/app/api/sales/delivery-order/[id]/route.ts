@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { toUserMessage } from "@/lib/api-error";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -24,7 +25,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json(doItem);
   } catch (error: any) {
     console.error("Get Delivery Order Error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: toUserMessage(error, "Could not load the delivery order. Please try again.") }, { status: 500 });
   }
 }
 
@@ -32,7 +33,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   try {
     const { id } = await params;
     const body = await req.json();
-    const { doNo, date, customerId, salesOrderId, cocRequired, items } = body;
+    const { doNo, date, customerId, salesOrderId, cocRequired, poNo, vehicleNo, modeOfTransport, isReturnable, returnableNote, items } = body;
 
     // Check if duplicate DO no
     const existing = await prisma.deliveryOrder.findUnique({ where: { doNo } });
@@ -56,12 +57,19 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         customerId,
         salesOrderId,
         cocRequired: !!cocRequired,
+        poNo: poNo?.trim() || null,
+        vehicleNo: vehicleNo?.trim() || null,
+        modeOfTransport: modeOfTransport?.trim() || null,
+        isReturnable: !!isReturnable,
+        returnableNote: isReturnable ? (returnableNote?.trim() || null) : null,
         items: {
           deleteMany: {},
           create: items.map((item: any) => ({
             workOrderNo: item.workOrderNo,
+            description: item.description?.trim() || null,
             quantity: Number(item.quantity),
             uomId: item.uomId || null,
+            totalValue: item.totalValue === "" || item.totalValue == null ? null : Number(item.totalValue),
             deliveryDate: item.deliveryDate ? new Date(item.deliveryDate) : null,
           })),
         },
@@ -71,7 +79,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error("Update Delivery Order Error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: toUserMessage(error, "Could not save the delivery order. Please check the details and try again.") }, { status: 500 });
   }
 }
 
@@ -91,6 +99,6 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error("Delete Delivery Order Error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: toUserMessage(error, "Could not delete the delivery order. Please try again.") }, { status: 500 });
   }
 }

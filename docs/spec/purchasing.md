@@ -65,7 +65,7 @@ Common: Quantity (Numeric, Y, 2 dec), Cancel Quantity (Numeric, N, 2 dec), PR Qu
 - **1 PO : 1 PR. 1 PR : n PO.**
 - Within one PO, items may come from Material Profile or be free-text.
 - **All POs require approval.** See [PO Approval](#po-approval) below.
-- **PO cannot be submitted for approval if supplier email is blank.**
+- Supplier email is optional; a PO can be submitted for approval with a blank email (the supplier auto-email on approval is skipped when blank).
 - Exchange rate = latest from Currency Profile at PO creation.
 - No discount columns — unit price / amount are the final net.
 - For each line, purchaser indicates **how much of the PR quantity** this PO consumes, so the system can compute outstanding PR.
@@ -117,7 +117,7 @@ Receive Status (auto): `NA / Not Received / Partially Received / Fully Received`
 | 15 | Mill Certificate | Checkbox | User | N | default unticked |
 | 16 | Certificate of Conformance | Checkbox | User | N | default unticked |
 | 17 | Contact Person | Dropdown | Supplier Contact | Y | populates Tel/Fax/Mobile/Email below; editable |
-| 18–21 | Tel / Fax / Mobile / Email | Text | from Contact | Email Y | |
+| 18–21 | Tel / Fax / Mobile / Email | Text | from Contact | N | email optional |
 | 22–23 | Approval By / Date (Tier 1) | Read-only | System | — | |
 | 24–25 | Approval By / Date (Tier 2) | Read-only | System | — | |
 | 26 | Receive Status | Read-only | Computed | — | |

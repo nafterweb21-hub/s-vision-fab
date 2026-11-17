@@ -3,8 +3,36 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { nextDocumentNo } from "@/lib/document-numbering";
-
 import { RecordStatus } from "@/lib/status";
+
+function toUserFriendlyError(error: any, defaultMsg: string): string {
+  if (!error) return defaultMsg;
+  const msg = typeof error === "string" ? error : error.message || "";
+
+  if (msg.includes("Argument `company` is missing")) {
+    return "Company profile configuration is incomplete. Please re-select the Company.";
+  }
+  if (msg.includes("Argument `supplier` is missing")) {
+    return "Supplier profile configuration is incomplete. Please re-select the Supplier.";
+  }
+  if (msg.includes("Argument `purchaseOrder` is missing")) {
+    return "Purchase Order selection is required. Please select an issued Purchase Order.";
+  }
+  if (msg.includes("Argument `currency` is missing")) {
+    return "Currency is required. Please ensure currency is set.";
+  }
+  if (msg.includes("Unique constraint failed") || msg.includes("grNo")) {
+    return "A Goods Receive document with this number already exists. Please try saving again.";
+  }
+  if (msg.includes("Foreign key constraint failed")) {
+    return "One of the referenced records (Company, Supplier, PO, or Creator) is invalid or no longer exists.";
+  }
+  if (msg.includes("Invalid `prisma.") || msg.includes("invocation:")) {
+    return "Failed to save Goods Receive due to invalid data format. Please verify the form inputs and try again.";
+  }
+  return msg || defaultMsg;
+}
+
 export async function getGoodsReceiveFormData() {
   try {
     const [companies, suppliers, purchaseOrders, employees, currencies, taxes] = await Promise.all([
@@ -31,23 +59,48 @@ export async function createGoodsReceive(data: any) {
   try {
     const { items, ...grData } = data;
 
-    // The number is taken and the GR written in one transaction: the counter's
-    // row lock only holds for as long as the transaction does.
+    if (!grData.companyId) {
+      return { success: false, error: "Company selection is mandatory." };
+    }
+    if (!grData.supplierId) {
+      return { success: false, error: "Supplier selection is mandatory." };
+    }
+    if (!grData.purchaseOrderId) {
+      return { success: false, error: "Purchase Order selection is mandatory." };
+    }
+
+    const cleanData: any = {
+      date: new Date(grData.date || new Date()),
+      companyId: grData.companyId,
+      supplierId: grData.supplierId,
+      purchaseOrderId: grData.purchaseOrderId,
+      currencyId: grData.currencyId,
+      exchangeRate: Number(grData.exchangeRate) || 1,
+      taxRate: Number(grData.taxRate) || 0,
+      taxTypeId: grData.taxTypeId || null,
+      doNo: grData.doNo || null,
+      doDate: grData.doDate ? new Date(grData.doDate) : null,
+      invoiceNo: grData.invoiceNo || null,
+      invoiceDate: grData.invoiceDate ? new Date(grData.invoiceDate) : null,
+      remark: grData.remark || null,
+      creatorId: grData.creatorId || "emp-1",
+    };
+
     const newGr = await prisma.$transaction(async (tx) => {
       const grNo = await nextDocumentNo(tx, "GOODS_RECEIVE", {
-        companyId: grData.companyId,
+        companyId: cleanData.companyId,
         isTaken: async (no) => (await tx.goodsReceive.count({ where: { grNo: no } })) > 0,
       });
 
       return tx.goodsReceive.create({
         data: {
-          ...grData,
+          ...cleanData,
           grNo,
           status: "Draft",
           items: {
-            create: items.map((item: any) => ({
+            create: (items || []).map((item: any) => ({
               purchaseOrderItemId: item.purchaseOrderItemId,
-              receiveQty: item.receiveQty,
+              receiveQty: Number(item.receiveQty) || 0,
             })),
           },
         },
@@ -58,7 +111,7 @@ export async function createGoodsReceive(data: any) {
     return { success: true, id: newGr.id };
   } catch (error: any) {
     console.error("Error creating GR:", error);
-    return { success: false, error: error.message };
+    return { success: false, error: toUserFriendlyError(error, "Failed to create Goods Receive.") };
   }
 }
 
@@ -66,10 +119,26 @@ export async function updateGoodsReceive(id: string, data: any) {
   try {
     const { items, ...grData } = data;
 
+    const cleanData: any = {
+      date: grData.date ? new Date(grData.date) : undefined,
+      companyId: grData.companyId,
+      supplierId: grData.supplierId,
+      purchaseOrderId: grData.purchaseOrderId,
+      currencyId: grData.currencyId,
+      exchangeRate: grData.exchangeRate !== undefined ? Number(grData.exchangeRate) : undefined,
+      taxRate: grData.taxRate !== undefined ? Number(grData.taxRate) : undefined,
+      taxTypeId: grData.taxTypeId || null,
+      doNo: grData.doNo || null,
+      doDate: grData.doDate ? new Date(grData.doDate) : null,
+      invoiceNo: grData.invoiceNo || null,
+      invoiceDate: grData.invoiceDate ? new Date(grData.invoiceDate) : null,
+      remark: grData.remark || null,
+    };
+
     await prisma.$transaction(async (tx) => {
       await tx.goodsReceive.update({
         where: { id },
-        data: grData,
+        data: cleanData,
       });
 
       if (items && items.length > 0) {
@@ -77,7 +146,7 @@ export async function updateGoodsReceive(id: string, data: any) {
           if (item.id) {
             await tx.goodsReceiveItem.update({
               where: { id: item.id },
-              data: { receiveQty: item.receiveQty },
+              data: { receiveQty: Number(item.receiveQty) || 0 },
             });
           }
         }
@@ -89,13 +158,12 @@ export async function updateGoodsReceive(id: string, data: any) {
     return { success: true };
   } catch (error: any) {
     console.error("Error updating GR:", error);
-    return { success: false, error: error.message };
+    return { success: false, error: toUserFriendlyError(error, "Failed to update Goods Receive.") };
   }
 }
 
 export async function submitGoodsReceive(id: string) {
   try {
-    // In a real scenario, you'd check PO balances here and update PO status.
     await prisma.goodsReceive.update({
       where: { id },
       data: { status: "Submitted" },
@@ -106,7 +174,7 @@ export async function submitGoodsReceive(id: string) {
     return { success: true };
   } catch (error: any) {
     console.error("Error submitting GR:", error);
-    return { success: false, error: error.message };
+    return { success: false, error: toUserFriendlyError(error, "Failed to submit Goods Receive.") };
   }
 }
 
@@ -122,6 +190,6 @@ export async function voidGoodsReceive(id: string) {
     return { success: true };
   } catch (error: any) {
     console.error("Error voiding GR:", error);
-    return { success: false, error: error.message };
+    return { success: false, error: toUserFriendlyError(error, "Failed to void Goods Receive.") };
   }
 }

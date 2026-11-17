@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { nextDocumentNo } from "@/lib/document-numbering";
+import { toUserMessage } from "@/lib/api-error";
 
 export async function GET(req: NextRequest) {
   try {
@@ -13,6 +14,8 @@ export async function GET(req: NextRequest) {
       ? {
           OR: [
             { doNo: { contains: search, mode: "insensitive" as const } },
+            { poNo: { contains: search, mode: "insensitive" as const } },
+            { vehicleNo: { contains: search, mode: "insensitive" as const } },
             { customer: { customerName: { contains: search, mode: "insensitive" as const } } },
           ],
         }
@@ -35,14 +38,14 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ total, data, page, pageSize });
   } catch (error: any) {
     console.error("Delivery Order List Error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: toUserMessage(error, "Could not load delivery orders. Please try again.") }, { status: 500 });
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { date, customerId, salesOrderId, cocRequired, items } = body;
+    const { date, customerId, salesOrderId, cocRequired, poNo, vehicleNo, modeOfTransport, isReturnable, returnableNote, items } = body;
 
     // ── QC Guard: Only allow Completed + QC Approved work orders ──
     if (items && items.length > 0) {
@@ -82,12 +85,19 @@ export async function POST(req: NextRequest) {
           customerId,
           salesOrderId,
           cocRequired: !!cocRequired,
+          poNo: poNo?.trim() || null,
+          vehicleNo: vehicleNo?.trim() || null,
+          modeOfTransport: modeOfTransport?.trim() || null,
+          isReturnable: !!isReturnable,
+          returnableNote: isReturnable ? (returnableNote?.trim() || null) : null,
           status: "Draft",
           items: {
             create: items.map((item: any) => ({
               workOrderNo: item.workOrderNo,
+              description: item.description?.trim() || null,
               quantity: Number(item.quantity),
               uomId: item.uomId || null,
+              totalValue: item.totalValue === "" || item.totalValue == null ? null : Number(item.totalValue),
               deliveryDate: item.deliveryDate ? new Date(item.deliveryDate) : null,
             })),
           },
@@ -98,6 +108,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, id: newDO.id, doNo: newDO.doNo });
   } catch (error: any) {
     console.error("Create Delivery Order Error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: toUserMessage(error, "Could not save the delivery order. Please check the details and try again.") }, { status: 500 });
   }
 }

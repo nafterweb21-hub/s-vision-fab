@@ -100,7 +100,7 @@ export default function RoutingProcessTable({
 
   return (
     <div className="overflow-x-auto w-full">
-      <table className="w-full text-sm text-left min-w-[600px] sm:min-w-[1000px]">
+      <table className="w-full text-sm text-left min-w-[600px] lg:min-w-[860px]">
         <thead className="text-[10px] sm:text-xs text-slate-500 uppercase bg-white border-b border-slate-100">
           <tr>
             {dndEnabled && <th className="px-1.5 sm:px-2 py-1.5 sm:py-2 w-6 sm:w-8" aria-label="Reorder" />}

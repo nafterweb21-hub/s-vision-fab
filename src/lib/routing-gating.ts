@@ -27,6 +27,11 @@ export type GateRow = {
   mainProcessId: string | null;
   /** Role ids allowed on this row's Main Process. Empty = open to all. */
   allowedRoleIds: string[];
+  /**
+   * Stage QC: false while this (completed) step still awaits QC approval on a work order with
+   * Stage QC ON. Such a step holds the serial front, so the next step stays locked. Omitted = cleared.
+   */
+  qcCleared?: boolean;
 };
 
 export type GatedRow = GateRow & {
@@ -35,7 +40,21 @@ export type GatedRow = GateRow & {
   locked: boolean; // a future step, blocked until earlier ones complete
   permitted: boolean; // operator's role may run this process
   visible: boolean; // should appear in the scan-in dropdown for this operator
+  awaitingQc: boolean; // completed, but Stage QC has not approved it yet (blocks the next step)
 };
+
+type StageQcSheet = { timeOut: string | Date | null; completedQty: unknown; qcStatus: string | null };
+
+/**
+ * Has this step passed Stage QC? Always true when the work order has Stage QC OFF or the step is not
+ * completed yet. Otherwise every finished session that produced pieces must be QC-Approved.
+ */
+export function isStageQcCleared(stageQc: boolean, status: string, sheets: StageQcSheet[]): boolean {
+  if (!stageQc || status !== "Completed") return true;
+  return sheets
+    .filter((t) => t.timeOut != null && Number(t.completedQty ?? 0) > 0)
+    .every((t) => t.qcStatus === "Approved");
+}
 
 /** Serial order across the whole work order. */
 function serialCompare(a: GateRow, b: GateRow): number {
@@ -56,8 +75,10 @@ export function computeGating(
   roleId: string | null | undefined,
 ): GatedRow[] {
   const ordered = [...rows].sort(serialCompare);
-  // The current step is the earliest process (serial order) not yet completed.
-  const frontId = ordered.find((r) => r.status !== "Completed")?.id ?? null;
+  // The current step is the earliest process (serial order) not yet completed — or completed but
+  // still awaiting Stage QC, which blocks everything after it.
+  const frontId =
+    ordered.find((r) => r.status !== "Completed" || r.qcCleared === false)?.id ?? null;
 
   return ordered.map((r) => {
     const completed = r.status === "Completed";
@@ -65,6 +86,7 @@ export function computeGating(
     const locked = !completed && !available;
     const permitted = isRolePermitted(r.allowedRoleIds, roleId);
     const visible = permitted && available;
-    return { ...r, completed, available, locked, permitted, visible };
+    const awaitingQc = completed && r.qcCleared === false;
+    return { ...r, completed, available, locked, permitted, visible, awaitingQc };
   });
 }

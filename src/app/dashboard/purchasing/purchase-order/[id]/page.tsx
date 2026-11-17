@@ -3,11 +3,13 @@ import { SearchableSelect } from "@/components/SearchableSelect";
 import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import PoBillShipTo, { emptyPoShipTo, poShipToFromRecord, validatePoShipTo, applyPoCustomer, type PoCustomer, type PoShipTo } from "@/components/purchasing/PoBillShipTo";
 import { Loader2, ArrowLeft, Plus, Trash2, Save, FileText } from "lucide-react";
 type FormData = {
   companies: { id: string; companyName: string; allowPoForWo: boolean }[];
+  customers: PoCustomer[];
   employees: { id: string; name: string; email: string; code: string }[];
-  workOrders: { workOrderNo: string; jobDescription: string | null }[];
+  workOrders: { workOrderNo: string; jobDescription: string | null; customerId: string | null }[];
   suppliers: { id: string; supplierName: string; contactPersons: any[] }[];
   currencies: { id: string; code: string; name: string; exchangeRate: string | number }[];
   taxes: { id: string; taxType: string; taxRate: string | number }[];
@@ -76,6 +78,14 @@ export default function PurchaseOrderEditPage() {
   const [certOfConformance, setCertOfConformance] = useState(false);
 
   const [remark, setRemark] = useState("");
+  const [shipTo, setShipTo] = useState<PoShipTo>(emptyPoShipTo);
+
+  // Selecting a work order auto-fills Billed to with that work order's customer.
+  function handleWorkOrderChange(woNo: string) {
+    setWorkOrderNo(woNo);
+    const customerId = data?.workOrders?.find((w) => w.workOrderNo === woNo)?.customerId;
+    if (customerId) setShipTo((prev) => applyPoCustomer(prev, data?.customers, customerId));
+  }
   const [items, setItems] = useState<Item[]>([]);
 
   useEffect(() => {
@@ -110,6 +120,7 @@ export default function PurchaseOrderEditPage() {
           setMillCertificate(po.millCertificate || false);
           setCertOfConformance(po.certOfConformance || false);
           setRemark(po.remark || "");
+          setShipTo(poShipToFromRecord(po));
           setItems(
             po.items.map((it: any) => ({
               id: it.id,
@@ -402,9 +413,13 @@ export default function PurchaseOrderEditPage() {
       }
     }
 
+    const shipToError = validatePoShipTo(shipTo);
+    if (shipToError) return setError(shipToError);
+
     setSaving(true);
     try {
       const payload = {
+        ...shipTo,
         companyId,
         supplierId,
         date,
@@ -429,6 +444,7 @@ export default function PurchaseOrderEditPage() {
         certOfConformance,
         remark,
         items: items.map((it, idx) => ({
+          id: it.id,
           fromMaterialProfile: it.fromMaterialProfile,
           materialProfileId: it.fromMaterialProfile ? it.materialProfileId : null,
           purchaseRequisitionItemId: it.purchaseRequisitionItemId || null,
@@ -485,7 +501,7 @@ export default function PurchaseOrderEditPage() {
   }
 
   return (
-    <div className="p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
+    <div className="py-3 space-y-4 w-full">
       <div className="flex items-center justify-between pb-6 border-b border-blue-200">
         <div>
           <div className="flex items-center gap-2 text-xs text-blue-400 font-semibold uppercase mb-1">
@@ -683,7 +699,7 @@ export default function PurchaseOrderEditPage() {
           <SearchableSelect
             value={workOrderNo}
             disabled={readOnly}
-            onChange={(e) => setWorkOrderNo(e.target.value)}
+            onChange={(e) => handleWorkOrderChange(e.target.value)}
             className={inputCls}
           >
             <option value="">— None (Non Work Order) —</option>
@@ -723,10 +739,17 @@ export default function PurchaseOrderEditPage() {
 
       </div>
 
+      <PoBillShipTo
+        customers={data?.customers}
+        value={shipTo}
+        onChange={setShipTo}
+        readOnly={readOnly}
+      />
+
       {/* Items Section */}
-      <div className="bg-white border border-blue-200 rounded-xl shadow-sm overflow-hidden">
-        <div className="px-6 py-3 border-b border-blue-200 flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-blue-900">Purchase Order Items</h3>
+      <div className="bg-white border border-blue-200 rounded-xl shadow-sm p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-base font-bold text-blue-900">Purchase Order Items</h3>
           {!readOnly && (
             <button
               onClick={addItem}
@@ -737,177 +760,183 @@ export default function PurchaseOrderEditPage() {
           )}
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[2200px]">
-            <thead className="text-xs text-blue-500 bg-blue-50/50 uppercase tracking-wider">
+          <table className="w-full table-fixed text-[13px] text-left min-w-[860px]">
+            <colgroup>
+              <col />
+              <col className="w-28" />
+              <col className="w-24" />
+              <col className="w-24" />
+              <col className="w-28" />
+              <col className="w-28" />
+              <col className="w-28" />
+              <col className="w-32" />
+              {!readOnly && <col className="w-8" />}
+            </colgroup>
+            <thead className="text-[11px] text-blue-500 bg-blue-50/50 uppercase tracking-wide border-b border-blue-200 align-bottom">
               <tr>
-                <th className="px-3 py-2 text-left w-24">Type</th>
-                <th className="px-3 py-2 text-left w-48">Material Profile / Code</th>
-                <th className="px-3 py-2 text-left w-56">Description</th>
-                <th className="px-3 py-2 text-left w-32">HSN Code</th>
-                <th className="px-3 py-2 text-left w-40">Supplier Part No</th>
-                <th className="px-3 py-2 text-left w-32">Shape</th>
-                <th className="px-3 py-2 text-left w-32">Size</th>
-                <th className="px-3 py-2 text-left w-28">PO UOM</th>
-                <th className="px-3 py-2 text-right w-24">Qty</th>
-                <th className="px-3 py-2 text-right w-32">Unit Price</th>
-                <th className="px-3 py-2 text-right w-32">Amount</th>
-                <th className="px-3 py-2 text-left w-32">Tax</th>
-                <th className="px-3 py-2 text-right w-24">Conv</th>
-                <th className="px-3 py-2 text-left w-28">Int UOM</th>
-                <th className="px-3 py-2 text-right w-24">Int Qty</th>
-                <th className="px-3 py-2 text-left w-40">Delivery Date</th>
-                <th className="px-3 py-2 text-left min-w-[150px]">Remark</th>
-                {!readOnly && <th className="w-10"></th>}
+                <th className="px-1.5 py-2 text-left">Type · Material / Description</th>
+                <th className="px-1.5 py-2 text-left">HSN<span className="block">Supplier PN</span></th>
+                <th className="px-1.5 py-2 text-left">Shape<span className="block">Size</span></th>
+                <th className="px-1.5 py-2 text-left">Qty<span className="block">PO UOM</span></th>
+                <th className="px-1.5 py-2 text-left">Unit Price<span className="block">Amount</span></th>
+                <th className="px-1.5 py-2 text-left">Tax</th>
+                <th className="px-1.5 py-2 text-left">Conv · Int UOM<span className="block">Int Qty</span></th>
+                <th className="px-1.5 py-2 text-left">Delivery Date<span className="block">Remark</span></th>
+                {!readOnly && <th className="px-1.5 py-2"></th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-blue-100">
               {items.map((it, idx) => {
                 return (
-                  <tr key={idx} className="hover:bg-blue-50/10">
-                    <td className="px-3 py-2 align-top">
-                      <SearchableSelect
-                        value={it.fromMaterialProfile ? "Profile" : "Free"}
-                        disabled={readOnly || !!it.purchaseRequisitionItemId}
-                        onChange={(e) => updateItem(idx, { fromMaterialProfile: e.target.value === "Profile" })}
-                        className={inputCls}
-                      >
-                        <option value="Profile">Profile</option>
-                        <option value="Free">FreeText</option>
-                      </SearchableSelect>
+                  <tr key={idx} className="hover:bg-blue-50/10 align-top">
+                    <td className="px-1.5 py-1.5">
+                      <div className="flex flex-col gap-1">
+                        <div className="flex gap-1">
+                          <div className="w-24 shrink-0">
+                            <SearchableSelect compact
+                              value={it.fromMaterialProfile ? "Profile" : "Free"}
+                              disabled={readOnly || !!it.purchaseRequisitionItemId}
+                              onChange={(e) => updateItem(idx, { fromMaterialProfile: e.target.value === "Profile" })}
+                              className={cellCls}
+                            >
+                              <option value="Profile">Profile</option>
+                              <option value="Free">FreeText</option>
+                            </SearchableSelect>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            {it.fromMaterialProfile ? (
+                              <SearchableSelect compact
+                                value={it.materialProfileId}
+                                disabled={readOnly || !!it.purchaseRequisitionItemId}
+                                onChange={(e) => updateItem(idx, { materialProfileId: e.target.value })}
+                                className={cellCls}
+                              >
+                                <option value="">— Select —</option>
+                                {data?.materials?.map((m) => (
+                                  <option key={m.id} value={m.id}>
+                                    {m.partNo ? `${m.partNo} — ` : ""}{m.description.slice(0, 30)}
+                                  </option>
+                                ))}
+                              </SearchableSelect>
+                            ) : (
+                              <textarea
+                                rows={1}
+                                value={it.material}
+                                disabled={readOnly || !!it.purchaseRequisitionItemId}
+                                onChange={(e) => updateItem(idx, { material: e.target.value.replace(/\n/g, " ") })}
+                                onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }}
+                                className={`${cellCls} block leading-snug break-words resize-none field-sizing-content`}
+                                placeholder="e.g. PART-A"
+                              />
+                            )}
+                          </div>
+                        </div>
+                        <textarea
+                          rows={1}
+                          value={it.description}
+                          disabled={readOnly || !!it.purchaseRequisitionItemId}
+                          onChange={(e) => updateItem(idx, { description: e.target.value })}
+                          className={`${cellCls} block leading-snug break-words resize-none field-sizing-content`}
+                          placeholder="Material description"
+                        />
+                      </div>
                     </td>
 
-                    <td className="px-3 py-2 align-top">
-                      {it.fromMaterialProfile ? (
-                        <SearchableSelect
-                          value={it.materialProfileId}
+                    <td className="px-1.5 py-1.5">
+                      <div className="flex flex-col gap-1">
+                        <input
+                          type="text"
+                          value={it.hsnCode}
+                          disabled={readOnly}
+                          onChange={(e) => updateItem(idx, { hsnCode: e.target.value })}
+                          className={cellCls}
+                          placeholder="HSN Code"
+                        />
+                        <input
+                          type="text"
+                          value={it.supplierMaterialNo}
+                          disabled={readOnly}
+                          onChange={(e) => updateItem(idx, { supplierMaterialNo: e.target.value })}
+                          className={cellCls}
+                          placeholder="Supplier PN"
+                          title={it.supplierMaterialNo}
+                        />
+                      </div>
+                    </td>
+
+                    <td className="px-1.5 py-1.5">
+                      <div className="flex flex-col gap-1">
+                        <input
+                          type="text"
+                          value={it.shape}
                           disabled={readOnly || !!it.purchaseRequisitionItemId}
-                          onChange={(e) => updateItem(idx, { materialProfileId: e.target.value })}
-                          className={inputCls}
+                          onChange={(e) => updateItem(idx, { shape: e.target.value })}
+                          className={cellCls}
+                          placeholder="Shape"
+                        />
+                        <input
+                          type="text"
+                          value={it.size}
+                          disabled={readOnly || !!it.purchaseRequisitionItemId}
+                          onChange={(e) => updateItem(idx, { size: e.target.value })}
+                          className={cellCls}
+                          placeholder="Size"
+                        />
+                      </div>
+                    </td>
+
+                    <td className="px-1.5 py-1.5">
+                      <div className="flex flex-col gap-1">
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={it.quantity}
+                          disabled={readOnly}
+                          onChange={(e) => updateItem(idx, { quantity: e.target.value })}
+                          className={`${cellCls} text-right`}
+                          placeholder="Qty"
+                        />
+                        <SearchableSelect compact
+                          value={it.poUomId}
+                          disabled={readOnly}
+                          onChange={(e) => updateItem(idx, { poUomId: e.target.value })}
+                          className={cellCls}
                         >
-                          <option value="">— Select —</option>
-                          {data?.materials?.map((m) => (
-                            <option key={m.id} value={m.id}>
-                              {m.partNo ? `${m.partNo} — ` : ""}{m.description.slice(0, 30)}
+                          <option value="">—</option>
+                          {data?.uoms?.map((u) => (
+                            <option key={u.id} value={u.id}>
+                              {u.uomName}
                             </option>
                           ))}
                         </SearchableSelect>
-                      ) : (
+                      </div>
+                    </td>
+
+                    <td className="px-1.5 py-1.5">
+                      <div className="flex flex-col gap-1">
                         <input
-                          type="text"
-                          value={it.material}
-                          disabled={readOnly || !!it.purchaseRequisitionItemId}
-                          onChange={(e) => updateItem(idx, { material: e.target.value })}
-                          className={inputCls}
-                          placeholder="e.g. PART-A"
+                          type="number"
+                          step="0.0001"
+                          min="0"
+                          value={it.unitPrice}
+                          disabled={readOnly}
+                          onChange={(e) => updateItem(idx, { unitPrice: e.target.value })}
+                          className={`${cellCls} text-right`}
+                          placeholder="Unit Price"
                         />
-                      )}
+                        <div className="px-2 py-1 text-right tabular-nums text-blue-900 font-semibold">
+                          {it.amount}
+                        </div>
+                      </div>
                     </td>
 
-                    <td className="px-3 py-2 align-top">
-                      <textarea
-                        rows={1}
-                        value={it.description}
-                        disabled={readOnly || !!it.purchaseRequisitionItemId}
-                        onChange={(e) => updateItem(idx, { description: e.target.value })}
-                        className={inputCls}
-                        placeholder="Material description"
-                      />
-                    </td>
-
-                    <td className="px-3 py-2 align-top">
-                      <input
-                        type="text"
-                        value={it.hsnCode}
-                        disabled={readOnly}
-                        onChange={(e) => updateItem(idx, { hsnCode: e.target.value })}
-                        className={inputCls}
-                        placeholder="HSN Code"
-                      />
-                    </td>
-
-                    <td className="px-3 py-2 align-top">
-                      <input
-                        type="text"
-                        value={it.supplierMaterialNo}
-                        disabled={readOnly}
-                        onChange={(e) => updateItem(idx, { supplierMaterialNo: e.target.value })}
-                        className={inputCls}
-                        placeholder="Supplier PN"
-                      />
-                    </td>
-
-                    <td className="px-3 py-2 align-top">
-                      <input
-                        type="text"
-                        value={it.shape}
-                        disabled={readOnly || !!it.purchaseRequisitionItemId}
-                        onChange={(e) => updateItem(idx, { shape: e.target.value })}
-                        className={inputCls}
-                        placeholder="Shape"
-                      />
-                    </td>
-
-                    <td className="px-3 py-2 align-top">
-                      <input
-                        type="text"
-                        value={it.size}
-                        disabled={readOnly || !!it.purchaseRequisitionItemId}
-                        onChange={(e) => updateItem(idx, { size: e.target.value })}
-                        className={inputCls}
-                        placeholder="Size"
-                      />
-                    </td>
-
-                    <td className="px-3 py-2 align-top">
-                      <SearchableSelect
-                        value={it.poUomId}
-                        disabled={readOnly}
-                        onChange={(e) => updateItem(idx, { poUomId: e.target.value })}
-                        className={inputCls}
-                      >
-                        <option value="">—</option>
-                        {data?.uoms?.map((u) => (
-                          <option key={u.id} value={u.id}>
-                            {u.uomName}
-                          </option>
-                        ))}
-                      </SearchableSelect>
-                    </td>
-
-                    <td className="px-3 py-2 align-top">
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={it.quantity}
-                        disabled={readOnly}
-                        onChange={(e) => updateItem(idx, { quantity: e.target.value })}
-                        className={`${inputCls} text-right`}
-                      />
-                    </td>
-
-                    <td className="px-3 py-2 align-top">
-                      <input
-                        type="number"
-                        step="0.0001"
-                        min="0"
-                        value={it.unitPrice}
-                        disabled={readOnly}
-                        onChange={(e) => updateItem(idx, { unitPrice: e.target.value })}
-                        className={`${inputCls} text-right`}
-                      />
-                    </td>
-                    
-                    <td className="px-3 py-2 align-top text-right font-mono text-blue-900 font-semibold pt-4">
-                      {it.amount}
-                    </td>
-
-                    <td className="px-3 py-2 align-top">
-                      <SearchableSelect
+                    <td className="px-1.5 py-1.5">
+                      <SearchableSelect compact
                         value={it.taxTypeId}
                         disabled={readOnly}
                         onChange={(e) => updateItem(idx, { taxTypeId: e.target.value })}
-                        className={inputCls}
+                        className={cellCls}
                       >
                         <option value="">— Select Tax —</option>
                         {data?.taxes?.map((t) => (
@@ -917,73 +946,76 @@ export default function PurchaseOrderEditPage() {
                         ))}
                       </SearchableSelect>
                       {Number(it.taxAmount) > 0 && (
-                        <div className="text-[10px] text-slate-500 mt-1 text-right">
+                        <div className="text-[10px] text-slate-500 mt-0.5 text-right tabular-nums">
                           Tax: {it.taxAmount}
                         </div>
                       )}
                     </td>
 
-                    <td className="px-3 py-2 align-top">
-                      <input
-                        type="number"
-                        step="0.0001"
-                        min="0"
-                        value={it.conversion}
-                        disabled={readOnly}
-                        onChange={(e) => updateItem(idx, { conversion: e.target.value })}
-                        className={`${inputCls} text-right`}
-                      />
+                    <td className="px-1.5 py-1.5">
+                      <div className="flex flex-col gap-1">
+                        <div className="flex gap-1">
+                          <input
+                            type="number"
+                            step="0.0001"
+                            min="0"
+                            value={it.conversion}
+                            disabled={readOnly}
+                            onChange={(e) => updateItem(idx, { conversion: e.target.value })}
+                            className={`${cellCls} min-w-0 text-right`}
+                            placeholder="Conv"
+                            title="Conversion"
+                          />
+                          <div className="w-14 shrink-0">
+                            <SearchableSelect compact
+                              value={it.internalUomId}
+                              disabled={readOnly || !!it.purchaseRequisitionItemId}
+                              onChange={(e) => updateItem(idx, { internalUomId: e.target.value })}
+                              className={cellCls}
+                            >
+                              <option value="">—</option>
+                              {data?.uoms?.map((u) => (
+                                <option key={u.id} value={u.id}>
+                                  {u.uomName}
+                                </option>
+                              ))}
+                            </SearchableSelect>
+                          </div>
+                        </div>
+                        <div className="px-2 py-1 text-right tabular-nums text-blue-900">
+                          {it.internalQuantity}
+                        </div>
+                      </div>
                     </td>
 
-                    <td className="px-3 py-2 align-top">
-                      <SearchableSelect
-                        value={it.internalUomId}
-                        disabled={readOnly || !!it.purchaseRequisitionItemId}
-                        onChange={(e) => updateItem(idx, { internalUomId: e.target.value })}
-                        className={inputCls}
-                      >
-                        <option value="">—</option>
-                        {data?.uoms?.map((u) => (
-                          <option key={u.id} value={u.id}>
-                            {u.uomName}
-                          </option>
-                        ))}
-                      </SearchableSelect>
-                    </td>
-                    
-                    <td className="px-3 py-2 align-top text-right font-mono text-blue-900 pt-4">
-                      {it.internalQuantity}
-                    </td>
-
-                    <td className="px-3 py-2 align-top">
-                      <input
-                        type="date"
-                        value={it.deliveryDate}
-                        disabled={readOnly}
-                        onChange={(e) => updateItem(idx, { deliveryDate: e.target.value })}
-                        className={inputCls}
-                      />
-                    </td>
-
-                    <td className="px-3 py-2 align-top">
-                      <input
-                        type="text"
-                        value={it.remark}
-                        disabled={readOnly}
-                        onChange={(e) => updateItem(idx, { remark: e.target.value })}
-                        className={inputCls}
-                        placeholder="Remark"
-                      />
+                    <td className="px-1.5 py-1.5">
+                      <div className="flex flex-col gap-1">
+                        <input
+                          type="date"
+                          value={it.deliveryDate}
+                          disabled={readOnly}
+                          onChange={(e) => updateItem(idx, { deliveryDate: e.target.value })}
+                          className={`${cellCls} px-1`}
+                        />
+                        <textarea
+                          rows={1}
+                          value={it.remark}
+                          disabled={readOnly}
+                          onChange={(e) => updateItem(idx, { remark: e.target.value })}
+                          className={remarkCls}
+                          placeholder="Remark"
+                        />
+                      </div>
                     </td>
 
                     {!readOnly && (
-                      <td className="px-2 py-2 align-top text-center pt-3">
+                      <td className="px-0.5 py-1.5 text-center">
                         <button
                           onClick={() => removeItem(idx)}
-                          className="p-1.5 rounded-md hover:bg-rose-50 text-rose-500 cursor-pointer"
+                          className="p-1 rounded-md hover:bg-rose-50 text-rose-500 cursor-pointer"
                           title="Remove"
                         >
-                          <Trash2 size={14} />
+                          <Trash2 size={15} />
                         </button>
                       </td>
                     )}
@@ -1065,6 +1097,12 @@ export default function PurchaseOrderEditPage() {
 
 const inputCls =
   "w-full px-3 py-2 text-sm bg-blue-50 border border-blue-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 disabled:bg-slate-100 disabled:text-slate-500";
+
+const cellCls =
+  "w-full px-2 py-1 text-[13px] bg-blue-50 border border-blue-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 disabled:bg-slate-100 disabled:text-slate-500";
+
+const remarkCls =
+  "block w-full px-2 py-1 text-xs leading-snug bg-blue-50 border border-blue-200 rounded-md break-words resize-y field-sizing-content focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 disabled:bg-slate-100 disabled:text-slate-500";
 
 function Field({
   label,

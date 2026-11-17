@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
+import { getUnfinishedRoutingSteps, unfinishedStepsError } from "@/lib/work-order-completion";
 
 export async function approveQc(workOrderNo: string) {
   try {
@@ -10,6 +11,9 @@ export async function approveQc(workOrderNo: string) {
     if (!session || !session.user || !session.user.employeeId) {
       return { success: false, error: "Unauthorized or employee profile missing" };
     }
+
+    const pending = await getUnfinishedRoutingSteps(workOrderNo);
+    if (pending.length > 0) return { success: false, error: unfinishedStepsError(pending) };
 
     await prisma.$transaction(async (tx: any) => {
       // Update Work Order

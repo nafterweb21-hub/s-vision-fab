@@ -190,7 +190,7 @@ export default function EditEmployeePage() {
   ];
 
   return (
-    <div className="flex-1 p-6 space-y-6 max-w-3xl mx-auto w-full">
+    <div className="flex-1 py-3 space-y-4 w-full">
       {/* Toast Notification */}
       {notification && (
         <div

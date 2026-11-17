@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma";
 import { nextDocumentNo } from "@/lib/document-numbering";
+import { assertRejectWithinReturned, RejectQtyError } from "@/lib/subcon-reject";
 
 export async function GET(request: Request) {
   try {
@@ -114,45 +115,8 @@ export async function POST(request: Request) {
         },
       });
 
-      // Update Subcon Request Form receiveStatus if status is Submitted
       if (srt.status === "Submitted") {
-        const srf = await tx.subconRequestForm.findUnique({
-          where: { id: subconRequestFormId },
-          include: { subconRejectTrackings: true },
-        });
-
-        if (srf) {
-          const totalRejected = srf.subconRejectTrackings
-            .filter((t) => t.status === "Submitted")
-            .reduce((sum, t) => sum + Number(t.rejectedQty), 0);
-
-          let receiveStatus = "N/A";
-          if (totalRejected >= Number(srf.quantity)) {
-            receiveStatus = "Fully Received";
-          } else if (totalRejected > 0) {
-            receiveStatus = "Partially Received";
-          }
-
-          await tx.subconRequestForm.update({
-            where: { id: subconRequestFormId },
-            data: { receiveStatus },
-          });
-          
-          // Note: "The specific routing process in work order can start only when subcon PO quantity has been fully received."
-          // So if fully received, we should probably update the Routing Process fullyReceived = true
-          if (receiveStatus === "Fully Received") {
-            const srfWithPOItem = await tx.subconRequestForm.findUnique({
-              where: { id: subconRequestFormId },
-              include: { purchaseOrderItem: true },
-            });
-            if (srfWithPOItem?.purchaseOrderItem?.woRoutingProcessId) {
-               await tx.routingProcess.update({
-                  where: { id: srfWithPOItem.purchaseOrderItem.woRoutingProcessId },
-                  data: { fullyReceived: true }
-               });
-            }
-          }
-        }
+        await assertRejectWithinReturned(tx, srt.subconRequestFormId);
       }
 
       return srt;
@@ -160,6 +124,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json(newSrt, { status: 201 });
   } catch (error: any) {
+    if (error instanceof RejectQtyError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
     console.error("Error creating Subcon Reject Tracking:", error);
     return NextResponse.json(
       { error: "Failed to create Subcon Reject Tracking" },

@@ -105,7 +105,7 @@ export const APP_MODULES: AppModuleDef[] = [
     name: 'Invoice',
     group: 'Sales',
     pathPrefixes: ['/dashboard/sales/invoice'],
-    exportPrefixes: ['/print/invoice'],
+    exportPrefixes: ['/print/invoice', '/print/invoice-label'],
   },
   {
     code: 'RECEIPT',

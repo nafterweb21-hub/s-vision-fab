@@ -65,7 +65,7 @@ export default function EditDesignationProfilePage() {
   }
 
   return (
-    <div className="flex-1 flex flex-col p-6 space-y-6 max-w-3xl mx-auto w-full">
+    <div className="flex-1 flex flex-col py-3 space-y-4 w-full">
       <div className="flex items-center gap-4">
         <Link
           href="/dashboard/master-profile/designation"

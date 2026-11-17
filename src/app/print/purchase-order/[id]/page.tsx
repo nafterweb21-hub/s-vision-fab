@@ -1,7 +1,9 @@
 import { prisma } from "@/lib/prisma";
+import PoBillShipToPrint from "../PoBillShipToPrint";
 import { notFound } from "next/navigation";
 import PrintToolbar from "@/app/print/PrintToolbar";
 import CompanyLogo from "./CompanyLogo";
+import { resolveSellerStateCode, resolveStateCode, roundTo2 } from "@/lib/gst";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +36,7 @@ export default async function PrintPurchaseOrderPage(
       contactPerson: true,
       purchaser: true,
       items: {
-        include: { poUom: true }
+        include: { poUom: true, taxType: true }
       }
     }
   });
@@ -43,7 +45,45 @@ export default async function PrintPurchaseOrderPage(
 
   const settings = await prisma.generalSetting.findFirst();
 
+  // Tax is stored per line; fall back to the line's tax profile, then the PO-level rate.
+  const lineTaxRate = (it: (typeof po.items)[number]) =>
+    Number(it.taxRate) || Number(it.taxType?.taxRate) || Number(po.taxRate) || 0;
+
   const primarySupplierAddress = po.supplier?.addresses?.find((a) => a.isDefault)?.address || po.supplier?.addresses?.[0]?.address || "";
+
+  // Intra-state (CGST + SGST) when the supplier is in our state, else inter-state (IGST).
+  // If the supplier's state can't be resolved, fall back to the tax type naming IGST.
+  const companyState = resolveSellerStateCode(po.company);
+  const supplierState = resolveStateCode(po.supplierGst, primarySupplierAddress);
+  const isInterState = supplierState
+    ? supplierState !== companyState
+    : po.items.some((it) => /igst/i.test(it.taxType?.taxType || ""));
+
+  // Tax summary: CGST / SGST (or IGST) rows per rate, from each line's stored tax amount.
+  type TaxRow = { component: "CGST" | "SGST" | "IGST"; rate: number; amount: number };
+  const taxRowMap = new Map<string, TaxRow>();
+  const addTax = (component: TaxRow["component"], rate: number, amount: number) => {
+    const key = `${component}|${rate}`;
+    const row = taxRowMap.get(key) || { component, rate, amount: 0 };
+    row.amount = roundTo2(row.amount + amount);
+    taxRowMap.set(key, row);
+  };
+  for (const it of po.items) {
+    const rate = lineTaxRate(it);
+    const tax = Number(it.taxAmount) || roundTo2(((Number(it.amount) || 0) * rate) / 100);
+    if (!rate && !tax) continue;
+    if (isInterState) {
+      addTax("IGST", rate, tax);
+    } else {
+      const cgst = roundTo2(tax / 2);
+      addTax("CGST", rate / 2, cgst);
+      addTax("SGST", rate / 2, roundTo2(tax - cgst));
+    }
+  }
+  const componentOrder = { CGST: 0, SGST: 1, IGST: 2 };
+  const taxRows = Array.from(taxRowMap.values()).sort(
+    (a, b) => componentOrder[a.component] - componentOrder[b.component] || a.rate - b.rate,
+  );
   
   return (
     <>
@@ -117,20 +157,23 @@ export default async function PrintPurchaseOrderPage(
           </div>
         </div>
 
+        <PoBillShipToPrint company={po.company} po={po} />
+
         <table className="items-table">
           <thead>
             <tr>
               <th style={{ width: '4%' }}>Item</th>
-              <th style={{ width: '12%' }}>Material</th>
+              <th style={{ width: '11%' }}>Material</th>
               <th style={{ width: '12%' }}>Description</th>
-              <th style={{ width: '8%' }}>HSN Code</th>
-              <th style={{ width: '9%' }}>Shape</th>
-              <th style={{ width: '9%' }}>Size</th>
-              <th style={{ width: '12%' }}>Delivery Date</th>
+              <th style={{ width: '7%' }}>HSN Code</th>
+              <th style={{ width: '8%' }}>Shape</th>
+              <th style={{ width: '8%' }}>Size</th>
+              <th style={{ width: '11%' }}>Delivery Date</th>
               <th style={{ width: '7%', textAlign: 'center' }}>Qty</th>
-              <th style={{ width: '7%', textAlign: 'center' }}>UOM</th>
-              <th style={{ width: '12%', textAlign: 'center' }}>Unit<br/>Price</th>
-              <th style={{ width: '12%', textAlign: 'center' }}>Amount</th>
+              <th style={{ width: '6%', textAlign: 'center' }}>UOM</th>
+              <th style={{ width: '9%', textAlign: 'center' }}>Unit<br/>Price</th>
+              <th style={{ width: '8%', textAlign: 'center' }}>Tax</th>
+              <th style={{ width: '9%', textAlign: 'center' }}>Amount</th>
             </tr>
           </thead>
           <tbody>
@@ -149,13 +192,17 @@ export default async function PrintPurchaseOrderPage(
                 <td style={{ textAlign: 'right' }}>{formatNumber(it.quantity)}</td>
                 <td style={{ textAlign: 'center' }}>{it.poUom?.uomName}</td>
                 <td style={{ textAlign: 'right' }}>{formatNumber(it.unitPrice, 4)}</td>
+                <td style={{ textAlign: 'center' }}>
+                  <div>{formatNumber(lineTaxRate(it))}%</div>
+                  {Number(it.taxAmount) > 0 && <div style={{ fontSize: '9px', color: '#555' }}>{formatNumber(it.taxAmount)}</div>}
+                </td>
                 <td style={{ textAlign: 'right' }}>{formatNumber(it.amount)}</td>
               </tr>
             ))}
           </tbody>
           <tfoot>
             <tr>
-              <td colSpan={7} rowSpan={Number(po.roundOff) !== 0 ? 4 : 3} style={{ border: 'none', padding: '15px 10px 0 0', verticalAlign: 'top' }}>
+              <td colSpan={8} rowSpan={3 + taxRows.length + (Number(po.roundOff) !== 0 ? 1 : 0)} style={{ border: 'none', padding: '15px 10px 0 0', verticalAlign: 'top' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', color: '#111' }}>
                   <tbody>
                     <tr>
@@ -187,16 +234,22 @@ export default async function PrintPurchaseOrderPage(
               <td colSpan={3} style={{ padding: '6px', textAlign: 'right', fontWeight: 'bold' }}>
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
                   <span>Total :</span>
-                  <span style={{ width: '15px', textAlign: 'center' }}>$</span>
                 </div>
               </td>
               <td className="dyn" style={{ padding: '6px', textAlign: 'right', fontWeight: 'bold' }}>{formatNumber(po.amountBeforeTax)}</td>
             </tr>
+            {taxRows.map((r) => (
+              <tr key={`${r.component}|${r.rate}`}>
+                <td colSpan={3} style={{ padding: '4px 6px', textAlign: 'right' }}>
+                  {r.component} @ {formatNumber(r.rate)}% :
+                </td>
+                <td className="dyn" style={{ padding: '4px 6px', textAlign: 'right' }}>{formatNumber(r.amount)}</td>
+              </tr>
+            ))}
             <tr>
               <td colSpan={3} style={{ padding: '6px', textAlign: 'right', fontWeight: 'bold' }}>
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
                   <span>Total Tax :</span>
-                  <span style={{ width: '15px', textAlign: 'center' }}>$</span>
                 </div>
               </td>
               <td className="dyn" style={{ padding: '6px', textAlign: 'right', fontWeight: 'bold' }}>{formatNumber(po.taxAmount)}</td>
@@ -206,7 +259,6 @@ export default async function PrintPurchaseOrderPage(
                 <td colSpan={3} style={{ padding: '6px', textAlign: 'right', fontWeight: 'bold' }}>
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
                     <span>Round Off :</span>
-                    <span style={{ width: '15px', textAlign: 'center' }}>$</span>
                   </div>
                 </td>
                 <td className="dyn" style={{ padding: '6px', textAlign: 'right', fontWeight: 'bold' }}>{formatNumber(po.roundOff)}</td>
@@ -216,7 +268,6 @@ export default async function PrintPurchaseOrderPage(
               <td colSpan={3} style={{ padding: '6px', textAlign: 'right', fontWeight: 'bold' }}>
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
                   <span>Total {po.currency?.code} :</span>
-                  <span style={{ width: '15px', textAlign: 'center' }}>$</span>
                 </div>
               </td>
               <td className="dyn" style={{ padding: '6px', textAlign: 'right', fontWeight: 'bold' }}>{formatNumber(po.amountAfterTax)}</td>

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { poShipToData } from "@/lib/po-ship-to";
 import { prisma } from "@/lib/prisma";
 import { nextDocumentNo } from "@/lib/document-numbering";
 
@@ -12,7 +13,13 @@ export async function GET(req: Request) {
     const where: any = { type };
 
     if (status !== "All") {
-      where.status = status;
+      if (status === "Pending For Approval") {
+        where.status = {
+          in: ["Pending For Approval", "Pending First Tier Approval", "Pending Second Tier Approval"],
+        };
+      } else {
+        where.status = status;
+      }
     }
 
     if (search) {
@@ -80,6 +87,7 @@ export async function POST(req: Request) {
           supplierGst: body.supplierGst || null,
           millCertificate: body.millCertificate || false,
           certOfConformance: body.certOfConformance || false,
+          ...poShipToData(body),
           contactPersonId: finalContactPersonId,
           telNo: body.telNo || "",
           faxNo: body.faxNo || "",

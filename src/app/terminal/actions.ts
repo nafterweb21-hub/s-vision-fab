@@ -3,7 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
-import { computeGating, isRolePermitted, type GateRow } from "@/lib/routing-gating";
+import { computeGating, isRolePermitted, isStageQcCleared, type GateRow } from "@/lib/routing-gating";
 
 import { RecordStatus } from "@/lib/status";
 // ──────────────────────────────────────────────────────────────────────────────
@@ -22,6 +22,8 @@ export async function lookupWorkOrder(woNo: string) {
             include: {
               mainProcess: true,
               routingProcess: { include: { allowedRoles: { select: { id: true } } } },
+              // Stage QC gate (see isStageQcCleared)
+              productionTimesheets: { select: { timeOut: true, completedQty: true, qcStatus: true } },
             },
           },
         },
@@ -183,6 +185,7 @@ export async function scanIn(input: { workOrderNo: string; inProcessId: string; 
         inProcess: { select: { sn: true } },
         mainProcess: true,
         routingProcess: { select: { allowedRoles: { select: { id: true } } } },
+        productionTimesheets: { select: { timeOut: true, completedQty: true, qcStatus: true } },
       },
     });
     const gateRows: GateRow[] = allRows.map((r: any) => ({
@@ -192,6 +195,7 @@ export async function scanIn(input: { workOrderNo: string; inProcessId: string; 
       status: r.status,
       mainProcessId: r.mainProcessId,
       allowedRoleIds: (r.routingProcess?.allowedRoles ?? []).map((x: any) => x.id),
+      qcCleared: isStageQcCleared(wo.stageQc, r.status, r.productionTimesheets),
     }));
 
     const employee = await prisma.employee.findUnique({
@@ -202,9 +206,12 @@ export async function scanIn(input: { workOrderNo: string; inProcessId: string; 
     const targetGate = gated.find((g) => g.id === target!.id);
 
     if (targetGate?.locked) {
+      const waiting = gated.find((g) => g.awaitingQc);
       return {
         success: false,
-        error: "This process is locked — earlier routing processes must be completed first.",
+        error: waiting
+          ? "This process is locked — the previous stage is waiting for QC approval (Stage QC is ON for this work order)."
+          : "This process is locked — earlier routing processes must be completed first.",
       };
     }
     const targetAllowedRoleIds = gateRows.find((g) => g.id === target!.id)?.allowedRoleIds ?? [];
@@ -212,6 +219,17 @@ export async function scanIn(input: { workOrderNo: string; inProcessId: string; 
       return {
         success: false,
         error: "Your role is not permitted to run this process.",
+      };
+    }
+    // Assignment gate: a step assigned to an operator can only be run by that operator.
+    if (target.assignedEmployeeId && target.assignedEmployeeId !== input.employeeId) {
+      const assignee = await prisma.employee.findUnique({
+        where: { id: target.assignedEmployeeId },
+        select: { name: true },
+      });
+      return {
+        success: false,
+        error: `This process is assigned to ${assignee?.name ?? "another operator"}. Ask the planner to reassign it in the work order.`,
       };
     }
 
@@ -231,6 +249,28 @@ export async function scanIn(input: { workOrderNo: string; inProcessId: string; 
     });
     if (existingOpen) {
       return { success: false, error: "Employee already has an open scan on this routing process" };
+    }
+
+    // Don't let more operators start than there are pieces left: every open session is counted as
+    // working on at least one of the remaining pieces.
+    if (wo.quantity != null) {
+      const sheets = await prisma.productionTimesheet.findMany({
+        where: { routingProcessId: target.id },
+        select: { completedQty: true, timeOut: true, employee: { select: { name: true } } },
+      });
+      const doneQty = sheets.reduce((sum, t) => sum + (t.completedQty ? Number(t.completedQty) : 0), 0);
+      const remaining = Number(wo.quantity) - doneQty;
+      const open = sheets.filter((t) => !t.timeOut);
+      if (remaining <= 0) {
+        return { success: false, error: "The full quantity for this process has already been produced." };
+      }
+      if (open.length >= remaining) {
+        const names = open.map((t) => t.employee?.name).filter(Boolean).join(", ");
+        return {
+          success: false,
+          error: `Only ${remaining} piece(s) left on this process and ${open.length} operator(s) already working on it (${names}).`,
+        };
+      }
     }
 
     const ts = await prisma.productionTimesheet.create({
@@ -413,6 +453,7 @@ export async function getAvailableSessions() {
         quantity: true,
         uom: true,
         deliveryDate: true,
+        stageQc: true,
         customer: { select: { customerName: true } },
         inProcesses: {
           orderBy: { sn: "asc" },
@@ -432,7 +473,7 @@ export async function getAvailableSessions() {
                 targetCompletionDate: true,
                 mainProcess: { select: { process: true } },
                 routingProcess: { select: { routingProcess: true, allowedRoles: { select: { id: true } } } },
-                productionTimesheets: { select: { completedQty: true } },
+                productionTimesheets: { select: { completedQty: true, timeOut: true, qcStatus: true } },
               },
             },
           },
@@ -458,6 +499,7 @@ export async function getAvailableSessions() {
         status: rp.status,
         mainProcessId: rp.mainProcessId,
         allowedRoleIds: (rp.routingProcess?.allowedRoles ?? []).map((r) => r.id),
+        qcCleared: isStageQcCleared(wo.stageQc, rp.status, rp.productionTimesheets),
       }));
 
       for (const g of computeGating(gateRows, emp?.roleProfileId)) {
@@ -472,6 +514,9 @@ export async function getAvailableSessions() {
         // Full quantity already produced (the step is only waiting on parameter confirmation): nothing left to start.
         const doneQty = rp.productionTimesheets.reduce((sum, t) => sum + (t.completedQty ? Number(t.completedQty) : 0), 0);
         if (wo.quantity != null && doneQty >= Number(wo.quantity)) continue;
+        // Remaining pieces are already covered by operators who are scanned in (same rule as scanIn).
+        const openCount = rp.productionTimesheets.filter((t) => !t.timeOut).length;
+        if (wo.quantity != null && openCount >= Number(wo.quantity) - doneQty) continue;
 
         out.push({
           key: rp.id,
@@ -851,6 +896,7 @@ export async function scanOut(payload: ScanOutPayload) {
       });
     }
 
+    await closeLeftoverSessions(ts.routingProcessId, wo.quantity != null ? Number(wo.quantity) : null, timeOut);
     await checkAndCompleteRoutingProcess(ts.routingProcessId);
 
     revalidatePath("/terminal");
@@ -861,6 +907,33 @@ export async function scanOut(payload: ScanOutPayload) {
   } catch (err: any) {
     console.error("scanOut:", err);
     return { success: false, error: err.message || "Scan OUT failed" };
+  }
+}
+
+// Once the full quantity of a process is produced, any other operator still scanned in on it has
+// nothing left to book — close those sessions with zero output so nobody has to scan out by hand.
+async function closeLeftoverSessions(routingProcessId: string, targetQty: number | null, timeOut: Date) {
+  if (targetQty == null) return;
+  const sheets = await prisma.productionTimesheet.findMany({
+    where: { routingProcessId },
+    select: { id: true, timeIn: true, timeOut: true, completedQty: true },
+  });
+  const doneQty = sheets.reduce((sum, t) => sum + (t.completedQty ? Number(t.completedQty) : 0), 0);
+  if (doneQty < targetQty) return;
+
+  for (const t of sheets) {
+    if (t.timeOut) continue;
+    await prisma.productionTimesheet.update({
+      where: { id: t.id },
+      data: {
+        timeOut,
+        totalMinutes: t.timeIn ? Number(((timeOut.getTime() - t.timeIn.getTime()) / 60000).toFixed(2)) : null,
+        completedQty: 0,
+        completed: true,
+        isPaused: false,
+        lastPauseTime: null,
+      },
+    });
   }
 }
 

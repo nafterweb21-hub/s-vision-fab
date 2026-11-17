@@ -74,7 +74,7 @@ export default function CreateSupplierPage() {
   };
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 bg-white text-black p-6 md:p-8 rounded-2xl shadow-sm border border-blue-100">
+    <div className="space-y-4 bg-white text-black p-4 rounded-2xl shadow-sm border border-blue-100 w-full">
       {/* Navigation & Header */}
       <div className="space-y-2">
         <Link

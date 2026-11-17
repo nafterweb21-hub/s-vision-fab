@@ -40,7 +40,18 @@ export default function PurchaseOrderApprovalDetailPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [meta, setMeta] = useState<{ poNo?: string; revision?: number; status?: string; type?: string }>({});
+  const [meta, setMeta] = useState<{
+    poNo?: string;
+    revision?: number;
+    status?: string;
+    type?: string;
+    approvalTier?: number;
+    firstApproverName?: string | null;
+    firstApprovedAt?: string | null;
+    secondApproverName?: string | null;
+    secondApprovedAt?: string | null;
+  }>({});
+  const [evaluation, setEvaluation] = useState<any>(null);
 
   const [companyId, setCompanyId] = useState("");
   const [date, setDate] = useState<string>(new Date().toISOString().slice(0, 10));
@@ -93,10 +104,22 @@ export default function PurchaseOrderApprovalDetailPage() {
         setPrs(fd.purchaseRequisitions || []);
         setWorkOrders(fd.workOrders || []);
 
-        const po = await fetch(`/api/purchasing/purchase-order/${id}`).then((r) => r.json());
-        if (po.error) throw new Error(po.error);
+        const detailRes = await fetch(`/api/purchasing/purchase-order-approval/${id}`).then((r) => r.json());
+        if (detailRes.error) throw new Error(detailRes.error);
+        const po = detailRes.po || detailRes;
+        setEvaluation(detailRes.evaluation || null);
         
-        setMeta({ poNo: po.poNo, revision: po.revision, status: po.status, type: po.type });
+        setMeta({
+          poNo: po.poNo,
+          revision: po.revision,
+          status: po.status,
+          type: po.type,
+          approvalTier: po.approvalTier || detailRes.evaluation?.requiredTiers || 1,
+          firstApproverName: po.firstApproverName,
+          firstApprovedAt: po.firstApprovedAt,
+          secondApproverName: po.secondApproverName,
+          secondApprovedAt: po.secondApprovedAt,
+        });
         setCompanyId(po.companyId);
         setDate(new Date(po.date).toISOString().slice(0, 10));
         setWorkOrderNo(po.workOrderNo || "");
@@ -165,13 +188,10 @@ export default function PurchaseOrderApprovalDetailPage() {
 
     setSubmitting(true);
     try {
-      // Current user mock - in real app get from session
-      const currentUserId = "mock-user-id"; 
-
       const res = await fetch(`/api/purchasing/purchase-order-approval/${id}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, remark: approvalRemark, currentUserId }),
+        body: JSON.stringify({ action, remark: approvalRemark }),
       });
 
       if (!res.ok) {
@@ -197,7 +217,7 @@ export default function PurchaseOrderApprovalDetailPage() {
   }
 
   return (
-    <div className="p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
+    <div className="py-3 space-y-4 w-full">
       <div className="flex items-center justify-between pb-6 border-b border-blue-200">
         <div>
           <div className="flex items-center gap-2 text-xs text-blue-400 font-semibold uppercase mb-1">
@@ -229,6 +249,96 @@ export default function PurchaseOrderApprovalDetailPage() {
 
       {error && (
         <div className="bg-rose-50 border border-rose-200 rounded-lg p-3 text-sm text-rose-700">{error}</div>
+      )}
+
+      {/* 2-Tier Approval Workflow Banner */}
+      {evaluation && (
+        <div className="bg-white border border-blue-200 rounded-xl p-5 shadow-sm space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+            <div>
+              <span className="text-xs font-bold uppercase tracking-wider text-blue-600">Approval Workflow</span>
+              <h3 className="text-base font-bold text-slate-900 mt-0.5">
+                {evaluation.requiredTiers === 2 ? "Two-Tier Sequential Approval Required" : "Single-Tier Approval Required"}
+              </h3>
+            </div>
+            <div className="text-xs font-medium text-slate-500">
+              Total PO Value: <span className="font-bold text-slate-800 font-mono text-sm">${amountAfterTax}</span>
+              {formatThreshold(evaluation)}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Step 1: First Tier */}
+            <div className={`p-4 rounded-xl border ${meta.firstApproverName ? "bg-emerald-50/70 border-emerald-200" : evaluation.isFirstTierPending ? "bg-amber-50/70 border-amber-300 ring-2 ring-amber-100" : "bg-slate-50 border-slate-200"}`}>
+              <div className="flex items-start justify-between">
+                <div>
+                  <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-500">
+                    <span>Step 1: First Level</span>
+                    <span className="text-[10px] font-normal px-2 py-0.5 rounded-full bg-slate-200 text-slate-700">Tier 1</span>
+                  </div>
+                  <h4 className="text-sm font-bold text-slate-900 mt-1">First Tier Sign-off</h4>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Authorized: <span className="font-semibold text-slate-700">{evaluation.firstTierApprovers?.map((a: any) => a.name).join(", ") || "Shyue Yin"}</span>
+                  </p>
+                </div>
+                {meta.firstApproverName ? (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                    <CheckCircle2 size={13} /> Approved
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-300">
+                    Pending
+                  </span>
+                )}
+              </div>
+              {meta.firstApproverName && (
+                <div className="mt-3 pt-2 border-t border-emerald-200/60 text-xs text-emerald-800">
+                  Signed off by <span className="font-bold">{meta.firstApproverName}</span> {meta.firstApprovedAt ? `on ${new Date(meta.firstApprovedAt).toLocaleDateString()}` : ""}
+                </div>
+              )}
+            </div>
+
+            {/* Step 2: Second Tier */}
+            <div className={`p-4 rounded-xl border ${meta.secondApproverName || (evaluation.requiredTiers === 1 && meta.firstApproverName) ? "bg-emerald-50/70 border-emerald-200" : evaluation.isSecondTierPending ? "bg-amber-50/70 border-amber-300 ring-2 ring-amber-100" : "bg-slate-50 border-slate-200 opacity-80"}`}>
+              <div className="flex items-start justify-between">
+                <div>
+                  <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-500">
+                    <span>Step 2: Second Level</span>
+                    <span className="text-[10px] font-normal px-2 py-0.5 rounded-full bg-slate-200 text-slate-700">Tier 2</span>
+                  </div>
+                  <h4 className="text-sm font-bold text-slate-900 mt-1">
+                    {evaluation.requiredTiers === 2 ? "Second Tier Sign-off" : "Not Required for Single Tier"}
+                  </h4>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {evaluation.requiredTiers === 2 ? (
+                      <>Authorized: <span className="font-semibold text-slate-700">{evaluation.secondTierApprovers?.map((a: any) => a.name).join(", ") || "Danny, Simeon"}</span></>
+                    ) : (
+                      "Single-tier PO is issued upon 1st Level approval"
+                    )}
+                  </p>
+                </div>
+                {meta.secondApproverName ? (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                    <CheckCircle2 size={13} /> Approved
+                  </span>
+                ) : evaluation.requiredTiers === 1 ? (
+                  <span className="text-xs text-slate-400 font-semibold">N/A</span>
+                ) : evaluation.isSecondTierPending ? (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-300">
+                    Awaiting Sign-off
+                  </span>
+                ) : (
+                  <span className="text-xs text-slate-400 font-medium">Awaiting Step 1</span>
+                )}
+              </div>
+              {meta.secondApproverName && (
+                <div className="mt-3 pt-2 border-t border-emerald-200/60 text-xs text-emerald-800">
+                  Signed off by <span className="font-bold">{meta.secondApproverName}</span> {meta.secondApprovedAt ? `on ${new Date(meta.secondApprovedAt).toLocaleDateString()}` : ""}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Header Fields - Read Only */}
@@ -340,7 +450,7 @@ export default function PurchaseOrderApprovalDetailPage() {
           <h3 className="text-sm font-semibold text-blue-900">Purchase Order Items</h3>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[1200px]">
+          <table className="w-full text-sm min-w-[900px]">
             <thead className="text-xs text-blue-500 bg-blue-50/50 uppercase tracking-wider">
               {meta.type === "SUBCON" ? (
                 <tr>
@@ -540,16 +650,33 @@ export default function PurchaseOrderApprovalDetailPage() {
 
       {/* Approval Action Panel */}
       <div className="bg-blue-50 border border-blue-200 rounded-xl shadow-sm p-6 space-y-4">
-        <h3 className="text-lg font-bold text-blue-900 flex items-center gap-2">
-          <CheckCircle2 size={18} /> Approval Decision
-        </h3>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <h3 className="text-lg font-bold text-blue-900 flex items-center gap-2">
+            <CheckCircle2 size={18} /> Approval Decision
+          </h3>
+          {evaluation && (
+            <span className="text-xs font-semibold px-2.5 py-1 rounded-md bg-blue-100 text-blue-800 border border-blue-200 w-fit">
+              Current Stage: {evaluation.currentStageTitle}
+            </span>
+          )}
+        </div>
+
+        {evaluation && !evaluation.canApprove && (
+          <div className="bg-amber-50 border border-amber-300 text-amber-900 p-4 rounded-xl text-sm flex items-start gap-3 shadow-xs">
+            <span className="text-lg">🔒</span>
+            <div>
+              <p className="font-bold text-amber-950">Action restricted for your current login</p>
+              <p className="text-xs text-amber-800 mt-1 leading-relaxed">{evaluation.cannotApproveReason}</p>
+            </div>
+          </div>
+        )}
         
-        <Field label="Approval Remark">
+        <Field label="Approval / Rejection Remark">
           <textarea
             rows={2}
             value={approvalRemark}
             onChange={(e) => setApprovalRemark(e.target.value)}
-            disabled={submitting}
+            disabled={submitting || (evaluation && !evaluation.canApprove && !evaluation.canReject)}
             placeholder="Optional remark for approval, required for rejection..."
             className="w-full px-3 py-2 text-sm bg-white border border-blue-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 disabled:bg-slate-100"
           />
@@ -558,8 +685,8 @@ export default function PurchaseOrderApprovalDetailPage() {
         <div className="flex items-center justify-end gap-3 pt-2">
           <button
             onClick={() => handleAction("reject")}
-            disabled={submitting}
-            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-rose-700 bg-rose-100 hover:bg-rose-200 rounded-lg transition-colors active:scale-95 disabled:opacity-50 cursor-pointer"
+            disabled={submitting || (evaluation && !evaluation.canReject)}
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-rose-700 bg-rose-100 hover:bg-rose-200 rounded-lg transition-colors active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
           >
             {submitting ? <Loader2 size={16} className="animate-spin" /> : <XCircle size={16} />}
             Reject
@@ -567,11 +694,13 @@ export default function PurchaseOrderApprovalDetailPage() {
           
           <button
             onClick={() => handleAction("approve")}
-            disabled={submitting}
-            className="inline-flex items-center gap-2 px-6 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-500 rounded-lg shadow-sm transition-colors active:scale-95 disabled:opacity-50 cursor-pointer"
+            disabled={submitting || (evaluation && !evaluation.canApprove)}
+            className="inline-flex items-center gap-2 px-6 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-500 rounded-lg shadow-sm transition-colors active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
           >
             {submitting ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
-            Approve
+            {evaluation?.isFirstTierPending && evaluation?.requiredTiers === 2
+              ? "Approve (1st Tier Sign-off)"
+              : "Approve (Issue Purchase Order)"}
           </button>
         </div>
       </div>
@@ -597,4 +726,14 @@ function Field({
       {children}
     </div>
   );
+}
+
+function formatThreshold(evaluation: any): string {
+  const fmt = (n: number) =>
+    n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const max = evaluation?.firstLevelMax;
+  if (max == null) return "";
+  if (evaluation.requiredTiers === 2) return ` (Exceeds $${fmt(max)} First Level threshold)`;
+  const min = evaluation.firstLevelMin ?? 0;
+  return ` (Within $${fmt(min)} – $${fmt(max)} First Level limit)`;
 }

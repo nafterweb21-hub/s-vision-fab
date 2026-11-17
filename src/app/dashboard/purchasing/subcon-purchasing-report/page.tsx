@@ -81,7 +81,7 @@ export default function SubconPurchasingReportPage() {
     rows.push([
       "", "", "", "", "", "", "", "", "", "", // Up to Currency
       "Amt", "", "", "", "", // Before Tax to Aft Tax
-      "", "", "", "", "", "", "", "", "", "", "", "Outstanding Qty", "", ""
+      "", "", "", "", "", "", "", "", "", "", "", "", "Outstanding Qty", "", ""
     ]);
 
     // Row 4: Column Headers
@@ -89,7 +89,7 @@ export default function SubconPurchasingReportPage() {
       "Company", "PO No", "PO Date", "PO Status", "Purchaser", "Supplier", "WO No", "PR No", "Currency", "Exch Rate",
       "Before Tax", "Tax Type", "Tax Rate", "Tax Amt", "Aft Tax",
       "In-Process Description", "Main Process*", "Routing Process*", "Descr", "Hardness", "Thickness", "UOM", "Qty", "Unit Price", "Amt",
-      "Qty Acknowledged by Subcon", "Qty Returned by Subcon", "Not Acknowledged by Subcon", "Not Returned by Subcon", "Deliver Date"
+      "Qty Acknowledged by Subcon", "Qty Returned by Subcon", "Qty Rejected", "Not Acknowledged by Subcon", "Not Returned by Subcon", "Deliver Date"
     ]);
 
     let sumBeforeTax = 0;
@@ -135,6 +135,7 @@ export default function SubconPurchasingReportPage() {
         item.amt,
         item.qtyAcknowledged,
         item.qtyReturned,
+        item.qtyRejected,
         item.qtyNotAcknowledged,
         item.qtyNotReturned,
         item.deliverDate ? new Date(item.deliverDate).toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-') : ""
@@ -144,7 +145,7 @@ export default function SubconPurchasingReportPage() {
     });
 
     // Footer Total Row
-    const footer = new Array(30).fill("");
+    const footer = new Array(31).fill("");
     footer[10] = sumBeforeTax; 
     footer[13] = sumTaxAmt;    
     footer[14] = sumAftTax;    
@@ -159,7 +160,7 @@ export default function SubconPurchasingReportPage() {
       const deliveryDate = itemRow.deliverDate ? new Date(itemRow.deliverDate) : null;
       
       if (outstanding > 0 && deliveryDate && deliveryDate < now) {
-        const cellAddress = XLSX.utils.encode_cell({ r, c: 28 }); // Col 28 = Not Returned by Subcon
+        const cellAddress = XLSX.utils.encode_cell({ r, c: 29 }); // Col 29 = Not Returned by Subcon
         if (ws[cellAddress]) {
           ws[cellAddress].s = {
             fill: { fgColor: { rgb: "FFFF0000" } }, // Red background
@@ -172,7 +173,7 @@ export default function SubconPurchasingReportPage() {
     // Merges
     ws['!merges'] = [
       { s: { r: 2, c: 10 }, e: { r: 2, c: 14 } }, // Amt (Before Tax to Aft Tax)
-      { s: { r: 2, c: 27 }, e: { r: 2, c: 28 } }, // Outstanding Qty
+      { s: { r: 2, c: 28 }, e: { r: 2, c: 29 } }, // Outstanding Qty
     ];
 
     // Basic Column Widths
@@ -180,7 +181,7 @@ export default function SubconPurchasingReportPage() {
       { wch: 15 }, { wch: 15 }, { wch: 12 }, { wch: 15 }, { wch: 15 }, { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 8 }, { wch: 10 },
       { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 12 },
       { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 25 }, { wch: 10 }, { wch: 10 }, { wch: 8 }, { wch: 10 }, { wch: 12 }, { wch: 12 },
-      { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 12 }
+      { wch: 15 }, { wch: 15 }, { wch: 12 }, { wch: 15 }, { wch: 15 }, { wch: 12 }
     ];
 
     const wb = XLSX.utils.book_new();

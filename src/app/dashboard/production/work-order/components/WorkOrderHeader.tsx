@@ -56,12 +56,14 @@ export default function WorkOrderHeader({ wo, uoms }: Props) {
 
   const [date, setDate] = useState(() => new Date(wo.date).toISOString().split("T")[0]);
   const [remark, setRemark] = useState<string>(wo.remark ?? "");
+  const [partName, setPartName] = useState<string>(wo.partName ?? "");
   const [labelExpiryDate, setLabelExpiryDate] = useState<string>(
     wo.labelExpiryDate ? new Date(wo.labelExpiryDate).toISOString().split("T")[0] : "",
   );
   const [labelQty, setLabelQty] = useState<string>(wo.labelQty != null ? String(wo.labelQty) : "");
   const [labelUomId, setLabelUomId] = useState<string>(wo.labelUomId ?? "");
   const [uploadUrl, setUploadUrl] = useState<string>(wo.uploadUrl ?? "");
+  const [stageQc, setStageQc] = useState<boolean>(wo.stageQc ?? true);
 
   const editable = !["Void", "Cancelled", "Completed"].includes(wo.status);
 
@@ -71,10 +73,12 @@ export default function WorkOrderHeader({ wo, uoms }: Props) {
       const res = await updateWorkOrderEditable(wo.workOrderNo, {
         date,
         remark,
+        partName,
         labelExpiryDate: labelExpiryDate || null,
         labelQty: labelQty || null,
         labelUomId: labelUomId || null,
         uploadUrl: uploadUrl || null,
+        stageQc,
       });
       if (!res.success) setError(res.error || "Failed to save");
       else router.refresh();
@@ -141,6 +145,48 @@ export default function WorkOrderHeader({ wo, uoms }: Props) {
         <ReadOnly label="UOM" value={wo.uom} />
         <ReadOnly label="Amount" value={wo.amount != null ? Number(wo.amount).toFixed(2) : "-"} />
       </Section>
+
+      <div className="flex items-start justify-between gap-3 p-2 sm:p-4 border border-slate-200 rounded-md sm:rounded-lg bg-slate-50">
+        <div>
+          <div className="text-[10px] sm:text-sm font-medium text-slate-700">QC at every stage</div>
+          <p className="text-[9px] sm:text-xs text-slate-500 mt-0.5">
+            {stageQc
+              ? "ON: QC must approve each stage before the next stage can start. Final QC still happens at the end."
+              : "OFF: stages flow one after another; QC checks only once at the end (final QC)."}
+          </p>
+          {stageQc !== (wo.stageQc ?? true) && editable && (
+            <p className="text-[9px] sm:text-xs text-amber-600 mt-0.5">Click Save to apply.</p>
+          )}
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={stageQc}
+          aria-label="QC at every stage"
+          onClick={() => setStageQc((v) => !v)}
+          disabled={!editable}
+          className={`relative inline-flex h-5 w-9 sm:h-6 sm:w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
+            stageQc ? "bg-emerald-600" : "bg-slate-300"
+          }`}
+        >
+          <span
+            className={`inline-block h-4 w-4 sm:h-5 sm:w-5 transform rounded-full bg-white shadow transition-transform ${
+              stageQc ? "translate-x-4 sm:translate-x-5" : "translate-x-0.5"
+            }`}
+          />
+        </button>
+      </div>
+
+      <div>
+        <label className="text-sm font-medium text-slate-700">Part Name</label>
+        <input
+          type="text"
+          value={partName}
+          onChange={(e) => setPartName(e.target.value)}
+          disabled={!editable}
+          className={`mt-1.5 ${inputCls}`}
+        />
+      </div>
 
       <div>
         <label className="text-sm font-medium text-slate-700">Job Description</label>

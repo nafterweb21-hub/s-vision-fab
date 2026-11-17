@@ -66,7 +66,7 @@ export default function DeliveryOrderListPage() {
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-blue-400" />
           <input
             type="text"
-            placeholder="Search by DO No or Customer Name..."
+            placeholder="Search by DO No, Customer, PO No or Vehicle No..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-9 pr-4 py-2 text-sm bg-blue-50 border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors"
@@ -117,6 +117,9 @@ export default function DeliveryOrderListPage() {
                   <th className="px-6 py-4">Date</th>
                   <th className="px-6 py-4">Customer</th>
                   <th className="px-6 py-4">Sales Order</th>
+                  <th className="px-6 py-4">PO No</th>
+                  <th className="px-6 py-4">Transport</th>
+                  <th className="px-6 py-4">Vehicle No</th>
                   <th className="px-6 py-4">COC Req.</th>
                   <th className="px-6 py-4">Status</th>
                   <th className="px-6 py-4 text-right">Action</th>
@@ -138,6 +141,15 @@ export default function DeliveryOrderListPage() {
                     </td>
                     <td className="px-6 py-4 text-blue-700">
                       {order.salesOrder?.orderNo || "—"}
+                    </td>
+                    <td className="px-6 py-4 text-blue-700">
+                      {order.poNo || order.salesOrder?.customerPoRef || "—"}
+                    </td>
+                    <td className="px-6 py-4 text-blue-700">
+                      {order.modeOfTransport || "—"}
+                    </td>
+                    <td className="px-6 py-4 text-blue-700">
+                      {order.vehicleNo || "—"}
                     </td>
                     <td className="px-6 py-4 text-blue-700">
                       {order.cocRequired ? "Yes" : "No"}

@@ -31,6 +31,8 @@
 | 5 | Customer PO Ref | Read-only | from SO | — | |
 | 6 | COC Required | Checkbox | User | N | default unticked |
 | 7 | Status | Read-only | — | — | Draft / Submitted / Void |
+| 8 | Returnable Delivery Challan | Checkbox | User | N | default unticked. For goods not for sale (e.g. sent for testing and return). Printout title becomes "RETURNABLE DELIVERY CHALLAN". |
+| 9 | Returnable Note | Textarea | User | N | shown when #8 is ticked; defaults to "Not for sale / Send for testing and return"; printed below the items. |
 
 ### Fields — Item
 
@@ -40,6 +42,7 @@
 | 2 | Quantity | Numeric | User | Y | 0 dec; total ≤ WO Qty |
 | 3 | UOM | Read-only | from WO | — | |
 | 4 | Delivery Date | Read-only | from WO | — | |
+| 5 | Total Value | Numeric | DO Qty × SO line Unit Price (editable) | N | 2 dec. Re-calculated on WO/qty change unless the user typed a different value. Shown only on returnable challans; summed as "Value of Goods" on the form and printout. |
 
 ---
 
@@ -96,7 +99,7 @@
 | 17 | Welder ID No | Read-only | Employee NRIC/FIN | — | |
 | 18 | Welding Process | Dropdown | Scanning Terminal by WO | N | |
 | 19 | Welding Machine Serial No | Dropdown | Scanning Terminal by WO | N | |
-| 20 | Part Name | Text | User | N | **Spray Paint section** |
+| 20 | Part Name | Text | User | N | **Spray Paint section**. Prefilled from the selected Work Order's Part Name when empty; user can override |
 | 21 | Part Number | Text | User | N | |
 | 22 | Painting SAN No | Text | User | N | |
 | 23 | Painter Name | Dropdown | Scanning Terminal by Routing | N | |

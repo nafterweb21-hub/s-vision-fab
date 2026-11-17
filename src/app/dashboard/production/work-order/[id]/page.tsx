@@ -56,7 +56,7 @@ export default async function WorkOrderDetailPage({
   const serialised = JSON.parse(JSON.stringify(modifiedWorkOrder));
 
   return (
-    <div className="p-0 sm:p-4 max-w-6xl mx-auto space-y-1 sm:space-y-6">
+    <div className="p-0 sm:p-4 space-y-1 sm:space-y-6 w-full">
       <div className="flex flex-col md:flex-row md:items-center gap-1 justify-between px-1 sm:px-0 mt-1 sm:mt-0">
         <div className="flex items-start md:items-center gap-1 w-full md:w-auto">
           <Link

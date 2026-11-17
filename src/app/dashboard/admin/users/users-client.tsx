@@ -105,7 +105,7 @@ export default function UsersClient({ currentUserId }: { currentUserId: string }
   }, [users, search, roleFilter, statusFilter]);
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 p-6">
+    <div className="flex w-full flex-1 flex-col gap-4 py-3">
       {toast && (
         <div
           className={`fixed right-4 top-4 z-50 rounded-xl border px-5 py-4 text-sm shadow-2xl ${

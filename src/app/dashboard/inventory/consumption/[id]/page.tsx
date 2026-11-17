@@ -250,7 +250,7 @@ export default function ConsumptionFormPage() {
 
   if (error || !lookups) {
     return (
-      <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-4">
+      <div className="py-3 space-y-4 w-full">
         <BackLink />
         <div className="bg-rose-50 border border-rose-200 rounded-xl p-6 flex items-center gap-3 text-rose-700">
           <AlertCircle size={18} />
@@ -262,7 +262,7 @@ export default function ConsumptionFormPage() {
 
   if (!allowed) {
     return (
-      <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-4">
+      <div className="py-3 space-y-4 w-full">
         <BackLink />
         <div className="bg-slate-50 border border-slate-200 rounded-xl p-6 text-sm text-slate-700">
           You do not have permission to {isNew ? "create" : "edit"} a material consumption.
@@ -272,7 +272,7 @@ export default function ConsumptionFormPage() {
   }
 
   return (
-    <div className="p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
+    <div className="py-3 space-y-4 w-full">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-6 border-b border-blue-200">
         <div>
           <div className="flex items-center gap-2 text-xs text-blue-400 font-semibold uppercase mb-1">

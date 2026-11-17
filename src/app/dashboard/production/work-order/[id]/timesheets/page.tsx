@@ -133,7 +133,7 @@ export default async function WorkOrderTimesheetsPage({
   }
 
   return (
-    <div className="p-0 sm:p-4 max-w-7xl mx-auto space-y-1 sm:space-y-6">
+    <div className="p-0 sm:p-4 space-y-1 sm:space-y-6 w-full">
       <div className="flex flex-col md:flex-row md:items-center gap-1 justify-between px-1 sm:px-0 mt-1 sm:mt-0">
         <div className="flex items-start md:items-center gap-1 w-full md:w-auto">
           <Link
@@ -200,7 +200,7 @@ export default async function WorkOrderTimesheetsPage({
           </div>
         ) : (
           <div className="overflow-x-auto w-full">
-            <table className="w-full text-sm text-left min-w-[600px] sm:min-w-[1000px]">
+            <table className="w-full text-sm text-left min-w-[600px] lg:min-w-[860px]">
               <thead className="text-[10px] sm:text-xs text-slate-500 uppercase bg-slate-100 border-b border-slate-200">
                 <tr>
                   <th className="px-1.5 py-1.5 sm:px-4 sm:py-3 font-semibold">Employee</th>

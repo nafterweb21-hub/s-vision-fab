@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { poShipToData } from "@/lib/po-ship-to";
 import { prisma } from "@/lib/prisma";
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -49,7 +50,28 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
         throw new Error("Only Draft or Rejected PO can be edited.");
       }
 
-      await tx.purchaseOrderItem.deleteMany({ where: { purchaseOrderId: exist.id } });
+      // Update lines in place (by id) instead of delete-and-recreate, so records
+      // that point at a PO line (Subcon Request Forms, moved over on revise)
+      // keep their link when the PO is edited.
+      const incoming: any[] = body.items || [];
+      const existingItems = await tx.purchaseOrderItem.findMany({
+        where: { purchaseOrderId: exist.id },
+        select: { id: true, description: true, _count: { select: { subconRequestForms: true } } },
+      });
+      const existingIds = new Set(existingItems.map((it) => it.id));
+      const keptIds = new Set(incoming.map((it) => it.id).filter((x: any) => x && existingIds.has(x)));
+      const removed = existingItems.filter((it) => !keptIds.has(it.id));
+      const locked = removed.filter((it) => it._count.subconRequestForms > 0);
+      if (locked.length) {
+        throw new Error(
+          `Cannot remove line(s) that have Subcon Request Forms: ${locked
+            .map((it) => it.description || it.id)
+            .join(", ")}`
+        );
+      }
+      if (removed.length) {
+        await tx.purchaseOrderItem.deleteMany({ where: { id: { in: removed.map((it) => it.id) } } });
+      }
 
       const finalSupplierId = body.supplierId;
       const finalContactPersonId = body.contactPersonId || null;
@@ -73,6 +95,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
           supplierGst: body.supplierGst || null,
           millCertificate: body.millCertificate || false,
           certOfConformance: body.certOfConformance || false,
+          ...poShipToData(body),
           contactPersonId: finalContactPersonId,
           telNo: body.telNo || "",
           faxNo: body.faxNo || "",
@@ -80,40 +103,46 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
           email: body.email || "",
           purchaserId: body.purchaserId,
           remark: body.remark || "",
-          items: {
-            create: (body.items || []).map((it: any, i: number) => ({
-              fromMaterialProfile: it.fromMaterialProfile || false,
-              material: it.material || "",
-              description: it.description || "",
-              supplierMaterialNo: it.supplierMaterialNo || "",
-              shape: it.shape || "",
-              size: it.size || "",
-              hardness: it.hardness || null,
-              thickness: it.thickness || null,
-              quantity: it.quantity || 0,
-              poUomId: it.poUomId,
-              unitPrice: it.unitPrice || 0,
-              amount: it.amount || 0,
-              taxTypeId: it.taxTypeId || null,
-              taxRate: it.taxRate || 0,
-              taxAmount: it.taxAmount || 0,
-              conversion: it.conversion || 1,
-              internalUomId: it.internalUomId || null,
-              internalQuantity: it.internalQuantity || 0,
-              deliveryDate: it.deliveryDate ? new Date(it.deliveryDate) : new Date(),
-              remark: it.remark || "",
-              hsnCode: it.hsnCode || null,
-              hsnDescription: it.hsnDescription || null,
-              materialProfileId: it.materialProfileId || null,
-              purchaseRequisitionItemId: it.purchaseRequisitionItemId || null,
-              woRoutingProcessId: it.woRoutingProcessId || null,
-              masterMainProcessId: it.masterMainProcessId || null,
-              masterRoutingProcessId: it.masterRoutingProcessId || null,
-              sortOrder: i,
-            })),
-          },
         },
       });
+
+      for (const [i, it] of incoming.entries()) {
+        const data = {
+          fromMaterialProfile: it.fromMaterialProfile || false,
+          material: it.material || "",
+          description: it.description || "",
+          supplierMaterialNo: it.supplierMaterialNo || "",
+          shape: it.shape || "",
+          size: it.size || "",
+          hardness: it.hardness || null,
+          thickness: it.thickness || null,
+          quantity: it.quantity || 0,
+          poUomId: it.poUomId,
+          unitPrice: it.unitPrice || 0,
+          amount: it.amount || 0,
+          taxTypeId: it.taxTypeId || null,
+          taxRate: it.taxRate || 0,
+          taxAmount: it.taxAmount || 0,
+          conversion: it.conversion || 1,
+          internalUomId: it.internalUomId || null,
+          internalQuantity: it.internalQuantity || 0,
+          deliveryDate: it.deliveryDate ? new Date(it.deliveryDate) : new Date(),
+          remark: it.remark || "",
+          hsnCode: it.hsnCode || null,
+          hsnDescription: it.hsnDescription || null,
+          materialProfileId: it.materialProfileId || null,
+          purchaseRequisitionItemId: it.purchaseRequisitionItemId || null,
+          woRoutingProcessId: it.woRoutingProcessId || null,
+          masterMainProcessId: it.masterMainProcessId || null,
+          masterRoutingProcessId: it.masterRoutingProcessId || null,
+          sortOrder: i,
+        };
+        if (it.id && keptIds.has(it.id)) {
+          await tx.purchaseOrderItem.update({ where: { id: it.id }, data });
+        } else {
+          await tx.purchaseOrderItem.create({ data: { ...data, purchaseOrderId: exist.id } });
+        }
+      }
 
       return NextResponse.json(updated);
     });

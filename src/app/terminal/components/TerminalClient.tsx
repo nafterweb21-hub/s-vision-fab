@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Monitor, Plus, ChevronRight, CheckCircle2, Info, AlertCircle, Minus, ChevronDown, Check, Zap, Clock, Box, LogOut, Keyboard, Play, FileText, X } from "lucide-react";
 import ProductionIntake from "./ProductionIntake";
+import ScanOutDialog from "./ScanOutDialog";
 import {
   scanIn,
   scanOut,
@@ -132,6 +133,33 @@ export default function TerminalClient({ support, loggedInEmployee, initialSessi
     setRecentCompletes(initialRecentCompletes);
   }
   const [selectedSessionId, setSelectedSessionId] = useState<string>("");
+
+  // Scan Out dialog: Employee ID → job → quantity. A linked operator is fixed to themselves;
+  // a shared/admin login types or scans the operator's Employee ID.
+  const [isScanOutOpen, setIsScanOutOpen] = useState(false);
+  const scanOutLockedEmployee =
+    loggedInEmployee?.id && loggedInEmployee.code !== "UNLINKED_USER"
+      ? { id: loggedInEmployee.id, name: loggedInEmployee.name, code: loggedInEmployee.code }
+      : null;
+
+  function handleScanOutCompleted(session: any) {
+    setIsScanOutOpen(false);
+    setRecentCompletes((prev) => [session, ...prev]);
+    setActiveSessions((prev) => prev.filter((s) => s.id !== session.id));
+    if (selectedSessionId === session.id) setSelectedSessionId("");
+    router.refresh();
+  }
+
+  // Welding / painting / machining: carry the quantity into the full panel so the parameters get filled.
+  function handleScanOutNeedParameters(session: any, good: number, rejected: number, reason: string) {
+    setIsScanOutOpen(false);
+    handleSelectSession(session);
+    setProducedCount(good);
+    setDefectCount(rejected);
+    setDefectReason(reason);
+    // On phones the Complete Job panel sits below the sidebar; bring it into view.
+    setTimeout(() => document.getElementById("session-panel")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+  }
 
   function handleIntakeScanOutRequest(routingProcessProfileId: string, employeeId: string, inProcessId: string, mainProcessId: string) {
     const matchingSession = activeSessions.find((s) =>
@@ -338,10 +366,17 @@ export default function TerminalClient({ support, loggedInEmployee, initialSessi
           </div>
           <button 
             onClick={openScanInModal}
-            className="font-bold rounded-lg md:rounded-2xl px-2 py-1.5 md:px-6 md:py-3 flex items-center justify-center gap-1 md:gap-2 transition-colors shadow-sm md:shadow-lg bg-cyan-500 hover:bg-cyan-400 text-white shadow-cyan-500/20 flex-1 md:w-auto text-[10px] md:text-base"
+            className="font-bold rounded-lg md:rounded-2xl px-2 py-1.5 md:px-6 md:py-3 flex items-center justify-center gap-1 md:gap-2 transition-colors shadow-sm md:shadow-lg bg-cyan-500 hover:bg-cyan-400 text-white shadow-cyan-500/20 flex-1 md:flex-none md:w-auto whitespace-nowrap text-[10px] md:text-base"
           >
             <Plus size={16} strokeWidth={3} className="md:w-[18px] md:h-[18px]" />
             Scan In
+          </button>
+          <button
+            onClick={() => setIsScanOutOpen(true)}
+            className="font-bold rounded-lg md:rounded-2xl px-2 py-1.5 md:px-6 md:py-3 flex items-center justify-center gap-1 md:gap-2 transition-colors shadow-sm md:shadow-lg bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/20 flex-1 md:flex-none md:w-auto whitespace-nowrap text-[10px] md:text-base"
+          >
+            <LogOut size={16} strokeWidth={3} className="md:w-[18px] md:h-[18px]" />
+            Scan Out
           </button>
         </div>
       </div>
@@ -466,7 +501,7 @@ export default function TerminalClient({ support, loggedInEmployee, initialSessi
         </div>
 
         {/* MAIN AREA */}
-        <div className="lg:col-span-8">
+        <div className="lg:col-span-8 scroll-mt-4" id="session-panel">
           <div className="bg-white border border-slate-200 shadow-sm rounded-lg md:rounded-3xl p-1.5 md:p-8 min-h-[200px] lg:min-h-[600px] flex flex-col relative overflow-hidden">
             
             {/* Background decorative element */}
@@ -552,6 +587,19 @@ export default function TerminalClient({ support, loggedInEmployee, initialSessi
                     <div className="text-slate-400 font-bold tracking-widest text-[10px] md:text-sm uppercase">
                       {selectedSession.routingProcess?.inProcess?.workOrderNo}
                     </div>
+                    {(selectedSession.routingProcess?.inProcess?.workOrder?.partName || selectedSession.routingProcess?.inProcess?.workOrder?.customerPoRef) && (
+                      <div className="mt-1 text-slate-600 text-[11px] md:text-sm font-medium">
+                        {selectedSession.routingProcess?.inProcess?.workOrder?.partName && (
+                          <span>Part: <span className="font-semibold text-slate-900">{selectedSession.routingProcess.inProcess.workOrder.partName}</span></span>
+                        )}
+                        {selectedSession.routingProcess?.inProcess?.workOrder?.partName && selectedSession.routingProcess?.inProcess?.workOrder?.customerPoRef && (
+                          <span className="mx-2 text-slate-300">|</span>
+                        )}
+                        {selectedSession.routingProcess?.inProcess?.workOrder?.customerPoRef && (
+                          <span>PO No: <span className="font-semibold text-slate-900">{selectedSession.routingProcess.inProcess.workOrder.customerPoRef}</span></span>
+                        )}
+                      </div>
+                    )}
                   </div>
                   
                   <div className="flex gap-2 md:gap-4 mt-2 md:mt-0">
@@ -625,6 +673,14 @@ export default function TerminalClient({ support, loggedInEmployee, initialSessi
                     </button>
                   </div>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    <div className="col-span-2">
+                      <div className="text-xs text-slate-500 font-medium mb-1">Part Name</div>
+                      <div className="font-semibold text-slate-900 text-xs md:text-sm break-words">{selectedSession.routingProcess?.inProcess?.workOrder?.partName || 'N/A'}</div>
+                    </div>
+                    <div className="col-span-2">
+                      <div className="text-xs text-slate-500 font-medium mb-1">Purchase Order No.</div>
+                      <div className="font-semibold text-slate-900 text-xs md:text-sm break-words">{selectedSession.routingProcess?.inProcess?.workOrder?.customerPoRef || 'N/A'}</div>
+                    </div>
                     <div>
                       <div className="text-xs text-slate-500 font-medium mb-1">Drawing Number</div>
                       <div className="font-semibold text-slate-900 text-xs md:text-sm">DWG-{selectedSession.routingProcess?.inProcess?.workOrderNo?.split('-').pop() || '0000'}</div>
@@ -975,6 +1031,15 @@ export default function TerminalClient({ support, loggedInEmployee, initialSessi
         onSuccess={handleScanInSuccess}
         loggedInEmployeeId={loggedInEmployee?.id}
         onScanOutRequest={handleIntakeScanOutRequest}
+      />
+      <ScanOutDialog
+        isOpen={isScanOutOpen}
+        onClose={() => setIsScanOutOpen(false)}
+        sessions={activeSessions}
+        employees={support.employees}
+        lockedEmployee={scanOutLockedEmployee}
+        onCompleted={handleScanOutCompleted}
+        onNeedParameters={handleScanOutNeedParameters}
       />
       {isFilesModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">

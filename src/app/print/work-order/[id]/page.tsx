@@ -238,6 +238,10 @@ export default async function PrintWorkOrderPage(
               <td className="v">{wo.quantity?.toString() || "0"} {wo.uom || ""}</td>
             </tr>
             <tr>
+              <td className="k">Part Name</td>
+              <td className="v" colSpan={3}>{wo.partName || "—"}</td>
+            </tr>
+            <tr>
               <td className="k">Job Description</td>
               <td className="v" colSpan={3}>{wo.jobDescription || "—"}</td>
             </tr>

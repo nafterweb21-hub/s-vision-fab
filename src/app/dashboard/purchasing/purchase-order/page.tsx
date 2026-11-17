@@ -4,6 +4,7 @@ import { toast as hotToast } from "react-hot-toast";
 
 import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
+import { copyPoShipTo } from "@/lib/po-ship-to";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Plus,
@@ -21,6 +22,14 @@ import {
   X,
   Printer,
 } from "lucide-react";
+
+const REVISABLE_STATUSES = [
+  "Pending For Approval",
+  "Pending First Tier Approval",
+  "Pending Second Tier Approval",
+  "Approved",
+  "Issued",
+];
 
 const STATUS_TABS = [
   "All",
@@ -135,10 +144,13 @@ export default function PurchaseOrderListPage() {
 
   async function onRevise() {
     if (!selected) return;
-    if (selected.status !== "Approved" && selected.status !== "Issued") {
-      return hotToast.error("Only Approved or Issued purchase orders can be revised");
+    if (!REVISABLE_STATUSES.includes(selected.status)) {
+      return hotToast.error("Only purchase orders pending approval, Approved or Issued can be revised");
     }
-    if (!await customConfirm(`Create a new revision of ${selected.poNo}?`)) return;
+    const msg = selected.status.startsWith("Pending")
+      ? `${selected.poNo} is pending approval. Revising will cancel the current approval and create a new Draft revision that must be re-submitted. Continue?`
+      : `Create a new revision of ${selected.poNo}?`;
+    if (!await customConfirm(msg)) return;
     const res = await callAction(selected.id, "revise");
     if (res?.id) router.push(`/dashboard/purchasing/purchase-order/${res.id}`);
   }
@@ -173,6 +185,7 @@ export default function PurchaseOrderListPage() {
     try {
       const full = await fetch(`/api/purchasing/purchase-order/${selected.id}`).then((r) => r.json());
       const payload = {
+        ...copyPoShipTo(full),
         companyId: full.companyId,
         date: new Date().toISOString().slice(0, 10),
         workOrderNo: full.workOrderNo,
@@ -247,7 +260,7 @@ export default function PurchaseOrderListPage() {
         <ToolbarBtn icon={<Edit2 size={14} />} label="Edit" onClick={onEdit} disabled={!selected || selected.status !== "Draft"} />
         <ToolbarBtn icon={<Ban size={14} />} label="Void" onClick={onVoid} disabled={!selected || selected.status === "Void"} />
         <ToolbarBtn icon={<Send size={14} />} label="Submit" onClick={onSubmit} disabled={!selected || selected.status !== "Draft"} primary />
-        <ToolbarBtn icon={<GitBranch size={14} />} label="Revise" onClick={onRevise} disabled={!selected || selected.status !== "Submitted"} />
+        <ToolbarBtn icon={<GitBranch size={14} />} label="Revise" onClick={onRevise} disabled={!selected || !REVISABLE_STATUSES.includes(selected.status)} />
         <ToolbarBtn icon={<History size={14} />} label="History" onClick={onHistory} disabled={!selected} />
         <ToolbarBtn icon={<Copy size={14} />} label="Copy" onClick={onCopy} disabled={!selected} />
         <ToolbarBtn icon={<Printer size={14} />} label="Print" onClick={() => { if (selected) window.open(`/print/purchase-order/${selected.id}`, "_blank"); }} disabled={!selected} />
@@ -470,6 +483,10 @@ function StatusPill({ status }: { status: string }) {
   const cls =
     status === "Issued" || status === "Approved"
       ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+      : status === "Pending First Tier Approval"
+      ? "bg-amber-50 text-amber-800 border-amber-300"
+      : status === "Pending Second Tier Approval"
+      ? "bg-indigo-50 text-indigo-800 border-indigo-300"
       : status === "Pending For Approval"
       ? "bg-sky-50 text-sky-700 border-sky-200"
       : status === "Draft"

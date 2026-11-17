@@ -13,6 +13,8 @@ export interface SearchableSelectProps extends React.SelectHTMLAttributes<HTMLSe
   required?: boolean;
   name?: string;
   dropdownPosition?: "bottom" | "top";
+  /** Smaller text (13px) for dense line-item tables. */
+  compact?: boolean;
 }
 
 export const SearchableSelect = React.forwardRef<HTMLSelectElement, SearchableSelectProps>((
@@ -26,6 +28,7 @@ export const SearchableSelect = React.forwardRef<HTMLSelectElement, SearchableSe
     required = false,
     name,
     dropdownPosition = "bottom",
+    compact = false,
     ...rest
   },
   ref
@@ -176,7 +179,7 @@ export const SearchableSelect = React.forwardRef<HTMLSelectElement, SearchableSe
           filteredOptions.map((opt, i) => (
             <div
               key={i}
-              className={`px-2 py-1.5 sm:px-3 sm:py-2 text-[10px] sm:text-sm rounded sm:rounded-md cursor-pointer truncate ${
+              className={`${compact ? "px-2 py-1 text-[13px]" : "px-2 py-1.5 sm:px-3 sm:py-2 text-[10px] sm:text-sm"} rounded sm:rounded-md cursor-pointer truncate ${
                 String(internalValue) === String(opt.value)
                   ? "bg-indigo-50 text-indigo-700 font-medium"
                   : opt.disabled 
@@ -205,10 +208,10 @@ export const SearchableSelect = React.forwardRef<HTMLSelectElement, SearchableSe
         onClick={() => !disabled && setOpen(!open)}
         title={selectedOption ? selectedOption.label : undefined}
       >
-        <span className="truncate pr-4 sm:pr-4 block text-[10px] sm:text-sm">
+        <span className={`truncate block ${compact ? "pr-3.5 text-[13px]" : "pr-4 text-[10px] sm:text-sm"}`}>
           {selectedOption ? selectedOption.label : <span className="opacity-50">Select...</span>}
         </span>
-        <ChevronDown size={14} className="absolute right-1.5 sm:right-3 top-1/2 -translate-y-1/2 opacity-50 pointer-events-none sm:w-4 sm:h-4 w-3 h-3" />
+        <ChevronDown size={14} className={`absolute top-1/2 -translate-y-1/2 opacity-50 pointer-events-none ${compact ? "right-1.5 w-3.5 h-3.5" : "right-1.5 sm:right-3 sm:w-4 sm:h-4 w-3 h-3"}`} />
       </div>
 
       <select 

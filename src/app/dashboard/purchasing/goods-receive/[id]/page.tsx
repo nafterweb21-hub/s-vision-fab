@@ -15,6 +15,24 @@ getGoodsReceiveFormData,
   voidGoodsReceive,
 } from "../actions";
 
+function cleanErrorMessage(msg: any): string {
+  const text = typeof msg === "string" ? msg : msg?.message || "";
+  if (!text) return "An unexpected error occurred.";
+  if (text.includes("Argument `company` is missing") || text.includes("companyId")) {
+    return "Company is mandatory. Please select a valid Company.";
+  }
+  if (text.includes("Argument `supplier` is missing") || text.includes("supplierId")) {
+    return "Supplier is mandatory. Please select a valid Supplier.";
+  }
+  if (text.includes("Argument `purchaseOrder` is missing") || text.includes("purchaseOrderId")) {
+    return "PO No is mandatory. Please select an issued Purchase Order.";
+  }
+  if (text.includes("Invalid `prisma.") || text.includes("invocation:")) {
+    return "Unable to save Goods Receive. Please ensure all mandatory fields (Company, Supplier, PO No, Date) are filled.";
+  }
+  return text;
+}
+
 export default function GoodsReceiveFormPage() {
   const params = useParams();
   const id = params?.id as string;
@@ -95,7 +113,7 @@ export default function GoodsReceiveFormPage() {
           }
         }
       } catch (e: any) {
-        setErrorMsg(e.message);
+        setErrorMsg(cleanErrorMessage(e));
       } finally {
         setLoading(false);
       }
@@ -183,7 +201,7 @@ export default function GoodsReceiveFormPage() {
         router.push(`/dashboard/saved?module=Goods Receive&id=${existing?.grNo || id}&viewUrl=/dashboard/purchasing/goods-receive/${id}&backUrl=/dashboard/purchasing/goods-receive`);
       }
     } catch (e: any) {
-      setErrorMsg(e.message);
+      setErrorMsg(cleanErrorMessage(e));
     } finally {
       setSaving(false);
     }
@@ -200,7 +218,7 @@ export default function GoodsReceiveFormPage() {
       if (!res.success) throw new Error(res.error);
       router.push(`/dashboard/saved?module=Goods Receive (Submitted)&id=${existing?.grNo || id}&viewUrl=/dashboard/purchasing/goods-receive/${id}&backUrl=/dashboard/purchasing/goods-receive`);
     } catch (e: any) {
-      setErrorMsg(e.message);
+      setErrorMsg(cleanErrorMessage(e));
     } finally {
       setSaving(false);
     }
@@ -217,7 +235,7 @@ export default function GoodsReceiveFormPage() {
   }
 
   return (
-    <div className="p-6 lg:p-8 space-y-6 max-w-6xl mx-auto">
+    <div className="py-3 space-y-4 w-full">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Link

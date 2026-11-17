@@ -37,7 +37,7 @@ export default function NewProcessProfilePage() {
   };
 
   return (
-    <div className="flex-1 flex flex-col p-6 max-w-7xl mx-auto w-full bg-blue-50 text-blue-900 ">
+    <div className="flex-1 flex flex-col p-4 w-full bg-blue-50 text-blue-900">
       <div className="mb-6">
         <Link
           href="/dashboard/master-profile/process-profile"

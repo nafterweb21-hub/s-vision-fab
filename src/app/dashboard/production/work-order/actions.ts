@@ -90,6 +90,7 @@ export async function createWorkOrderFromBatch(batchId: string) {
         projectCode: so.projectCode,
         deliveryDate: batch.deliveryDate,
         jobDescription: batch.salesOrderItem.part.description,
+        partName: batch.salesOrderItem.part.description,
         quantity: batch.quantity,
         uom: batch.salesOrderItem.uom.uomName,
         amount: Number(batch.salesOrderItem.unitPrice) * batch.quantity,
@@ -113,10 +114,12 @@ export async function updateWorkOrderEditable(
   data: {
     date?: string;
     remark?: string;
+    partName?: string;
     labelExpiryDate?: string | null;
     labelQty?: string | number | null;
     labelUomId?: string | null;
     uploadUrl?: string | null;
+    stageQc?: boolean;
   },
 ) {
   try {
@@ -137,10 +140,12 @@ export async function updateWorkOrderEditable(
       data: {
         ...(date ? { date } : {}),
         remark: data.remark ?? null,
+        ...(data.partName !== undefined ? { partName: data.partName.trim() || null } : {}),
         labelExpiryDate: data.labelExpiryDate ? new Date(data.labelExpiryDate) : null,
         labelQty: data.labelQty != null && data.labelQty !== "" ? Number(data.labelQty) : null,
         labelUomId: data.labelUomId || null,
         uploadUrl: data.uploadUrl || null,
+        ...(typeof data.stageQc === "boolean" ? { stageQc: data.stageQc } : {}),
       },
     });
 

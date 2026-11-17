@@ -41,7 +41,7 @@ Cancelled — cancel a Proceed or WIP WO
 
 - **Quantity is fixed** — you cannot change WO quantity or split a WO. Different splits require different SO batches.
 - Materials / quantities used per in-process-assembly are **not** captured.
-- WO tracks only the main product as described by Job Description; no assembly parts or inventory.
+- WO tracks only the main product as described by Job Description and Part Name; no assembly parts or inventory.
 - **No in-system rework.** If quantity is rejected mid-run, raise NCR (offline rework). The WO can still proceed to the next routing process with the original quantity as a whole; next process does **not** wait for NCR to be submitted.
 - Customer return = a **new** sales order, not a modification of the existing WO.
 - **Optional routing**: if the WO has no in-house routing (subcon-only), planner can flag that. WO goes to WIP when subcon PO is issued and to Completed when subcon items are fully received.
@@ -89,6 +89,7 @@ The Label Expiry Date / Qty / UOM fields exist on the WO header for the Delivery
 | 6 | Project Code | Read-only | from SO | — | |
 | 7 | Delivery Date | Read-only | from SO | — | |
 | 8 | Job Description | Read-only | from SO | — | |
+| 8a | Part Name | Text | from SO (Finished Good description) | N | Prefilled at WO creation; editable until Void / Cancelled / Completed. Shown on the WO printout and used to prefill the CoC Part Name |
 | 9 | Quantity | Read-only | from SO | — | |
 | 10 | UOM | Read-only | from SO | — | |
 | 11 | Amount | Read-only | from SO | — | |

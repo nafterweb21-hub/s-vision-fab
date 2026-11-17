@@ -63,7 +63,7 @@ Same shape as material PO header, **without `PR No`**.
 | 14 | Mill Certificate | Checkbox | User | N | default unticked |
 | 15 | Certificate of Conformance | Checkbox | User | N | default unticked |
 | 16 | Contact Person | Dropdown | Supplier Contact | Y | populates Tel/Fax/Mobile/Email; editable |
-| 17–20 | Tel / Fax / Mobile / Email | Text | from Contact | Email Y | |
+| 17–20 | Tel / Fax / Mobile / Email | Text | from Contact | N | email optional |
 | 21–22 | Approval By / Date (Tier 1) | Read-only | System | — | |
 | 23–24 | Approval By / Date (Tier 2) | Read-only | System | — | |
 | 25 | Receive Status | Read-only | Computed | — | NA / Not Received / Partially Received / Fully Received |

@@ -105,7 +105,7 @@ export default async function ProcessParameterDetailPage({ params }: { params: P
   ];
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
+    <div className="py-3 space-y-4 w-full">
       
       {/* Back button and title */}
       <div>

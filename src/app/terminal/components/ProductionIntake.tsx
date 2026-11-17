@@ -1,10 +1,10 @@
 import { SearchableSelect } from "@/components/SearchableSelect";
 import { toast as hotToast } from "react-hot-toast";
 import { useState, useMemo, useTransition, useEffect } from "react";
-import { ArrowLeft, Monitor, Camera, QrCode, Search, Calendar, Clock, Send, Package, ChevronDown, LogOut } from "lucide-react";
+import { ArrowLeft, Monitor, QrCode, Search, Calendar, Clock, Send, Package, ChevronDown, LogOut } from "lucide-react";
 import CameraScanner from "./CameraScanner";
 import { lookupWorkOrder, scanIn, scanOutQuick } from "../actions";
-import { computeGating, type GateRow } from "@/lib/routing-gating";
+import { computeGating, isStageQcCleared, type GateRow } from "@/lib/routing-gating";
 type Support = {
   employees: { id: string; name: string; code: string; roleProfileId?: string | null }[];
   activeWorkOrders?: { workOrderNo: string }[];
@@ -55,24 +55,52 @@ export default function ProductionIntake({ isOpen, onClose, support, onSuccess, 
   }, [support.employees, inForm.employeeId]);
   const operatorRoleId = selectedEmployee?.roleProfileId ?? null;
 
-  // Sequence + role gate over the whole work order. Only the current step (and
-  // completed steps) that the operator's role may run are "visible".
+  // Sequence + role gate over the whole work order. Only the current step that the
+  // operator's role may run is "visible". A signed-in operator additionally never
+  // sees a step assigned to someone else (same rule as the Available list and scanIn).
   const visibleRowIds = useMemo(() => {
     const rows: GateRow[] = [];
+    const assignee = new Map<string, string | null>();
     for (const ip of allInProcesses) {
       for (const rp of ip.routingProcesses ?? []) {
+        assignee.set(rp.id, rp.assignedEmployeeId ?? null);
         rows.push({
           id: rp.id,
           inProcessSn: ip.sn ?? 0,
           sequence: rp.sequence,
           status: rp.status,
           mainProcessId: rp.mainProcessId,
-          allowedRoleIds: (rp.mainProcess?.allowedRoles ?? []).map((x: any) => x.id),
+          // Roles live on the sub-process (ProcessProfile), not the Main Process.
+          allowedRoleIds: (rp.routingProcess?.allowedRoles ?? []).map((x: any) => x.id),
+          qcCleared: isStageQcCleared(!!wo?.stageQc, rp.status, rp.productionTimesheets ?? []),
         });
       }
     }
-    return new Set(computeGating(rows, operatorRoleId).filter((g) => g.visible).map((g) => g.id));
-  }, [allInProcesses, operatorRoleId]);
+    return new Set(
+      computeGating(rows, operatorRoleId)
+        .filter((g) => g.visible)
+        .filter((g) => {
+          if (!lockedEmployee) return true; // manual picker: auto-selects the assignee below
+          const a = assignee.get(g.id);
+          return !a || a === lockedEmployee.id;
+        })
+        .map((g) => g.id),
+    );
+  }, [allInProcesses, operatorRoleId, lockedEmployee, wo?.stageQc]);
+
+  // Stage QC: the completed step that is holding the line until QC approves it (if any).
+  const qcWaitingStage = useMemo(() => {
+    if (!wo?.stageQc) return null;
+    for (const ip of allInProcesses) {
+      for (const rp of [...(ip.routingProcesses ?? [])].sort((x: any, y: any) => x.sequence - y.sequence)) {
+        if (rp.status !== "Completed") return null; // front is a normal open step
+        if (!isStageQcCleared(true, rp.status, rp.productionTimesheets ?? [])) {
+          return rp.mainProcess?.process ?? "previous stage";
+        }
+      }
+    }
+    return null;
+  }, [allInProcesses, wo?.stageQc]);
 
   function visMainOpts(ip: any): { id: string; label: string }[] {
     const seen = new Map<string, { id: string; label: string }>();
@@ -212,13 +240,27 @@ export default function ProductionIntake({ isOpen, onClose, support, onSuccess, 
     }
   }
 
+  // Lock the page behind the overlay so touch/wheel scrolling goes to the intake, not the terminal.
+  useEffect(() => {
+    if (!isOpen) return;
+    const prevBody = document.body.style.overflow;
+    const prevHtml = document.documentElement.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prevBody;
+      document.documentElement.style.overflow = prevHtml;
+    };
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-50 flex flex-col font-sans text-slate-900 overflow-hidden h-screen">
-      
+    // 100dvh, not 100vh: on mobile 100vh is taller than the visible area, which pushed SCAN IN off-screen.
+    <div className="fixed inset-0 z-50 bg-slate-50 flex flex-col font-sans text-slate-900 overflow-hidden h-[100dvh]">
+
       {/* TOP HEADER */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-200 bg-white px-3 py-2 md:px-6 md:py-4 sticky top-0 z-10 shadow-sm gap-2 md:gap-0">
+      <div className="shrink-0 flex flex-col md:flex-row md:items-center justify-between border-b border-slate-200 bg-white px-3 py-2 md:px-6 md:py-4 z-10 shadow-sm gap-2 md:gap-0">
         <div className="flex items-center justify-between w-full md:w-auto">
           <div className="flex items-center gap-2 md:gap-6">
             <button 
@@ -269,10 +311,12 @@ export default function ProductionIntake({ isOpen, onClose, support, onSuccess, 
         </div>
       </div>
 
-      <div className="flex-1 p-2 md:p-8 max-w-5xl mx-auto w-full grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-8 min-h-0 overflow-y-auto items-start">
-        
+      {/* The scroll container spans the full width so scrolling works anywhere, not only over the centred column. */}
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
+      <div className="p-2 pb-[max(1rem,env(safe-area-inset-bottom))] md:p-8 max-w-5xl mx-auto w-full grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-8">
+
         {/* LEFT PANEL: WORK ORDER CAPTURE */}
-        <div className="bg-white border border-slate-200 rounded-xl md:rounded-3xl p-3 md:p-6 shadow-sm flex flex-col min-h-[300px] md:min-h-0 h-full">
+        <div className="bg-white border border-slate-200 rounded-xl md:rounded-3xl p-3 md:p-6 shadow-sm flex flex-col min-h-[300px] md:min-h-0">
           <div className="flex items-center justify-between mb-3 md:mb-6">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-slate-50 border border-slate-200 rounded-lg">
@@ -280,14 +324,9 @@ export default function ProductionIntake({ isOpen, onClose, support, onSuccess, 
               </div>
               <h2 className="text-sm font-bold tracking-widest uppercase text-slate-900">Work Order Capture</h2>
             </div>
-            <Camera size={24} className="md:w-8 md:h-8 text-slate-200" />
           </div>
 
           <div className="flex-1 bg-slate-50 border border-slate-200 rounded-lg md:rounded-2xl flex flex-col items-center justify-center relative min-h-0 overflow-hidden mb-3 md:mb-6 min-h-[150px] md:min-h-[200px]">
-            <div className="absolute top-2 right-2 md:top-4 md:right-4 w-6 h-6 md:w-8 md:h-8 rounded-full bg-black/5 flex items-center justify-center text-[10px] md:text-xs font-bold text-slate-400 z-10">
-              i
-            </div>
-            
             {isCameraOpen ? (
               <div className="w-full h-full p-4 flex items-center justify-center">
                 <CameraScanner 
@@ -301,7 +340,13 @@ export default function ProductionIntake({ isOpen, onClose, support, onSuccess, 
               </div>
             ) : (
               <div className="flex flex-col items-center text-center p-4 md:p-8">
-                <div className="w-10 h-10 md:w-16 md:h-16 border-2 border-slate-300 rounded-lg md:rounded-xl mb-3 md:mb-6 relative">
+                <button
+                  type="button"
+                  onClick={() => setIsCameraOpen(true)}
+                  aria-label="Open camera"
+                  title="Open camera"
+                  className="w-10 h-10 md:w-16 md:h-16 border-2 border-slate-300 rounded-lg md:rounded-xl mb-3 md:mb-6 relative cursor-pointer hover:border-emerald-400 transition-colors"
+                >
                   <div className="absolute inset-1.5 md:inset-2 border-2 border-slate-400 rounded-md md:rounded-lg border-dashed"></div>
                   <div className="absolute bottom-[-6px] right-[-6px] md:bottom-[-10px] md:right-[-10px] bg-slate-50 p-0.5 md:p-1">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-500 w-4 h-4 md:w-6 md:h-6">
@@ -310,8 +355,8 @@ export default function ProductionIntake({ isOpen, onClose, support, onSuccess, 
                       <path d="M14 12v.01"></path>
                     </svg>
                   </div>
-                </div>
-                <button 
+                </button>
+                <button
                   onClick={() => setIsCameraOpen(true)}
                   className="font-bold text-sm md:text-base text-slate-900 mb-1"
                 >
@@ -380,8 +425,8 @@ export default function ProductionIntake({ isOpen, onClose, support, onSuccess, 
         </div>
 
         {/* RIGHT PANEL: PRODUCTION SELECTION */}
-        <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm flex flex-col min-h-0">
-          <div className="flex items-center gap-3 mb-6">
+        <div className="bg-white border border-slate-200 rounded-xl md:rounded-3xl p-4 md:p-6 shadow-sm flex flex-col min-h-0">
+          <div className="flex items-center gap-3 mb-3 md:mb-6">
             <div className="p-2 bg-slate-50 border border-slate-200 rounded-lg">
               <Package size={20} className="text-cyan-600" />
             </div>
@@ -457,7 +502,9 @@ export default function ProductionIntake({ isOpen, onClose, support, onSuccess, 
 
           {wo && inProcessOptions.length === 0 && (
             <div className="mb-6 text-sm text-amber-700 bg-amber-50 border border-amber-200 p-4 rounded-xl font-medium">
-              No process is available to start right now. Earlier routing processes must be completed first, or your role is not permitted for the current step.
+              {qcWaitingStage
+                ? `Waiting for QC: ${qcWaitingStage} must be approved by QC before the next stage can start.`
+                : "No process is available to start right now. Earlier routing processes must be completed first, or the current step is assigned to another operator or not permitted for your role."}
             </div>
           )}
 
@@ -559,6 +606,7 @@ export default function ProductionIntake({ isOpen, onClose, support, onSuccess, 
             </button>
         </div>
         </div>
+      </div>
       </div>
     </div>
   );

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { nextDocumentNo } from "@/lib/document-numbering";
+import { getUnfinishedRoutingSteps, unfinishedStepsError } from "@/lib/work-order-completion";
 
 /**
  * The signed-in inspector. QC sign-offs are attributed to the logged-in user's own employee record
@@ -25,9 +26,17 @@ const NEEDS_EMPLOYEE = "Link your login to an employee record before rejecting o
 export async function getAwaitingInspection() {
   // Get recently completed production sessions that have Pending parameters
   const timesheets = await prisma.productionTimesheet.findMany({
-    where: { 
+    where: {
       timeOut: { not: null },
-      qcStatus: "Pending"
+      OR: [
+        { qcStatus: "Pending" },
+        // Stage QC ON: a rejected stage blocks the next one, so keep it in the list for re-inspection
+        // while the work order is still in production.
+        {
+          qcStatus: "Rejected",
+          routingProcess: { inProcess: { workOrder: { stageQc: true, status: { in: ["Proceed", "WIP"] } } } },
+        },
+      ],
     },
     include: {
       employee: true,
@@ -136,6 +145,11 @@ export async function submitWorkOrderQc(
 
   const inspector = await resolveInspector();
   if (!inspector.ok) return { success: false, error: inspector.error };
+
+  if (qcAcceptance === "Approved") {
+    const pending = await getUnfinishedRoutingSteps(workOrderNo);
+    if (pending.length > 0) return { success: false, error: unfinishedStepsError(pending) };
+  }
   const employeeId = inspector.employeeId ?? undefined;
   if (qcAcceptance === "Rejected" && !employeeId) return { success: false, error: NEEDS_EMPLOYEE };
 

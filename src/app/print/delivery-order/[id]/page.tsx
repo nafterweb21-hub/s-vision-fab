@@ -34,10 +34,52 @@ export default async function PrintDeliveryOrderPage(
   const companyEmail = company?.email || "";
   const companyName = company?.companyName || "Vision Fab Private Limited";
 
+  const isReturnable = deliveryOrder.isReturnable;
+  const returnableNote = deliveryOrder.returnableNote?.trim() || "";
+  // Every DO (returnable or not) carries a value per line.
+  const showValue = true;
+  const colCount = showValue ? 6 : 5;
+  const valueOfGoods = deliveryOrder.items.reduce((s, it) => s + Number(it.totalValue ?? 0), 0);
+  const fmtMoney = (n: number) => n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
   const customerName = deliveryOrder.customer?.customerName || "";
   const customerAddress = deliveryOrder.customer?.addresses?.[0]?.address || "";
   const customerGstin = deliveryOrder.customer?.gstin || "";
   const customerRoNumber = deliveryOrder.customer?.roNumber || "";
+
+  // Company footer image — shared with the invoice (configured under invoice footer in settings)
+  const footerImageUrl = settings?.enableInvoiceFooter && settings?.invoiceFooterUrl
+    ? (settings.invoiceFooterUrl.startsWith("/uploads") ? `/api${settings.invoiceFooterUrl}` : settings.invoiceFooterUrl)
+    : null;
+
+  const footer = (
+    <>
+    <div className="footer-box">
+      <div className="signature-box">
+        <div className="signature-line">Goods Received in Good Condition By</div>
+      </div>
+      <div className="signature-box">
+        {settings?.enableSignature && settings?.signatureUrl && (
+          <img 
+            src={settings.signatureUrl.startsWith("/uploads") ? `/api${settings.signatureUrl}` : settings.signatureUrl} 
+            alt="Signature" 
+            style={{ maxHeight: "40px", margin: "0 auto 4px auto" }} 
+          />
+        )}
+        <div className="signature-line">For {companyName}</div>
+      </div>
+    </div>
+    {footerImageUrl && (
+      <div style={{ marginTop: "12px", textAlign: "center", width: "100%" }}>
+        <img
+          src={footerImageUrl}
+          alt="Footer"
+          style={{ maxWidth: "100%", height: "auto", maxHeight: "150px", display: "block", margin: "0 auto" }}
+        />
+      </div>
+    )}
+    </>
+  );
 
   return (
     <>
@@ -52,6 +94,18 @@ export default async function PrintDeliveryOrderPage(
           .print-actions button { padding: 8px 14px; font-size: 13px; font-weight: 600; background: #c69200; color: #fff; border: 0; border-radius: 6px; cursor: pointer; }
         }
         @media print { .print-actions { display: none; } }
+
+        /* Layout table: browsers repeat thead/tfoot on every printed page,
+           so the company header and the signature footer appear on each page. */
+        .print-layout { width: 100%; border-collapse: collapse; }
+        .print-layout > thead > tr > td,
+        .print-layout > tfoot > tr > td,
+        .print-layout > tbody > tr > td { padding: 0; vertical-align: top; }
+        @media print {
+          @page { size: A4; margin: 12mm; }
+          .page { width: auto; min-height: 0; padding: 0; }
+          .items-table tr { break-inside: avoid; }
+        }
         
         .header { display: flex; justify-content: space-between; margin-bottom: 5mm; }
         .header-left { width: 40%; }
@@ -61,7 +115,9 @@ export default async function PrintDeliveryOrderPage(
         .company-name { color: #d00000; font-size: 20px; font-weight: bold; margin-bottom: 4px; }
         .company-details { font-size: 10px; line-height: 1.3; font-weight: 500; }
         
-        .main-box { border: 1.5px solid #63a0d4; border-radius: 0; }
+        /* clone: when the box splits across printed pages, each page's piece gets its own
+           top and bottom border instead of being left open at the page break. */
+        .main-box { border: 1.5px solid #63a0d4; border-radius: 0; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
         
         .title-bar { display: flex; align-items: center; justify-content: space-between; padding: 4px 8px; border-bottom: 1.5px solid #63a0d4; }
         .title-bar .do-title { color: #0070c0; font-size: 16px; font-weight: bold; }
@@ -92,6 +148,8 @@ export default async function PrintDeliveryOrderPage(
         .items-table tbody tr td { padding-bottom: 4px; padding-top: 4px; border-bottom: 1px solid #e1e1e1; }
         .items-table tbody tr:last-child td { border-bottom: none; }
         
+        .items-table tbody tr.returnable-note td { border-top: 1.5px solid #63a0d4; border-bottom: none; padding: 8px 4px; text-align: center; font-weight: bold; text-transform: uppercase; white-space: pre-line; font-size: 11px; }
+        .items-table tbody tr.value-total td { border-top: 1.5px solid #63a0d4; border-bottom: none; font-weight: bold; background: #e6f2ff; }
         .footer-box { margin-top: 20px; font-size: 10px; padding: 10px; border: 1.5px solid #63a0d4; display: flex; justify-content: space-between; min-height: 80px;}
         .signature-box { width: 45%; text-align: center; display: flex; flex-direction: column; justify-content: flex-end; }
         .signature-line { border-top: 1px solid #000; width: 80%; margin: 0 auto; padding-top: 4px; font-weight: bold;}
@@ -100,6 +158,10 @@ export default async function PrintDeliveryOrderPage(
       <PrintToolbar doc="delivery-order" id={id} label="Print DO" />
 
       <div className="page">
+        <table className="print-layout">
+          <thead>
+            <tr>
+              <td>
         <div className="header">
           <div className="header-left">
             <img src={company?.uploadUrl ? (company.uploadUrl.startsWith("/uploads") ? `/api${company.uploadUrl}` : company.uploadUrl) : "/logo.jpg"} alt="Logo" />
@@ -116,11 +178,25 @@ export default async function PrintDeliveryOrderPage(
         </div>
         
         <div style={{borderBottom: "2px solid #000", marginBottom: "4px"}}></div>
+              </td>
+            </tr>
+          </thead>
 
+          <tfoot>
+            <tr>
+              <td>
+                {footer}
+              </td>
+            </tr>
+          </tfoot>
+
+          <tbody>
+            <tr>
+              <td>
         <div className="main-box">
           <div className="title-bar">
             <div></div>
-            <div className="do-title">DELIVERY ORDER</div>
+            <div className="do-title">{isReturnable ? "RETURNABLE DELIVERY CHALLAN" : "DELIVERY ORDER"}</div>
             <div></div>
           </div>
 
@@ -161,11 +237,19 @@ export default async function PrintDeliveryOrderPage(
                   </tr>
                   <tr>
                     <td>P.O. Ref</td>
-                    <td>{deliveryOrder.salesOrder?.customerPoRef || "—"}</td>
+                    <td>{deliveryOrder.poNo || deliveryOrder.salesOrder?.customerPoRef || "—"}</td>
                   </tr>
                   <tr>
                     <td>Sales Order</td>
                     <td>{deliveryOrder.salesOrder?.orderNo || "—"}</td>
+                  </tr>
+                  <tr>
+                    <td>Transport</td>
+                    <td>{deliveryOrder.modeOfTransport || "—"}</td>
+                  </tr>
+                  <tr>
+                    <td>Vehicle No.</td>
+                    <td>{deliveryOrder.vehicleNo || "—"}</td>
                   </tr>
                 </tbody>
               </table>
@@ -176,49 +260,64 @@ export default async function PrintDeliveryOrderPage(
             <thead>
               <tr>
                 <th style={{width: "5%"}}>S/N</th>
-                <th style={{width: "45%"}}>Description</th>
-                <th style={{width: "20%"}}>Work Order No</th>
-                <th style={{width: "15%"}}>Quantity</th>
-                <th style={{width: "15%"}}>UOM</th>
+                <th style={{width: showValue ? "38%" : "45%"}}>Description</th>
+                <th style={{width: showValue ? "17%" : "20%"}}>Work Order No</th>
+                <th style={{width: showValue ? "12%" : "15%"}}>Quantity</th>
+                <th style={{width: showValue ? "10%" : "15%"}}>UOM</th>
+                {showValue && <th style={{width: "18%"}}>Total Value</th>}
               </tr>
             </thead>
             <tbody>
               {deliveryOrder.items.length === 0 ? (
                 <tr>
-                  <td colSpan={5} style={{ height: "40px" }}></td>
+                  <td colSpan={colCount} style={{ height: "40px" }}></td>
                 </tr>
               ) : (
                 deliveryOrder.items.map((it, idx) => (
                   <tr key={it.id}>
                     <td>{idx + 1}</td>
-                    <td className="text-left font-bold">
-                      {it.workOrder?.jobDescription || "—"}
+                    <td className="text-left">
+                      <div className="font-bold">{it.workOrder?.jobDescription || "—"}</div>
+                      {it.description?.trim() && (
+                        <div style={{ whiteSpace: "pre-line", fontWeight: "normal", fontSize: "9px", marginTop: "1px" }}>
+                          {it.description.trim()}
+                        </div>
+                      )}
                     </td>
-                    <td>{it.workOrderNo || "—"}</td>
+                    <td>
+                      <div>{it.workOrderNo || "—"}</div>
+                      {it.workOrder?.partName?.trim() && (
+                        <div style={{ fontSize: "9px", marginTop: "1px" }}>{it.workOrder.partName.trim()}</div>
+                      )}
+                    </td>
                     <td className="text-right">{Number(it.quantity || 0)}</td>
                     <td>{it.uom?.uomName || "—"}</td>
+                    {showValue && (
+                      <td className="text-right">{fmtMoney(Number(it.totalValue ?? 0))}</td>
+                    )}
                   </tr>
                 ))
+              )}
+              {isReturnable && returnableNote && (
+                <tr className="returnable-note">
+                  <td></td>
+                  <td colSpan={colCount - 1}>{returnableNote}</td>
+                </tr>
+              )}
+              {showValue && (
+                <tr className="value-total">
+                  <td colSpan={colCount - 1} className="text-right">Value of Goods</td>
+                  <td className="text-right">{fmtMoney(valueOfGoods)}</td>
+                </tr>
               )}
             </tbody>
           </table>
         </div>
         
-        <div className="footer-box">
-          <div className="signature-box">
-            <div className="signature-line">Goods Received in Good Condition By</div>
-          </div>
-          <div className="signature-box">
-            {settings?.enableSignature && settings?.signatureUrl && (
-              <img 
-                src={settings.signatureUrl.startsWith("/uploads") ? `/api${settings.signatureUrl}` : settings.signatureUrl} 
-                alt="Signature" 
-                style={{ maxHeight: "40px", margin: "0 auto 4px auto" }} 
-              />
-            )}
-            <div className="signature-line">For {companyName}</div>
-          </div>
-        </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </>
   );

@@ -89,7 +89,7 @@ export default function CreateProcessProfilePage() {
   };
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 animate-fade-in">
+    <div className="space-y-4 animate-fade-in w-full">
       <div className="flex items-center gap-3">
         <Link 
           href="/dashboard/profiles/process-profiles" 

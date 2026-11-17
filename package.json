@@ -9,6 +9,7 @@
     "lint": "eslint",
     "migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
+    "db:seed:subcon": "tsx prisma/seed-subcon.ts",
     "sync:modules": "tsx scripts/sync-modules.ts",
     "seed:shop-floor-roles": "tsx scripts/seed-shop-floor-roles.ts"
   },
