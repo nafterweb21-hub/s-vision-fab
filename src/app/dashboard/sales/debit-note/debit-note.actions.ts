@@ -4,7 +4,9 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { nextDocumentNo } from "@/lib/document-numbering";
 import { withRevision } from "@/lib/document-numbering.config";
-import { computeGstBreakup, resolvePosStateCode } from "@/lib/gst";
+import { computeGstBreakup, invoiceGstContext, invoiceGrandTotal, noteLineGstRate } from "@/lib/gst";
+import { balanceDueAfterRecalc, invoicePaymentStatus } from "@/lib/invoice-payment";
+import { invoiceDocLabel, invoiceReviseBlockReason, invoiceVoidBlockReason } from "../invoice/inv-status";
 import type { GstBreakup } from "@/lib/gst";
 import { RecordStatus } from "@/lib/status";
 import {
@@ -31,20 +33,35 @@ async function computeBreakupForData(data: any): Promise<GstBreakup> {
       select: { gstin: true, placeOfSupply: true, isSez: true },
     }),
   ]);
-  const posStateCode = resolvePosStateCode(customer?.placeOfSupply, customer?.gstin);
   return computeGstBreakup({
+    // Same per-line rate rule as the debit note form (noteLineGstRate), so its line tax matches.
     lines: (data.items || []).map((it: any) => ({
       amount: Number(it.amount) || 0,
-      taxRate: Number(it.taxRate) || Number(it.gstRate) || (Number(data.taxRate) > 0 ? Number(data.taxRate) : 0),
+      taxRate: noteLineGstRate(it, data.taxRate),
     })),
     taxRatePercent: Number(data.taxRate) || 0,
-    sellerGstin: company?.gstRegistrationNo,
-    sellerAddress: company?.address,
-    posStateCode,
-    isSez: customer?.isSez,
-    sezTaxRate: Number(company?.sezTaxRate) || 0,
+    // Same seller/POS/SEZ inputs the invoice and debit note forms use for CGST+SGST vs IGST.
+    ...invoiceGstContext(company, customer),
   });
 }
+
+/**
+ * Header totals stored on save, from the server-side breakup (the client's totals
+ * are display only). Same rule as the invoice actions: no currency roundingMode,
+ * only the user's manual round-off (see invoiceGrandTotal).
+ */
+function totalsFromBreakup(data: { roundOff?: unknown; taxRate?: unknown }, breakup: GstBreakup) {
+  const amountBeforeTax = breakup.totals.taxable;
+  const taxAmount = breakup.totals.tax;
+  const roundOff = Number(data.roundOff || 0);
+  const taxRate = Number(data.taxRate) > 0
+    ? Number(data.taxRate)
+    : (amountBeforeTax > 0 && taxAmount > 0 ? Math.round((taxAmount / amountBeforeTax) * 10000) / 100 : 0);
+  return { amountBeforeTax, taxRate, taxAmount, roundOff, amountAfterTax: invoiceGrandTotal(amountBeforeTax, taxAmount, roundOff) };
+}
+
+const LIST_PATH = "/dashboard/sales/debit-note";
+const DOC_TYPE = "Debit Note";
 
 /** Merge a computed line breakup into an invoice item's create payload. */
 function itemWithGst(item: any, line: { gstRate: number; cgstAmount: number; sgstAmount: number; igstAmount: number } | undefined) {
@@ -78,6 +95,7 @@ export async function getInvoices() {
       include: {
         customer: { select: { customerName: true } },
         currency: { select: { code: true } },
+        _count: { select: { receipts: { where: { status: { not: "Void" } } } } },
       },
     });
     return { success: true, data: JSON.parse(JSON.stringify(invoices)) };
@@ -100,6 +118,7 @@ export async function getInvoice(id: string) {
         currency: true,
         taxType: true,
         preparedBy: true,
+        _count: { select: { receipts: { where: { status: { not: "Void" } } } } },
         items: true,
         deliveryOrders: {
           include: {
@@ -263,6 +282,7 @@ export async function createInvoice(data: any) {
     }
 
     const breakup = await computeBreakupForData(data);
+    const totals = totalsFromBreakup(data, breakup);
 
     // The number is taken and the invoice written in one transaction: the
     // counter's row lock only holds for as long as the transaction does.
@@ -295,12 +315,13 @@ export async function createInvoice(data: any) {
           dueDate,
           currencyId: data.currencyId,
           exchangeRate: data.exchangeRate,
-          amountBeforeTax: data.amountBeforeTax,
+          amountBeforeTax: totals.amountBeforeTax,
           taxTypeId: data.taxTypeId || null,
-          taxRate: data.taxRate,
-          taxAmount: data.taxAmount,
-          amountAfterTax: data.amountAfterTax,
-          balanceDue: data.amountAfterTax,
+          taxRate: totals.taxRate,
+          taxAmount: totals.taxAmount,
+          amountAfterTax: totals.amountAfterTax,
+          balanceDue: totals.amountAfterTax,
+          roundOff: totals.roundOff,
           bankDetails: data.bankDetails || null,
           remark: data.remark || null,
           preparedById: data.preparedById,
@@ -323,7 +344,7 @@ export async function createInvoice(data: any) {
       });
     });
 
-    revalidatePath("/dashboard/sales/invoice");
+    revalidatePath(LIST_PATH);
     return { success: true, data: JSON.parse(JSON.stringify(invoice)) };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -343,6 +364,14 @@ export async function updateInvoice(id: string, data: any) {
     }
 
     const breakup = await computeBreakupForData(data);
+    const totals = totalsFromBreakup(data, breakup);
+
+    // Keep what was already received (a revised draft carries its predecessor's
+    // payments): balance = new total - amount paid.
+    const existing = await prisma.invoice.findUnique({ where: { id }, select: { amountPaid: true } });
+    if (!existing) throw new Error("Debit note not found");
+    const balance = balanceDueAfterRecalc(totals.amountAfterTax, existing.amountPaid, invoiceDocLabel(DOC_TYPE));
+    if (!balance.ok) throw new Error(balance.error);
 
     const invoice = await prisma.invoice.update({
       where: { id },
@@ -366,12 +395,13 @@ export async function updateInvoice(id: string, data: any) {
         dueDate,
         currencyId: data.currencyId,
         exchangeRate: data.exchangeRate,
-        amountBeforeTax: data.amountBeforeTax,
+        amountBeforeTax: totals.amountBeforeTax,
         taxTypeId: data.taxTypeId || null,
-        taxRate: data.taxRate,
-        taxAmount: data.taxAmount,
-        amountAfterTax: data.amountAfterTax,
-        balanceDue: data.amountAfterTax,
+        taxRate: totals.taxRate,
+        taxAmount: totals.taxAmount,
+        amountAfterTax: totals.amountAfterTax,
+        balanceDue: balance.balanceDue,
+        roundOff: totals.roundOff,
         bankDetails: data.bankDetails || null,
         remark: data.remark || null,
         preparedById: data.preparedById,
@@ -394,7 +424,7 @@ export async function updateInvoice(id: string, data: any) {
       },
     });
 
-    revalidatePath("/dashboard/sales/invoice");
+    revalidatePath(LIST_PATH);
     return { success: true, data: JSON.parse(JSON.stringify(invoice)) };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -403,12 +433,19 @@ export async function updateInvoice(id: string, data: any) {
 
 export async function submitInvoice(id: string) {
   try {
+    const existing = await prisma.invoice.findUnique({
+      where: { id },
+      select: { amountPaid: true, balanceDue: true },
+    });
+    if (!existing) throw new Error("Debit note not found");
+    // "Submitted" unless payments were carried over from a previous revision.
+    const status = invoicePaymentStatus(existing.amountPaid, existing.balanceDue);
     await prisma.invoice.update({
       where: { id },
-      data: { status: "Submitted" },
+      data: { status },
     });
-    revalidatePath("/dashboard/sales/invoice");
-    return { success: true };
+    revalidatePath(LIST_PATH);
+    return { success: true, status };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
@@ -416,11 +453,24 @@ export async function submitInvoice(id: string) {
 
 export async function voidInvoice(id: string) {
   try {
+    // Same rule as invoices (invoiceVoidBlockReason): no void while an IRN is
+    // active or any payment / non-void receipt is recorded against it.
+    const note = await prisma.invoice.findUnique({
+      where: { id },
+      select: { status: true, amountPaid: true, einvoiceStatus: true, irn: true },
+    });
+    if (!note) throw new Error("Debit note not found");
+    const activeReceipts = await prisma.receipt.count({
+      where: { invoiceId: id, status: { not: "Void" } },
+    });
+    const blocked = invoiceVoidBlockReason(note, activeReceipts, DOC_TYPE);
+    if (blocked) return { success: false, error: blocked };
+
     await prisma.invoice.update({
       where: { id },
       data: { status: "Void" },
     });
-    revalidatePath("/dashboard/sales/invoice");
+    revalidatePath(LIST_PATH);
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -429,26 +479,6 @@ export async function voidInvoice(id: string) {
 
 export async function reviseInvoice(id: string, data: any) {
   try {
-    const oldInvoice = await prisma.invoice.findUnique({
-      where: { id },
-      include: {
-        deliveryOrders: true,
-      },
-    });
-
-    if (!oldInvoice) throw new Error("Invoice not found");
-
-    // Mark old invoice as 'Old Version'
-    await prisma.invoice.update({
-      where: { id },
-      data: { status: "Old Version" },
-    });
-
-    // A revision keeps the original's number and only bumps the -R tail, so it
-    // does not consume a new sequence from the counter.
-    const newRevision = oldInvoice.revision + 1;
-    const newInvoiceNo = withRevision(oldInvoice.invoiceNo, newRevision);
-
     const paymentTerm = await prisma.paymentTermProfile.findUnique({
       where: { id: data.paymentTermId },
     });
@@ -460,8 +490,44 @@ export async function reviseInvoice(id: string, data: any) {
     }
 
     const breakup = await computeBreakupForData(data);
+    const totals = totalsFromBreakup(data, breakup);
 
-    const invoice = await prisma.invoice.create({
+    const invoice = await prisma.$transaction(async (tx) => {
+    // Lock the row before reading it, exactly like receipt confirm / void
+    // (src/lib/receipts.ts): lock order is invoice -> receipts everywhere, and
+    // no receipt can be confirmed or voided between reading amountPaid here and
+    // re-pointing the receipts below.
+    await tx.$queryRaw`SELECT "id" FROM "Invoice" WHERE "id" = ${id} FOR UPDATE`;
+    const oldInvoice = await tx.invoice.findUnique({
+      where: { id },
+      include: {
+        deliveryOrders: true,
+      },
+    });
+    if (!oldInvoice) throw new Error("Debit note not found");
+    // Status / active IRN are checked on the locked row (see invoiceReviseBlockReason).
+    const blocked = invoiceReviseBlockReason(oldInvoice, DOC_TYPE);
+    if (blocked) throw new Error(blocked);
+
+    // A revision keeps the original's number and only bumps the -R tail, so it
+    // does not consume a new sequence from the counter.
+    const newRevision = oldInvoice.revision + 1;
+    const newInvoiceNo = withRevision(oldInvoice.invoiceNo, newRevision);
+
+    // Payments carry over to the revision: receipts link by invoiceId, so they
+    // are re-pointed to the new row below and amountPaid (read under the lock)
+    // moves with them. The revision starts as a Draft; submitInvoice derives
+    // its status from amountPaid / balanceDue (invoicePaymentStatus).
+    const balance = balanceDueAfterRecalc(totals.amountAfterTax, oldInvoice.amountPaid, invoiceDocLabel(DOC_TYPE));
+    if (!balance.ok) throw new Error(balance.error);
+
+    // Mark old debit note as 'Old Version'
+    await tx.invoice.update({
+      where: { id },
+      data: { status: "Old Version" },
+    });
+
+    const created = await tx.invoice.create({
       data: {
         invoiceNo: newInvoiceNo,
         revision: newRevision,
@@ -484,12 +550,14 @@ export async function reviseInvoice(id: string, data: any) {
         dueDate,
         currencyId: data.currencyId,
         exchangeRate: data.exchangeRate,
-        amountBeforeTax: data.amountBeforeTax,
+        amountBeforeTax: totals.amountBeforeTax,
         taxTypeId: data.taxTypeId,
-        taxRate: data.taxRate,
-        taxAmount: data.taxAmount,
-        amountAfterTax: data.amountAfterTax,
-        balanceDue: data.amountAfterTax,
+        taxRate: totals.taxRate,
+        taxAmount: totals.taxAmount,
+        amountAfterTax: totals.amountAfterTax,
+        amountPaid: oldInvoice.amountPaid,
+        balanceDue: balance.balanceDue,
+        roundOff: totals.roundOff,
         bankDetails: data.bankDetails || null,
         remark: data.remark || null,
         preparedById: data.preparedById,
@@ -511,7 +579,17 @@ export async function reviseInvoice(id: string, data: any) {
       },
     });
 
-    revalidatePath("/dashboard/sales/invoice");
+    // Draft and Confirmed receipts follow the live revision, so confirming or
+    // voiding them later updates this debit note, not the Old Version.
+    await tx.receipt.updateMany({
+      where: { invoiceId: id, status: { not: "Void" } },
+      data: { invoiceId: created.id },
+    });
+
+    return created;
+    });
+
+    revalidatePath(LIST_PATH);
     return { success: true, data: JSON.parse(JSON.stringify(invoice)) };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -574,7 +652,7 @@ export async function generateEInvoice(id: string) {
         where: { id },
         data: { einvoiceStatus: "Failed", einvoiceError: msg.slice(0, 1000) },
       });
-      revalidatePath("/dashboard/sales/invoice");
+      revalidatePath(LIST_PATH);
       return { success: false, error: `IRP rejected the invoice: ${msg}` };
     }
 
@@ -593,7 +671,7 @@ export async function generateEInvoice(id: string) {
       },
     });
 
-    revalidatePath("/dashboard/sales/invoice");
+    revalidatePath(LIST_PATH);
     return { success: true, data: JSON.parse(JSON.stringify(updated)) };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -628,7 +706,7 @@ export async function cancelEInvoice(id: string, reasonCode: string, remark: str
       },
     });
 
-    revalidatePath("/dashboard/sales/invoice");
+    revalidatePath(LIST_PATH);
     return { success: true, data: JSON.parse(JSON.stringify(updated)) };
   } catch (error: any) {
     return { success: false, error: error.message };

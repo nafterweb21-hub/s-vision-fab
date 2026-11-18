@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { toUserMessage } from "@/lib/api-error";
+import { assertWithinWorkOrderQty, DeliveryOrderRuleError, lockDraftDeliveryOrder } from "@/lib/delivery-order-qty";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -49,35 +50,45 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: "Only draft Delivery Orders can be updated." }, { status: 400 });
     }
 
-    const updated = await prisma.deliveryOrder.update({
-      where: { id },
-      data: {
-        doNo,
-        date: new Date(date),
-        customerId,
-        salesOrderId,
-        cocRequired: !!cocRequired,
-        poNo: poNo?.trim() || null,
-        vehicleNo: vehicleNo?.trim() || null,
-        modeOfTransport: modeOfTransport?.trim() || null,
-        isReturnable: !!isReturnable,
-        returnableNote: isReturnable ? (returnableNote?.trim() || null) : null,
-        items: {
-          deleteMany: {},
-          create: items.map((item: any) => ({
-            workOrderNo: item.workOrderNo,
-            description: item.description?.trim() || null,
-            quantity: Number(item.quantity),
-            uomId: item.uomId || null,
-            totalValue: item.totalValue === "" || item.totalValue == null ? null : Number(item.totalValue),
-            deliveryDate: item.deliveryDate ? new Date(item.deliveryDate) : null,
-          })),
+    await prisma.$transaction(async (tx) => {
+      // Lock this DO and re-check it is still Draft (a concurrent submit/void may have landed).
+      await lockDraftDeliveryOrder(tx, id, "Only draft Delivery Orders can be updated.");
+      // Spec: total delivered across non-void DOs ≤ WO Qty (this DO's old lines excluded).
+      await assertWithinWorkOrderQty(tx, items ?? [], id);
+
+      await tx.deliveryOrder.update({
+        where: { id },
+        data: {
+          doNo,
+          date: new Date(date),
+          customerId,
+          salesOrderId,
+          cocRequired: !!cocRequired,
+          poNo: poNo?.trim() || null,
+          vehicleNo: vehicleNo?.trim() || null,
+          modeOfTransport: modeOfTransport?.trim() || null,
+          isReturnable: !!isReturnable,
+          returnableNote: isReturnable ? (returnableNote?.trim() || null) : null,
+          items: {
+            deleteMany: {},
+            create: items.map((item: any) => ({
+              workOrderNo: item.workOrderNo,
+              description: item.description?.trim() || null,
+              quantity: Number(item.quantity),
+              uomId: item.uomId || null,
+              totalValue: item.totalValue === "" || item.totalValue == null ? null : Number(item.totalValue),
+              deliveryDate: item.deliveryDate ? new Date(item.deliveryDate) : null,
+            })),
+          },
         },
-      },
+      });
     });
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, id, doNo: doNo || current.doNo });
   } catch (error: any) {
+    if (error instanceof DeliveryOrderRuleError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
     console.error("Update Delivery Order Error:", error);
     return NextResponse.json({ error: toUserMessage(error, "Could not save the delivery order. Please check the details and try again.") }, { status: 500 });
   }

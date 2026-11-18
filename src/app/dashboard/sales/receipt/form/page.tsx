@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 import { SearchableSelect } from "@/components/SearchableSelect";
 import { toast as hotToast } from "react-hot-toast";
@@ -7,18 +8,46 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   Save,
-  X,
   Loader2,
   AlertCircle,
   Banknote,
-  ChevronLeft,
+  ArrowLeft,
+  Building2,
+  CalendarDays,
+  FileText,
+  Hash,
+  Lock,
+  StickyNote,
+  Users,
+  Wallet,
 } from "lucide-react";
+import {
+  Badge,
+  Card,
+  Field,
+  MetaChip,
+  StatusBadge,
+  buttonClass,
+  inputClass,
+  readOnlyClass,
+  selectTriggerClass,
+  textareaClass,
+} from "@/components/form-ui";
 import {
 getReceiptFormData,
   getReceipt,
   createReceiptAction,
   updateReceiptAction,
 } from "../receipt.actions";
+import {
+  emeraldButtonClass,
+  fmtDate,
+  formatAmount,
+  paymentMethodMeta,
+  receiptStatusTone,
+  referenceLabel,
+} from "../rc-status";
+import { InvoiceBalanceCard, ReceiptSummaryRail } from "../ReceiptPanels";
 
 function ReceiptFormContent() {
   const router = useRouter();
@@ -53,6 +82,8 @@ function ReceiptFormContent() {
 
   const [receiptNo, setReceiptNo] = useState("");
   const [status, setStatus] = useState("Draft");
+  // What the saved receipt carries; its exchange rate is frozen unless the invoice or currency changes.
+  const [stored, setStored] = useState<{ invoiceId: string; currencyId: string; exchangeRate: string } | null>(null);
 
   useEffect(() => {
     async function init() {
@@ -67,6 +98,7 @@ function ReceiptFormContent() {
           const r = res.data;
           setReceiptNo(r.receiptNo);
           setStatus(r.status);
+          setStored({ invoiceId: r.invoiceId, currencyId: r.currencyId, exchangeRate: String(r.exchangeRate) });
           setFormData({
             receiptDate: new Date(r.receiptDate).toISOString().slice(0, 10),
             companyId: r.companyId,
@@ -116,17 +148,20 @@ function ReceiptFormContent() {
     return options.invoices.filter((inv: any) => inv.customerId === formData.customerId);
   }, [formData.customerId, options.invoices]);
 
-  // When invoice changes, update auto-populated fields
+  // When the invoice changes (new or edited Draft), the currency follows the invoice and the
+  // rate shown is the latest from Currency Profile, unless this is the saved receipt's own
+  // invoice + currency, whose rate stays frozen. Display only: the server sets the rate.
   useEffect(() => {
-    if (selectedInvoice && !id) { // Only auto-populate if creating new or changing invoice
-      setFormData((prev: any) => ({
-        ...prev,
-        currencyId: selectedInvoice.currencyId,
-        exchangeRate: selectedInvoice.exchangeRate,
-        // Optional: auto-fill amountReceived with balance due, or let user type it
-      }));
-    }
-  }, [selectedInvoice, id]);
+    if (!selectedInvoice || status !== "Draft") return;
+    const keep =
+      !!stored && stored.invoiceId === selectedInvoice.id && stored.currencyId === selectedInvoice.currencyId;
+    const latest = options.currencies.find((c: any) => c.id === selectedInvoice.currencyId)?.exchangeRate;
+    setFormData((prev: any) => ({
+      ...prev,
+      currencyId: selectedInvoice.currencyId,
+      exchangeRate: keep ? stored!.exchangeRate : latest ?? prev.exchangeRate,
+    }));
+  }, [selectedInvoice, stored, status, options.currencies]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -171,275 +206,359 @@ function ReceiptFormContent() {
     }
   };
 
+
   if (loading) {
     return (
       <div className="flex h-[60vh] items-center justify-center">
-        <Loader2 className="h-10 w-10 animate-spin text-emerald-500" />
+        <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
       </div>
     );
   }
 
+  // ---- Display-only derivations (no effect on the payload) ----
+  const isDraft = status === "Draft";
+  const selectedCustomer = options.customers.find((c: any) => c.id === formData.customerId);
+  const currencyCode: string =
+    selectedInvoice?.currency?.code || options.currencies.find((c: any) => c.id === formData.currencyId)?.code || "";
+  const amountNum = Number(formData.amountReceived) || 0;
+  const invTotal = Number(selectedInvoice?.amountAfterTax) || 0;
+  const invPaid = Number(selectedInvoice?.amountPaid) || 0;
+  const invBalance = Number(selectedInvoice?.balanceDue) || 0;
+  // Same comparison as the save-time check in handleSave.
+  const overBalance = !!selectedInvoice && Number(formData.amountReceived) > Number(selectedInvoice.balanceDue);
+  const method = paymentMethodMeta(formData.paymentMethod);
+
   return (
-    <div className="space-y-4 w-full">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link
-            href="/dashboard/sales/receipt"
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-blue-500 shadow-sm transition-all hover:bg-emerald-50 hover:text-emerald-600 active:scale-95 border border-blue-100"
-          >
-            <ChevronLeft size={20} />
-          </Link>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-blue-900">
-              {id ? `Edit Receipt: ${receiptNo}` : "New Receipt"}
-            </h1>
-            <p className="text-sm text-blue-500">
-              {id ? "Modify existing receipt" : "Record a new payment"}
-            </p>
+    <div className="w-full space-y-4 pb-24">
+      {/* Document header / action bar */}
+      <div className="sticky top-0 z-20 -mx-1 overflow-hidden rounded-xl border border-slate-200 bg-white/90 shadow-[0_1px_3px_rgba(15,23,42,0.06)] backdrop-blur-md">
+        <div className="h-0.5 bg-gradient-to-r from-indigo-500 via-indigo-500 to-violet-500" />
+        <div className="flex flex-col gap-2.5 px-4 py-2.5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0 space-y-1">
+            <Link href="/dashboard/sales/receipt" className="inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-indigo-600">
+              <ArrowLeft size={12} /> Receipts
+            </Link>
+            <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
+              {id ? (
+                <h1 className="flex min-w-0 items-baseline gap-2 leading-tight">
+                  <span className="text-[11px] font-medium uppercase tracking-wide text-slate-400">Edit Receipt</span>
+                  <span className="truncate font-mono text-lg font-semibold text-slate-900">{receiptNo}</span>
+                </h1>
+              ) : (
+                <h1 className="text-lg font-semibold leading-tight text-slate-900">New Receipt</h1>
+              )}
+              <StatusBadge status={status} tone={receiptStatusTone(status)} size="md" label={id ? status : "New · Draft"} />
+            </div>
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+              <MetaChip icon={Building2} title="Customer">{selectedCustomer?.customerName || "No customer yet"}</MetaChip>
+              <MetaChip icon={CalendarDays} title="Receipt date">{fmtDate(formData.receiptDate)}</MetaChip>
+              {selectedInvoice && (
+                <MetaChip icon={FileText} label="Inv" title="Invoice">{selectedInvoice.invoiceNo}</MetaChip>
+              )}
+              <MetaChip icon={method.icon} title="Payment method">{formData.paymentMethod || "—"}</MetaChip>
+              {formData.chequeRefNo && (
+                <MetaChip icon={Hash} label={referenceLabel(formData.paymentMethod)} title="Reference">{formData.chequeRefNo}</MetaChip>
+              )}
+              {amountNum > 0 && (
+                <span className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-semibold tabular-nums ring-1 ring-inset ${
+                  overBalance ? "bg-rose-50 text-rose-700 ring-rose-600/15" : "bg-emerald-50 text-emerald-700 ring-emerald-600/15"
+                }`}>
+                  <Banknote size={12} /> {currencyCode} {formatAmount(amountNum)}
+                </span>
+              )}
+            </div>
           </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <Link
-            href="/dashboard/sales/receipt"
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-blue-200 bg-white px-4 text-sm font-semibold text-blue-700 shadow-sm transition-all hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200"
-          >
-            <X size={16} /> Cancel
-          </Link>
-          <button
-            onClick={handleSave}
-            disabled={saving || status !== "Draft"}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-500 px-6 text-sm font-bold text-white shadow-md transition-all hover:from-emerald-400 hover:to-teal-400 active:scale-95 disabled:opacity-50"
-          >
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save size={16} />}
-            {saving ? "Saving..." : "Save Receipt"}
-          </button>
+
+          <div className="flex flex-wrap items-center justify-start gap-2 lg:justify-end">
+            <Link href="/dashboard/sales/receipt" className={buttonClass("ghost", "md")}>
+              Cancel
+            </Link>
+            {!isDraft && (
+              <span className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 text-xs font-medium text-slate-500">
+                <Lock size={13} /> View only
+              </span>
+            )}
+            <button type="button" onClick={handleSave} disabled={saving || status !== "Draft"} className={emeraldButtonClass}>
+              {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+              {saving ? "Saving..." : "Save Receipt"}
+            </button>
+          </div>
         </div>
       </div>
 
       {errorMsg && (
-        <div className="flex items-center gap-3 rounded-xl border border-rose-200 bg-rose-50 px-5 py-4 text-rose-700 shadow-sm">
-          <AlertCircle size={20} className="shrink-0" />
-          <p className="text-sm font-medium">{errorMsg}</p>
+        <div className="flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[13px] text-rose-700">
+          <AlertCircle size={14} className="shrink-0" />
+          <p className="font-medium">{errorMsg}</p>
         </div>
       )}
 
       {id && status !== "Draft" && (
-        <div className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 text-amber-700 shadow-sm">
-          <AlertCircle size={20} className="shrink-0" />
-          <p className="text-sm font-medium">This receipt is {status} and cannot be edited.</p>
+        <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[13px] text-amber-700">
+          <Lock size={14} className="shrink-0" />
+          <p className="font-medium">This receipt is {status} and cannot be edited.</p>
         </div>
       )}
 
-      <form className="space-y-6 rounded-2xl bg-white p-6 shadow-xl border border-blue-100 lg:p-8 relative overflow-hidden">
-        <div className="absolute top-0 right-0 p-8 opacity-5 pointer-events-none">
-          <Banknote size={200} />
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-blue-900 uppercase tracking-wider">Date *</label>
-            <input
-              type="date"
-              name="receiptDate"
-              value={formData.receiptDate}
-              onChange={handleChange}
-              disabled={status !== "Draft"}
-              className="w-full rounded-lg border border-blue-200 bg-blue-50/50 px-4 py-2.5 text-sm text-blue-900 focus:border-emerald-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 disabled:opacity-60"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-blue-900 uppercase tracking-wider">Company *</label>
-            <SearchableSelect
-              name="companyId"
-              value={formData.companyId}
-              onChange={handleChange}
-              disabled={status !== "Draft"}
-              className="w-full rounded-lg border border-blue-200 bg-blue-50/50 px-4 py-2.5 text-sm text-blue-900 focus:border-emerald-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 disabled:opacity-60"
-            >
-              <option value="">Select Company</option>
-              {options.companies.map((c: any) => (
-                <option key={c.id} value={c.id}>{c.companyName}</option>
-              ))}
-            </SearchableSelect>
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-blue-900 uppercase tracking-wider">Customer *</label>
-            <SearchableSelect
-              name="customerId"
-              value={formData.customerId}
-              onChange={(e) => {
-                handleChange(e);
-                setFormData((prev: any) => ({ ...prev, invoiceId: "" })); // Reset invoice when customer changes
-              }}
-              disabled={status !== "Draft"}
-              className="w-full rounded-lg border border-blue-200 bg-blue-50/50 px-4 py-2.5 text-sm text-blue-900 focus:border-emerald-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 disabled:opacity-60"
-            >
-              <option value="">Select Customer</option>
-              {options.customers.map((c: any) => (
-                <option key={c.id} value={c.id}>{c.customerName}</option>
-              ))}
-            </SearchableSelect>
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-blue-900 uppercase tracking-wider">Invoice No *</label>
-            <SearchableSelect
-              name="invoiceId"
-              value={formData.invoiceId}
-              onChange={handleChange}
-              disabled={!formData.customerId || status !== "Draft"}
-              className="w-full rounded-lg border border-blue-200 bg-blue-50/50 px-4 py-2.5 text-sm text-blue-900 focus:border-emerald-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 disabled:opacity-60"
-            >
-              <option value="">Select Invoice</option>
-              {availableInvoices.map((inv: any) => (
-                <option key={inv.id} value={inv.id}>
-                  {inv.invoiceNo} (Bal: {inv.currency?.code} {Number(inv.balanceDue).toFixed(2)})
-                </option>
-              ))}
-            </SearchableSelect>
-            {!formData.customerId && (
-              <p className="text-[10px] text-amber-600">Select a customer first to see their invoices.</p>
-            )}
-          </div>
-        </div>
-
-        <hr className="border-blue-100" />
-
-        {selectedInvoice && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-emerald-50/50 rounded-xl border border-emerald-100">
-            <div>
-              <p className="text-xs font-bold text-emerald-800/60 uppercase">Invoice Total</p>
-              <p className="font-mono text-emerald-900 font-semibold">{selectedInvoice.currency?.code} {Number(selectedInvoice.amountAfterTax).toFixed(2)}</p>
+      <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+        {/* Main column */}
+        <form className="min-w-0 space-y-4" onSubmit={(e) => e.preventDefault()}>
+          {/* Receipt details */}
+          <Card icon={FileText} tone="indigo" title="Receipt details" description="Number, date, company and creator">
+            <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2">
+              <Field label="Receipt No">
+                <input type="text" value={receiptNo || "Auto-generated"} disabled className={`${readOnlyClass} font-mono`} />
+              </Field>
+              <Field label="Date" required>
+                <input
+                  type="date"
+                  name="receiptDate"
+                  value={formData.receiptDate}
+                  onChange={handleChange}
+                  disabled={status !== "Draft"}
+                  className={inputClass}
+                />
+              </Field>
+              <Field label="Company" required>
+                <SearchableSelect
+                  compact
+                  name="companyId"
+                  value={formData.companyId}
+                  onChange={handleChange}
+                  disabled={status !== "Draft"}
+                  className={selectTriggerClass}
+                >
+                  <option value="">Select Company</option>
+                  {options.companies.map((c: any) => (
+                    <option key={c.id} value={c.id}>{c.companyName}</option>
+                  ))}
+                </SearchableSelect>
+              </Field>
+              <Field label="Creator" required help={id ? "Set when the receipt was created." : undefined}>
+                <SearchableSelect
+                  compact
+                  name="creatorId"
+                  value={formData.creatorId}
+                  onChange={handleChange}
+                  disabled={!!id || status !== "Draft"} // Only set on create
+                  className={selectTriggerClass}
+                >
+                  <option value="">Select Creator</option>
+                  {options.employees.map((c: any) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </SearchableSelect>
+              </Field>
             </div>
-            <div>
-              <p className="text-xs font-bold text-emerald-800/60 uppercase">Amount Paid</p>
-              <p className="font-mono text-emerald-900 font-semibold">{selectedInvoice.currency?.code} {Number(selectedInvoice.amountPaid).toFixed(2)}</p>
+          </Card>
+
+          {/* Customer & invoice */}
+          <Card icon={Users} tone="sky" title="Customer & invoice" description="Who paid and which document it settles">
+            <div className="space-y-3">
+              <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2">
+                <Field label="Customer" required>
+                  <SearchableSelect
+                    compact
+                    name="customerId"
+                    value={formData.customerId}
+                    onChange={(e) => {
+                      handleChange(e);
+                      setFormData((prev: any) => ({ ...prev, invoiceId: "" })); // Reset invoice when customer changes
+                    }}
+                    disabled={status !== "Draft"}
+                    className={selectTriggerClass}
+                  >
+                    <option value="">Select Customer</option>
+                    {options.customers.map((c: any) => (
+                      <option key={c.id} value={c.id}>{c.customerName}</option>
+                    ))}
+                  </SearchableSelect>
+                </Field>
+                <Field
+                  label="Invoice No"
+                  required
+                  help={
+                    !formData.customerId ? (
+                      <span className="text-amber-600">Select a customer first to see their invoices.</span>
+                    ) : availableInvoices.length === 0 ? (
+                      "No open invoices for this customer."
+                    ) : undefined
+                  }
+                >
+                  <SearchableSelect
+                    compact
+                    name="invoiceId"
+                    value={formData.invoiceId}
+                    onChange={handleChange}
+                    disabled={!formData.customerId || status !== "Draft"}
+                    className={selectTriggerClass}
+                  >
+                    <option value="">Select Invoice</option>
+                    {availableInvoices.map((inv: any) => (
+                      <option key={inv.id} value={inv.id}>
+                        {inv.invoiceNo} (Bal: {inv.currency?.code} {Number(inv.balanceDue).toFixed(2)})
+                      </option>
+                    ))}
+                  </SearchableSelect>
+                </Field>
+              </div>
+
+              {selectedInvoice ? (
+                <InvoiceBalanceCard
+                  code={currencyCode}
+                  invoiceNo={selectedInvoice.invoiceNo}
+                  invoiceType={selectedInvoice.invoiceType}
+                  invoiceStatus={selectedInvoice.status}
+                  total={invTotal}
+                  paid={invPaid}
+                  balance={invBalance}
+                  amount={amountNum}
+                  mode="pending"
+                />
+              ) : (
+                <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/50 px-3 py-4 text-center text-xs text-slate-500">
+                  Pick an invoice to see its total, what is already paid and the balance due.
+                </div>
+              )}
             </div>
-            <div>
-              <p className="text-xs font-bold text-emerald-800/60 uppercase">Balance Due</p>
-              <p className="font-mono text-emerald-900 font-bold text-lg">{selectedInvoice.currency?.code} {Number(selectedInvoice.balanceDue).toFixed(2)}</p>
+          </Card>
+
+          {/* Payment method & reference */}
+          <Card icon={Wallet} tone="emerald" title="Payment method & reference" description="How the money arrived and how much">
+            <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2">
+              <Field label="Payment Method" required>
+                <SearchableSelect
+                  compact
+                  name="paymentMethod"
+                  value={formData.paymentMethod}
+                  onChange={handleChange}
+                  disabled={status !== "Draft"}
+                  className={selectTriggerClass}
+                >
+                  <option value="Bank Transfer">Bank Transfer</option>
+                  <option value="Cheque">Cheque</option>
+                  <option value="Cash">Cash</option>
+                  <option value="Others">Others</option>
+                </SearchableSelect>
+              </Field>
+              <Field label="Cheque / Ref No" help={`${referenceLabel(formData.paymentMethod)} for this ${formData.paymentMethod ? formData.paymentMethod.toLowerCase() : "payment"}.`}>
+                <input
+                  type="text"
+                  name="chequeRefNo"
+                  value={formData.chequeRefNo}
+                  onChange={handleChange}
+                  disabled={status !== "Draft"}
+                  className={`${inputClass} font-mono`}
+                />
+              </Field>
+              <Field label="Currency" required help="Taken from the invoice.">
+                <SearchableSelect
+                  compact
+                  name="currencyId"
+                  value={formData.currencyId}
+                  onChange={handleChange}
+                  disabled={true} // Usually tied to Invoice
+                  className={selectTriggerClass}
+                >
+                  <option value="">Select Currency</option>
+                  {options.currencies.map((c: any) => (
+                    <option key={c.id} value={c.id}>{c.code}</option>
+                  ))}
+                </SearchableSelect>
+              </Field>
+              <Field label="Exchange Rate" required help="Latest Currency Profile rate, fixed when the receipt is created.">
+                <input
+                  type="number"
+                  step="0.001"
+                  name="exchangeRate"
+                  value={formData.exchangeRate}
+                  onChange={handleChange}
+                  disabled={true} // Usually tied to Invoice
+                  className={`${readOnlyClass} text-right tabular-nums`}
+                />
+              </Field>
+              <Field
+                label="Amount Received"
+                required
+                className="sm:col-span-2"
+                error={overBalance ? "Amount Received cannot exceed the Invoice Balance Due." : undefined}
+                help={selectedInvoice ? `Balance due: ${currencyCode} ${formatAmount(invBalance)}` : undefined}
+              >
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs font-medium text-emerald-600">
+                    {currencyCode}
+                  </span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    name="amountReceived"
+                    value={formData.amountReceived}
+                    onChange={handleChange}
+                    disabled={status !== "Draft"}
+                    className={`h-11 w-full rounded-lg border-2 bg-white pr-3 text-right text-lg font-semibold tabular-nums transition-colors placeholder:text-slate-300 focus:outline-none focus:ring-4 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:opacity-70 ${
+                      currencyCode ? "pl-14" : "pl-3"
+                    } ${
+                      overBalance
+                        ? "border-rose-300 text-rose-700 focus:border-rose-500 focus:ring-rose-500/15"
+                        : "border-emerald-300 text-emerald-800 focus:border-emerald-500 focus:ring-emerald-500/15"
+                    }`}
+                    placeholder="0.00"
+                  />
+                </div>
+              </Field>
             </div>
-            <div>
-              <p className="text-xs font-bold text-emerald-800/60 uppercase">Status</p>
-              <p className="font-semibold text-emerald-900">{selectedInvoice.status}</p>
-            </div>
-          </div>
-        )}
+          </Card>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-blue-900 uppercase tracking-wider">Payment Method *</label>
-            <SearchableSelect
-              name="paymentMethod"
-              value={formData.paymentMethod}
-              onChange={handleChange}
-              disabled={status !== "Draft"}
-              className="w-full rounded-lg border border-blue-200 bg-blue-50/50 px-4 py-2.5 text-sm text-blue-900 focus:border-emerald-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 disabled:opacity-60"
-            >
-              <option value="Bank Transfer">Bank Transfer</option>
-              <option value="Cheque">Cheque</option>
-              <option value="Cash">Cash</option>
-              <option value="Others">Others</option>
-            </SearchableSelect>
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-blue-900 uppercase tracking-wider">Cheque / Ref No</label>
-            <input
-              type="text"
-              name="chequeRefNo"
-              value={formData.chequeRefNo}
-              onChange={handleChange}
-              disabled={status !== "Draft"}
-              className="w-full rounded-lg border border-blue-200 bg-blue-50/50 px-4 py-2.5 text-sm text-blue-900 focus:border-emerald-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 disabled:opacity-60"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-blue-900 uppercase tracking-wider">Currency *</label>
-            <SearchableSelect
-              name="currencyId"
-              value={formData.currencyId}
-              onChange={handleChange}
-              disabled={true} // Usually tied to Invoice
-              className="w-full rounded-lg border border-blue-200 bg-blue-50/50 px-4 py-2.5 text-sm text-blue-900 opacity-70 cursor-not-allowed"
-            >
-              <option value="">Select Currency</option>
-              {options.currencies.map((c: any) => (
-                <option key={c.id} value={c.id}>{c.code}</option>
-              ))}
-            </SearchableSelect>
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-blue-900 uppercase tracking-wider">Exchange Rate *</label>
-            <input
-              type="number"
-              step="0.001"
-              name="exchangeRate"
-              value={formData.exchangeRate}
-              onChange={handleChange}
-              disabled={true} // Usually tied to Invoice
-              className="w-full rounded-lg border border-blue-200 bg-blue-50/50 px-4 py-2.5 text-sm text-blue-900 opacity-70 cursor-not-allowed"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-emerald-900 uppercase tracking-wider">Amount Received *</label>
-            <input
-              type="number"
-              step="0.01"
-              name="amountReceived"
-              value={formData.amountReceived}
-              onChange={handleChange}
-              disabled={status !== "Draft"}
-              className="w-full rounded-lg border-2 border-emerald-300 bg-emerald-50/30 px-4 py-3 text-lg font-bold text-emerald-900 focus:border-emerald-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-emerald-500/20 disabled:opacity-60"
-              placeholder="0.00"
-            />
-          </div>
-          
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-blue-900 uppercase tracking-wider">Creator *</label>
-            <SearchableSelect
-              name="creatorId"
-              value={formData.creatorId}
-              onChange={handleChange}
-              disabled={!!id || status !== "Draft"} // Only set on create
-              className="w-full rounded-lg border border-blue-200 bg-blue-50/50 px-4 py-2.5 text-sm text-blue-900 focus:border-emerald-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 disabled:opacity-60"
-            >
-              <option value="">Select Creator</option>
-              {options.employees.map((c: any) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </SearchableSelect>
-          </div>
-
-          <div className="space-y-1.5 md:col-span-2">
-            <label className="text-xs font-bold text-blue-900 uppercase tracking-wider">Remarks</label>
+          {/* Remarks */}
+          <Card icon={StickyNote} tone="slate" title="Remarks" description="Internal notes for this receipt">
             <textarea
               name="remark"
               value={formData.remark}
               onChange={handleChange}
               disabled={status !== "Draft"}
               rows={3}
-              className="w-full rounded-lg border border-blue-200 bg-blue-50/50 px-4 py-3 text-sm text-blue-900 focus:border-emerald-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 disabled:opacity-60 resize-none"
+              aria-label="Remarks"
+              className={`${textareaClass} resize-none`}
             />
-          </div>
+          </Card>
+        </form>
+
+        {/* Right rail */}
+        <div className="min-w-0 space-y-4 xl:sticky xl:top-28 xl:self-start">
+          <ReceiptSummaryRail
+            code={currencyCode}
+            amount={amountNum}
+            over={overBalance}
+            balanceAfter={selectedInvoice ? invBalance - amountNum : null}
+            rows={[
+              { label: "Invoice", value: selectedInvoice?.invoiceNo || "—", mono: true },
+              { label: "Method", value: formData.paymentMethod || "—" },
+              { label: "Exchange rate", value: Number(formData.exchangeRate || 0).toFixed(4) },
+              ...(selectedInvoice ? [{ label: "Balance due", value: formatAmount(invBalance) }] : []),
+            ]}
+            footnote={isDraft ? "Saved as Draft. The invoice balance changes only when the receipt is confirmed." : undefined}
+          />
+          {selectedInvoice && selectedInvoice.invoiceType && selectedInvoice.invoiceType !== "Customer Invoice" && (
+            <div className="flex items-start gap-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-[12px] text-violet-800">
+              <AlertCircle size={14} className="mt-0.5 shrink-0" />
+              <span>
+                This document is a <Badge tone="violet">{selectedInvoice.invoiceType}</Badge>.
+              </span>
+            </div>
+          )}
         </div>
-      </form>
+      </div>
     </div>
   );
 }
 
 export default function ReceiptFormPage() {
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen">
       <Suspense
         fallback={
           <div className="flex h-screen items-center justify-center">
-            <Loader2 className="h-10 w-10 animate-spin text-emerald-500" />
+            <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
           </div>
         }
       >

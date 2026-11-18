@@ -1,228 +1,414 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
-import { SearchableSelect } from "@/components/SearchableSelect";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
-import { Plus, Search, Loader2, Edit2, AlertCircle, ShoppingCart } from "lucide-react";
-export default function SalesOrderListPage() {
-  const [orders, setOrders] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("All");
-  const [orderTypeFilter, setOrderTypeFilter] = useState("All");
-  const [errorMsg, setErrorMsg] = useState("");
+import { toast as hotToast } from "react-hot-toast";
+import {
+  AlertCircle,
+  CheckCircle2,
+  Eye,
+  FileClock,
+  Loader2,
+  Lock,
+  Pencil,
+  Plus,
+  RotateCcw,
+  Search,
+  SearchX,
+  ShoppingCart,
+  XCircle,
+  type LucideIcon,
+} from "lucide-react";
+import { customConfirm } from "@/lib/customConfirm";
+import {
+  Badge,
+  EmptyState,
+  InitialsAvatar,
+  Segmented,
+  StatusBadge,
+  TONES,
+  buttonClass,
+  type Tone,
+} from "@/components/form-ui";
+import {
+  SO_STATUSES,
+  changeSalesOrderStatus,
+  normalizeSoStatus,
+  soStatusTone,
+  soTransitions,
+  type SoStatus,
+  type SoTransition,
+} from "./so-status";
 
-  const fetchOrders = async () => {
-    setLoading(true);
-    setErrorMsg("");
+const ORDER_TYPES = ["All", "Direct", "Sub-contract"] as const;
+type OrderTypeFilter = (typeof ORDER_TYPES)[number];
+type StatusFilter = "All" | SoStatus;
+
+const ACTION_ICON: Partial<Record<SoStatus, LucideIcon>> = {
+  Confirmed: CheckCircle2,
+  Revised: RotateCcw,
+  Closed: Lock,
+  Void: XCircle,
+  "Old Version": FileClock,
+};
+
+function orderTypeTone(type: string | null | undefined): Tone {
+  return type === "Sub-contract" ? "violet" : "sky";
+}
+
+function dayDiff(d: Date): number {
+  const today = new Date();
+  const a = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
+  const b = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
+  return Math.round((a - b) / 86400000);
+}
+
+function relativeDate(value: string | Date | null | undefined): string {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  const diff = dayDiff(d);
+  if (diff === 0) return "Today";
+  if (diff === 1) return "Yesterday";
+  if (diff === -1) return "Tomorrow";
+  if (diff > 1 && diff < 7) return `${diff}d ago`;
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  return d.toLocaleDateString(undefined, { day: "2-digit", month: "short", ...(sameYear ? {} : { year: "numeric" }) });
+}
+
+function formatAmount(n: unknown): string {
+  return Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+type LoadResult = { key: string; orders: any[]; error: string };
+
+export default function SalesOrderListPage() {
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("All");
+  const [orderTypeFilter, setOrderTypeFilter] = useState<OrderTypeFilter>("All");
+  const [result, setResult] = useState<LoadResult | null>(null);
+  const [busy, setBusy] = useState<Record<string, SoStatus>>({});
+
+  // Debounce the server-side search.
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 250);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  // Status is filtered client-side so the summary tiles can count every status.
+  const queryKey = `${debouncedSearch}|${orderTypeFilter}`;
+  const loading = result?.key !== queryKey;
+
+  useEffect(() => {
+    let ignore = false;
+    const [q, type] = queryKey.split("|");
+    fetch(`/api/sales/sales-order?search=${encodeURIComponent(q)}&status=All&orderType=${encodeURIComponent(type)}`)
+      .then(async (res) => {
+        if (!res.ok) throw new Error("Failed to fetch sales orders");
+        return res.json();
+      })
+      .then((orders) => {
+        if (!ignore) setResult({ key: queryKey, orders, error: "" });
+      })
+      .catch((err: any) => {
+        if (!ignore) setResult({ key: queryKey, orders: [], error: err.message || "Failed to fetch sales orders" });
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [queryKey]);
+
+  const allOrders = useMemo(() => result?.orders ?? [], [result]);
+  const errorMsg = result?.error ?? "";
+
+  const counts = useMemo(() => {
+    const c: Record<string, number> = { All: allOrders.length };
+    for (const s of SO_STATUSES) c[s] = 0;
+    for (const o of allOrders) {
+      const s = normalizeSoStatus(o.status);
+      c[s] = (c[s] || 0) + 1;
+    }
+    return c;
+  }, [allOrders]);
+
+  const orders = useMemo(
+    () => (statusFilter === "All" ? allOrders : allOrders.filter((o) => normalizeSoStatus(o.status) === statusFilter)),
+    [allOrders, statusFilter],
+  );
+
+  const hasFilters = search.trim() !== "" || statusFilter !== "All" || orderTypeFilter !== "All";
+  const clearFilters = () => {
+    setSearch("");
+    setStatusFilter("All");
+    setOrderTypeFilter("All");
+  };
+
+  const runAction = async (order: any, t: SoTransition) => {
+    if (busy[order.id]) return;
+    if (t.confirm && !(await customConfirm(t.confirm))) return;
+    setBusy((b) => ({ ...b, [order.id]: t.to }));
     try {
-      const res = await fetch(`/api/sales/sales-order?search=${encodeURIComponent(search)}&status=${statusFilter}&orderType=${encodeURIComponent(orderTypeFilter)}`);
-      if (!res.ok) throw new Error("Failed to fetch sales orders");
-      setOrders(await res.json());
+      const updated = await changeSalesOrderStatus(order.id, t.to);
+      setResult((prev) =>
+        prev
+          ? {
+              ...prev,
+              orders: prev.orders.map((o) =>
+                o.id === order.id
+                  ? {
+                      ...o,
+                      status: updated?.status ?? t.to,
+                      revision: updated?.revision ?? o.revision,
+                      amountAfterTax: updated?.amountAfterTax ?? o.amountAfterTax,
+                    }
+                  : o,
+              ),
+            }
+          : prev,
+      );
+      hotToast.success(`${order.orderNo} is now ${updated?.status ?? t.to}`);
     } catch (err: any) {
-      setErrorMsg(err.message);
+      hotToast.error(err?.message || "Failed to update status");
     } finally {
-      setLoading(false);
+      setBusy((b) => {
+        const next = { ...b };
+        delete next[order.id];
+        return next;
+      });
     }
   };
 
-  useEffect(() => {
-    fetchOrders();
-  }, [search, statusFilter, orderTypeFilter]);
+  const tiles: { key: StatusFilter; label: string; tone: Tone }[] = [
+    { key: "All", label: "All orders", tone: "indigo" },
+    ...SO_STATUSES.map((s) => ({ key: s as StatusFilter, label: s, tone: soStatusTone(s) })),
+  ];
 
   return (
-    <div className="p-6 lg:p-8 space-y-6">
-      {/* Header Panel */}
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 pb-6 border-b border-blue-200 ">
-        <div>
-          <div className="flex items-center gap-2 text-xs text-blue-400 font-semibold tracking-wider uppercase mb-1">
-            <Link href="/dashboard" className="hover:text-blue-600 :text-blue-300">Dashboard</Link>
-            <span>/</span>
-            <span className="text-blue-500 ">Sales</span>
-            <span>/</span>
-            <span className="text-blue-500 ">Sales Orders</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-500">
-              <ShoppingCart size={20} />
-            </div>
-            <div>
-              <h2 className="text-2xl font-bold tracking-tight text-blue-900 ">Sales Orders</h2>
-              <p className="text-sm text-blue-500 mt-0.5">Manage customer sales orders and items.</p>
-            </div>
+    <div className="space-y-4">
+      {/* Page header */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white shadow-sm shadow-indigo-600/20 sm:inline-flex">
+            <ShoppingCart size={18} />
+          </span>
+          <div className="min-w-0">
+            <nav className="mb-0.5 flex items-center gap-1 text-[11px] text-slate-400">
+              <Link href="/dashboard" className="hover:text-slate-600">Dashboard</Link>
+              <span>/</span>
+              <span>Sales</span>
+              <span>/</span>
+              <span className="text-slate-500">Sales Orders</span>
+            </nav>
+            <h1 className="text-lg font-semibold leading-tight text-slate-900">Sales Orders</h1>
+            <p className="text-xs text-slate-500">Track customer orders from draft to confirmation and close-out.</p>
           </div>
         </div>
 
-        <Link
-          href="/dashboard/sales/sales-order/new"
-          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 rounded-lg shadow-md shadow-indigo-500/20 active:scale-95 transition-all duration-200 shrink-0"
-        >
-          <Plus size={16} /> New Sales Order
+        <Link href="/dashboard/sales/sales-order/new" className={buttonClass("primary", "md")}>
+          <Plus size={14} /> New Sales Order
         </Link>
       </div>
 
-      {/* Filter and Search Bar */}
-      <div className="flex flex-col gap-4 bg-white border border-blue-200 p-4 rounded-xl shadow-sm">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-blue-400 " />
+      {/* Status summary tiles (also the status filter) */}
+      <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-7" role="tablist" aria-label="Filter by status">
+        {tiles.map(({ key, label, tone }) => {
+          const active = statusFilter === key;
+          const count = result ? counts[key] ?? 0 : null;
+          return (
+            <button
+              key={key}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => setStatusFilter(key)}
+              className={`relative flex min-w-0 flex-col items-start overflow-hidden rounded-lg border px-3 py-2 pl-3.5 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40 ${
+                active
+                  ? "border-indigo-300 bg-indigo-50/60 shadow-sm ring-1 ring-indigo-500/15"
+                  : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
+              }`}
+            >
+              <span className={`absolute inset-y-0 left-0 w-[3px] ${TONES[tone].bar}`} />
+              <span className={`flex w-full items-center gap-1.5 truncate text-[11px] font-medium ${active ? "text-indigo-700" : "text-slate-500"}`}>
+                <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${TONES[tone].dot}`} />
+                <span className="truncate">{label}</span>
+              </span>
+              <span className={`text-base font-semibold leading-tight tabular-nums ${active ? "text-indigo-900" : "text-slate-900"} ${count === 0 ? "opacity-40" : ""}`}>
+                {count === null ? "–" : count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Card: toolbar + table */}
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+        <div className="flex flex-col gap-2 border-b border-slate-100 px-4 py-2.5 sm:flex-row sm:items-center">
+          <div className="relative w-full sm:max-w-xs">
+            <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              placeholder="Search by Order No or Customer Name..."
+              placeholder="Search order no or customer…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 text-sm bg-blue-50 border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors"
+              className="h-8 w-full rounded-md border border-slate-300 bg-white pl-8 pr-2.5 text-[13px] text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
+            {loading && result && <Loader2 size={14} className="animate-spin text-indigo-500" aria-label="Refreshing" />}
+            {hasFilters && (
+              <button type="button" onClick={clearFilters} className={buttonClass("ghost", "sm")}>
+                Clear filters
+              </button>
+            )}
+            <Segmented
+              ariaLabel="Order type"
+              options={ORDER_TYPES.map((t) => ({ value: t, label: t === "All" ? "All types" : t }))}
+              value={orderTypeFilter}
+              onChange={setOrderTypeFilter}
             />
           </div>
         </div>
-        
-        <div className="flex flex-wrap items-center gap-2">
-          {["All", "Draft", "Confirmed", "Revised", "Old Revise", "Void", "Closed"].map((status) => (
-            <button
-              key={status}
-              onClick={() => setStatusFilter(status)}
-              className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200 ${
-                statusFilter === status
-                  ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/20 scale-105"
-                  : "bg-blue-50/50 text-blue-600 hover:bg-blue-100 border border-blue-200"
-              }`}
-            >
-              {status === "All" ? "All Status" : status}
-            </button>
-          ))}
-        </div>
 
-        <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-blue-100">
-          {["All", "Direct", "Sub-contract"].map((type) => (
-            <button
-              key={type}
-              onClick={() => setOrderTypeFilter(type)}
-              className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200 ${
-                orderTypeFilter === type
-                  ? "bg-violet-600 text-white shadow-md shadow-violet-500/20 scale-105"
-                  : "bg-blue-50/50 text-blue-600 hover:bg-blue-100 border border-blue-200"
-              }`}
-            >
-              {type === "All" ? "All Types" : type}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Table Area */}
-      {loading ? (
-        <div className="h-64 flex flex-col items-center justify-center gap-2">
-          <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
-          <p className="text-sm text-blue-500">Loading orders...</p>
-        </div>
-      ) : errorMsg ? (
-        <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 sm:p-6 flex items-center gap-3 text-rose-700 ">
-          <AlertCircle size={18} />
-          <p className="text-sm font-medium">{errorMsg}</p>
-        </div>
-      ) : orders.length === 0 ? (
-        <div className="bg-white border border-blue-200 rounded-xl p-6 sm:p-12 text-center shadow-sm">
-          <div className="mx-auto w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-indigo-500/10 flex items-center justify-center mb-4">
-            <ShoppingCart size={22} className="text-indigo-500" />
+        {/* Table Area */}
+        {loading && !result ? (
+          <div className="flex h-48 flex-col items-center justify-center gap-2">
+            <Loader2 size={20} className="animate-spin text-indigo-600" />
+            <p className="text-xs text-slate-500">Loading orders…</p>
           </div>
-          <p className="text-blue-600 font-semibold">No sales orders found.</p>
-          <p className="text-xs text-blue-400 mt-1">
-            Click &quot;New Sales Order&quot; to create your first order.
-          </p>
-        </div>
-      ) : (
-        <div className="bg-white border border-blue-200 rounded-xl shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs sm:text-sm text-left whitespace-nowrap">
-              <thead className="text-[10px] sm:text-xs text-blue-500 bg-blue-50/50 uppercase tracking-wider border-b border-blue-200 ">
-                <tr>
-                  <th className="px-2 sm:px-4 py-2 sm:py-4">Order No</th>
-                  <th className="px-2 sm:px-4 py-2 sm:py-4 hidden sm:table-cell">Date</th>
-                  <th className="px-2 sm:px-4 py-2 sm:py-4 hidden md:table-cell">Type</th>
-                  <th className="px-2 sm:px-4 py-2 sm:py-4">Customer</th>
-                  <th className="px-2 sm:px-4 py-2 sm:py-4 hidden lg:table-cell">Salesperson</th>
-                  <th className="px-2 sm:px-4 py-2 sm:py-4 text-right hidden sm:table-cell">Amount</th>
-                  <th className="px-2 sm:px-4 py-2 sm:py-4">Status</th>
-                  <th className="px-2 sm:px-4 py-2 sm:py-4 text-right">Action</th>
+        ) : errorMsg ? (
+          <div className="m-4 flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[13px] text-rose-700">
+            <AlertCircle size={14} />
+            <p className="font-medium">{errorMsg}</p>
+          </div>
+        ) : orders.length === 0 ? (
+          hasFilters ? (
+            <EmptyState
+              icon={SearchX}
+              tone="slate"
+              title="No orders match these filters"
+              description="Try a different search term, status or order type."
+              action={
+                <button type="button" onClick={clearFilters} className={buttonClass("secondary", "md")}>
+                  Clear filters
+                </button>
+              }
+            />
+          ) : (
+            <EmptyState
+              icon={ShoppingCart}
+              tone="indigo"
+              title="No sales orders yet"
+              description="Create your first sales order to start generating work orders."
+              action={
+                <Link href="/dashboard/sales/sales-order/new" className={buttonClass("primary", "md")}>
+                  <Plus size={14} /> New Sales Order
+                </Link>
+              }
+            />
+          )
+        ) : (
+          <div className={`overflow-x-auto transition-opacity ${loading ? "opacity-60" : ""}`}>
+            <table className="w-full whitespace-nowrap text-left text-[13px]">
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50/70 text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                  <th className="px-4 py-2 font-medium">Order No</th>
+                  <th className="px-3 py-2 font-medium">Customer</th>
+                  <th className="hidden px-3 py-2 font-medium sm:table-cell">Date</th>
+                  <th className="hidden px-3 py-2 font-medium md:table-cell">Type</th>
+                  <th className="hidden px-3 py-2 font-medium lg:table-cell">Salesperson</th>
+                  <th className="hidden px-3 py-2 text-right font-medium sm:table-cell">Amount</th>
+                  <th className="px-3 py-2 font-medium">Status</th>
+                  <th className="px-4 py-2 text-right font-medium">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-blue-100 text-[10px] sm:text-sm">
-                {orders.map((order) => (
-                  <tr key={order.id} className="hover:bg-blue-50/50 :bg-blue-800/20 transition-colors group">
-                    <td className="px-2 sm:px-4 py-2 sm:py-4 font-bold text-blue-900 ">
-                      <Link href={`/dashboard/sales/sales-order/${order.id}`} className="hover:text-indigo-600 :text-indigo-400 transition-colors">
-                        {order.orderNo}
-                        {order.revision > 0 && <span className="ml-1 text-[8px] sm:text-xs text-blue-500 font-normal">v{order.revision}</span>}
-                      </Link>
-                    </td>
-                    <td className="px-2 sm:px-4 py-2 sm:py-4 text-blue-700 hidden sm:table-cell">
-                      {new Date(order.date).toLocaleDateString()}
-                    </td>
-                    <td className="px-2 sm:px-4 py-2 sm:py-4 hidden md:table-cell">
-                      <span className={`inline-flex px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[8px] sm:text-xs font-semibold border ${
-                        order.orderType === "Sub-contract"
-                          ? "bg-violet-50 text-violet-700 border-violet-200/60"
-                          : "bg-slate-50 text-slate-700 border-slate-200"
-                      }`}>
-                        {order.orderType || "Direct"}
-                      </span>
-                    </td>
-                    <td className="px-2 sm:px-4 py-2 sm:py-4 font-medium text-blue-700 truncate max-w-[100px] sm:max-w-none">
-                      {order.customer?.customerName || "—"}
-                    </td>
-                    <td className="px-2 sm:px-4 py-2 sm:py-4 text-blue-700 hidden lg:table-cell">
-                      {order.salesperson?.name || "—"}
-                    </td>
-                    <td className="px-2 sm:px-4 py-2 sm:py-4 text-right font-mono font-semibold text-blue-900 hidden sm:table-cell">
-                      {order.currency?.code} {Number(order.amountAfterTax || 0).toFixed(2)}
-                    </td>
-                    <td className="px-2 sm:px-4 py-2 sm:py-4">
-                      <span className={`inline-flex items-center gap-1 sm:gap-1.5 px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[8px] sm:text-xs font-semibold border ${
-                        order.status === "Confirmed"
-                          ? "bg-emerald-50 text-emerald-700 border-emerald-200/60 "
-                          : order.status === "Closed"
-                          ? "bg-blue-100 text-blue-600 border-blue-200 "
-                          : "bg-amber-50 text-amber-700 border-amber-200/60 "
-                      }`}>
-                        <span className={`w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full ${
-                          order.status === "Confirmed" ? "bg-emerald-500" : order.status === "Closed" ? "bg-blue-400" : "bg-amber-500"
-                        }`} />
-                        {order.status}
-                      </span>
-                    </td>
-                    <td className="px-2 sm:px-4 py-2 sm:py-4 text-right">
-                      <div className="flex flex-col sm:flex-row items-end sm:items-center justify-end gap-1 sm:gap-2">
-                        {order.status === "Draft" && (
-                          <>
-                            <Link href={`/dashboard/sales/sales-order/${order.id}`} className="px-1.5 sm:px-2.5 py-0.5 sm:py-1.5 text-[10px] sm:text-xs font-semibold text-blue-700 bg-blue-100 rounded sm:rounded-lg hover:bg-blue-200 transition-colors">Save</Link>
-                            <Link href={`/dashboard/sales/sales-order/${order.id}`} className="px-1.5 sm:px-2.5 py-0.5 sm:py-1.5 text-[10px] sm:text-xs font-semibold text-blue-700 bg-blue-100 rounded sm:rounded-lg hover:bg-blue-200 transition-colors">Edit</Link>
-                            <Link href={`/dashboard/sales/sales-order/${order.id}`} className="px-1.5 sm:px-2.5 py-0.5 sm:py-1.5 text-[10px] sm:text-xs font-semibold text-white bg-indigo-600 rounded sm:rounded-lg hover:bg-indigo-500 transition-colors">Confirm</Link>
-                            <Link href={`/dashboard/sales/sales-order/${order.id}`} className="px-1.5 sm:px-2.5 py-0.5 sm:py-1.5 text-[10px] sm:text-xs font-semibold text-rose-700 bg-rose-100 rounded sm:rounded-lg hover:bg-rose-200 transition-colors">Void</Link>
-                          </>
+              <tbody className="divide-y divide-slate-100">
+                {orders.map((order) => {
+                  const status = normalizeSoStatus(order.status);
+                  const rowBusy = busy[order.id];
+                  const actions = soTransitions(status).filter((t) => t.inList);
+                  const isDraft = status === "Draft";
+                  const href = `/dashboard/sales/sales-order/${order.id}`;
+                  const customerName = order.customer?.customerName || "";
+                  return (
+                    <tr key={order.id} className="group transition-colors hover:bg-indigo-50/40">
+                      <td className="px-4 py-2">
+                        <Link href={href} className="font-mono text-[13px] font-semibold text-indigo-600 hover:text-indigo-800 hover:underline">
+                          {order.orderNo}
+                        </Link>
+                        {order.revision > 0 && (
+                          <span className="ml-1.5 rounded bg-slate-100 px-1 py-px font-mono text-[10px] font-medium text-slate-500">
+                            R{order.revision}
+                          </span>
                         )}
-                        {order.status === "Confirmed" && (
-                          <>
-                            <Link href={`/dashboard/sales/sales-order/${order.id}`} className="px-1.5 sm:px-2.5 py-0.5 sm:py-1.5 text-[10px] sm:text-xs font-semibold text-slate-700 bg-slate-100 rounded sm:rounded-lg hover:bg-slate-200 transition-colors">View</Link>
-                            <Link href={`/dashboard/sales/sales-order/${order.id}`} className="px-1.5 sm:px-2.5 py-0.5 sm:py-1.5 text-[10px] sm:text-xs font-semibold text-amber-700 bg-amber-100 rounded sm:rounded-lg hover:bg-amber-200 transition-colors">Revise</Link>
-                            <Link href={`/dashboard/sales/sales-order/${order.id}`} className="px-1.5 sm:px-2.5 py-0.5 sm:py-1.5 text-[10px] sm:text-xs font-semibold text-rose-700 bg-rose-100 rounded sm:rounded-lg hover:bg-rose-200 transition-colors hidden sm:inline-flex">Stop Purchase</Link>
-                          </>
-                        )}
-                        {order.status === "Revised" && (
-                          <>
-                            <Link href={`/dashboard/sales/sales-order/${order.id}`} className="px-1.5 sm:px-2.5 py-0.5 sm:py-1.5 text-[10px] sm:text-xs font-semibold text-slate-700 bg-slate-100 rounded sm:rounded-lg hover:bg-slate-200 transition-colors">View</Link>
-                            <Link href={`/dashboard/sales/sales-order/${order.id}`} className="px-1.5 sm:px-2.5 py-0.5 sm:py-1.5 text-[10px] sm:text-xs font-semibold text-white bg-indigo-600 rounded sm:rounded-lg hover:bg-indigo-500 transition-colors">Confirm</Link>
-                          </>
-                        )}
-                        {(order.status === "Closed" || order.status === "Void" || order.status === "Old Revise") && (
-                          <Link href={`/dashboard/sales/sales-order/${order.id}`} className="px-1.5 sm:px-2.5 py-0.5 sm:py-1.5 text-[10px] sm:text-xs font-semibold text-slate-700 bg-slate-100 rounded sm:rounded-lg hover:bg-slate-200 transition-colors">View Only</Link>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="px-3 py-2">
+                        <div className="flex min-w-0 max-w-[160px] items-center gap-2 sm:max-w-[260px]">
+                          <InitialsAvatar name={customerName} />
+                          <span className="truncate font-medium text-slate-800">{customerName || "—"}</span>
+                        </div>
+                      </td>
+                      <td
+                        className="hidden px-3 py-2 text-xs text-slate-500 sm:table-cell"
+                        title={order.date ? new Date(order.date).toLocaleDateString() : undefined}
+                      >
+                        {relativeDate(order.date)}
+                      </td>
+                      <td className="hidden px-3 py-2 md:table-cell">
+                        <Badge tone={orderTypeTone(order.orderType)}>{order.orderType || "Direct"}</Badge>
+                      </td>
+                      <td className="hidden px-3 py-2 text-slate-600 lg:table-cell">{order.salesperson?.name || "—"}</td>
+                      <td className="hidden px-3 py-2 text-right sm:table-cell">
+                        <span className="mr-1 text-[11px] text-slate-400">{order.currency?.code}</span>
+                        <span className="font-semibold tabular-nums text-slate-900">{formatAmount(order.amountAfterTax)}</span>
+                      </td>
+                      <td className="px-3 py-2">
+                        <StatusBadge status={status} tone={soStatusTone(status)} />
+                      </td>
+                      <td className="px-4 py-2 text-right">
+                        <div className="flex items-center justify-end gap-1 transition-opacity lg:opacity-75 lg:group-hover:opacity-100 lg:focus-within:opacity-100">
+                          <Link
+                            href={href}
+                            aria-disabled={!!rowBusy}
+                            className={buttonClass("secondary", "sm", rowBusy ? "pointer-events-none opacity-50" : "")}
+                          >
+                            {isDraft ? <Pencil size={12} /> : <Eye size={12} />}
+                            {isDraft ? "Edit" : "View"}
+                          </Link>
+                          {actions.map((t) => {
+                            const Icon = ACTION_ICON[t.to];
+                            const spinning = rowBusy === t.to;
+                            const variant = t.to === "Void" ? "danger" : t.to === "Closed" ? "secondary" : t.to === "Revised" ? "warn" : "primary";
+                            return (
+                              <button
+                                key={t.to}
+                                type="button"
+                                disabled={!!rowBusy}
+                                onClick={() => runAction(order, t)}
+                                className={buttonClass(variant, "sm")}
+                              >
+                                {spinning ? <Loader2 size={12} className="animate-spin" /> : Icon ? <Icon size={12} /> : null}
+                                {t.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
-        </div>
+        )}
+      </div>
+
+      {result && !errorMsg && orders.length > 0 && (
+        <p className="px-1 text-[11px] text-slate-400">
+          Showing <span className="font-medium tabular-nums text-slate-600">{orders.length}</span> of{" "}
+          <span className="font-medium tabular-nums text-slate-600">{allOrders.length}</span> orders
+        </p>
       )}
     </div>
   );

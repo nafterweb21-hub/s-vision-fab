@@ -166,8 +166,78 @@ export function resolvePosStateCode(
   return stateCodeFromGstin(buyerGstin);
 }
 
+/**
+ * Intra-state (CGST + SGST) vs inter-state (IGST). Intra only when both state
+ * codes are known AND equal and the buyer is not SEZ: supplies to SEZ are always
+ * inter-state per GST rules, and an unknown POS (export / unregistered buyer with
+ * no place of supply) falls to inter-state. Pure: shared by the invoice server
+ * actions and the invoice form so the screen and the stored breakup agree.
+ */
+export function resolveSupplyType(params: {
+  sellerStateCode: string | null | undefined;
+  posStateCode: string | null | undefined;
+  isSez?: boolean | null;
+}): "intra" | "inter" {
+  const { sellerStateCode, posStateCode, isSez } = params;
+  if (isSez) return "inter";
+  return sellerStateCode && posStateCode && sellerStateCode === posStateCode ? "intra" : "inter";
+}
+
+/**
+ * The GST inputs for an invoice-like document, taken from the seller's company
+ * profile and the customer profile exactly as the server reads them. Spread the
+ * result into `computeGstBreakup`. Client-safe (no server imports).
+ */
+export function invoiceGstContext(
+  company: { gstRegistrationNo?: string | null; address?: string | null; sezTaxRate?: unknown } | null | undefined,
+  customer: { gstin?: string | null; placeOfSupply?: string | null; isSez?: boolean | null } | null | undefined,
+) {
+  return {
+    sellerGstin: company?.gstRegistrationNo,
+    sellerAddress: company?.address,
+    posStateCode: resolvePosStateCode(customer?.placeOfSupply, customer?.gstin),
+    isSez: !!customer?.isSez,
+    sezTaxRate: Number(company?.sezTaxRate) || 0,
+  };
+}
+
 export function roundTo2(n: number): number {
   return Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+}
+
+/**
+ * GST on one line, rounded exactly as `computeGstBreakup` rounds it: the taxable
+ * amount to 2 dp, then (taxable x rate%) to 2 dp. Client-safe, so a form can show
+ * the same per-line tax the server stores.
+ */
+export function gstLineTax(amount: unknown, ratePercent: unknown): number {
+  return roundTo2((roundTo2(Number(amount) || 0) * (Number(ratePercent) || 0)) / 100);
+}
+
+/**
+ * GST % for a credit/debit note line, as both its server actions and its form read
+ * it: the line's own `taxRate` when present (an explicit 0 stays 0), else the
+ * stored `gstRate` of a line loaded from the DB, else the header rate.
+ */
+export function noteLineGstRate(
+  line: { taxRate?: unknown; gstRate?: unknown } | null | undefined,
+  headerTaxRate: unknown,
+): number {
+  const explicit = (v: unknown) => v !== undefined && v !== null && v !== "" && Number.isFinite(Number(v));
+  if (explicit(line?.taxRate)) return Number(line!.taxRate);
+  if (explicit(line?.gstRate)) return Number(line!.gstRate);
+  return Number(headerTaxRate) > 0 ? Number(headerTaxRate) : 0;
+}
+
+/**
+ * Grand total of an invoice-like document: taxable + tax + the user's manual
+ * round-off, to 2 dp. The currency profile's roundingMode is deliberately NOT
+ * applied: the server has always stored this value, and the e-invoice payload
+ * reports TotInvVal = taxable + tax with RndOffAmt 0. Shared by the invoice
+ * server actions and the invoice form so the screen shows what gets stored.
+ */
+export function invoiceGrandTotal(taxable: number, tax: number, roundOff: number): number {
+  return roundTo2((Number(taxable) || 0) + (Number(tax) || 0) + (Number(roundOff) || 0));
 }
 
 export type GstLineInput = {
@@ -220,14 +290,7 @@ export function computeGstBreakup(params: {
     resolveSellerStateCode({ gstRegistrationNo: params.sellerGstin, address: params.sellerAddress });
   const posStateCode = params.posStateCode ?? null;
 
-  // Intra-state when both state codes are known AND equal (and not SEZ).
-  // Supplies to SEZ are always inter-state (IGST) per GST rules.
-  const supplyType: "intra" | "inter" =
-    isSez
-      ? "inter"
-      : (sellerStateCode && posStateCode && sellerStateCode === posStateCode
-          ? "intra"
-          : "inter");
+  const supplyType = resolveSupplyType({ sellerStateCode, posStateCode, isSez });
 
   const baseRate = isSez ? (Number(params.sezTaxRate) || 0) : (Number(taxRatePercent) || 0);
 
@@ -236,7 +299,7 @@ export function computeGstBreakup(params: {
     const rate = isSez
       ? baseRate
       : (l.taxRate !== undefined && !isNaN(l.taxRate) ? Number(l.taxRate) : baseRate);
-    const lineTax = roundTo2((taxable * rate) / 100);
+    const lineTax = gstLineTax(taxable, rate);
     if (supplyType === "intra") {
       const cgst = roundTo2(lineTax / 2);
       const sgst = roundTo2(lineTax - cgst);

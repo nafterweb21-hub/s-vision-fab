@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { nextDocumentNo } from "@/lib/document-numbering";
 import { toUserMessage } from "@/lib/api-error";
+import { assertWithinWorkOrderQty, DeliveryOrderRuleError } from "@/lib/delivery-order-qty";
 
 export async function GET(req: NextRequest) {
   try {
@@ -74,6 +75,9 @@ export async function POST(req: NextRequest) {
     // row lock only holds for as long as the transaction does. It is generated
     // here, not sent by the client — see Admin → Document Numbering.
     const newDO = await prisma.$transaction(async (tx) => {
+      // Spec: total delivered across non-void DOs ≤ WO Qty.
+      await assertWithinWorkOrderQty(tx, items ?? []);
+
       const doNo = await nextDocumentNo(tx, "DELIVERY_ORDER", {
         isTaken: async (no) => (await tx.deliveryOrder.count({ where: { doNo: no } })) > 0,
       });
@@ -107,6 +111,9 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, id: newDO.id, doNo: newDO.doNo });
   } catch (error: any) {
+    if (error instanceof DeliveryOrderRuleError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
     console.error("Create Delivery Order Error:", error);
     return NextResponse.json({ error: toUserMessage(error, "Could not save the delivery order. Please check the details and try again.") }, { status: 500 });
   }

@@ -1,9 +1,46 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 import { SearchableSelect } from "@/components/SearchableSelect";
 import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { Loader2, ArrowLeft, Plus, Trash2, Save, FileText } from "lucide-react";
+import {
+  AlertCircle,
+  ArrowLeft,
+  Building2,
+  CalendarClock,
+  CalendarDays,
+  Calculator,
+  FileText,
+  Loader2,
+  Lock,
+  Package,
+  Plus,
+  Receipt,
+  Save,
+  ScrollText,
+  Trash2,
+  UserRound,
+  Users,
+  Wallet,
+} from "lucide-react";
+import {
+  Card,
+  EmptyState,
+  Field,
+  MetaChip,
+  StatusBadge,
+  buttonClass,
+  iconButtonDangerClass,
+  inputClass,
+  inputSmClass,
+  readOnlyClass,
+  selectTriggerClass,
+  selectTriggerSmClass,
+  textareaClass,
+} from "@/components/form-ui";
+import { isQtEditable, normalizeQtStatus, qtStatusTone } from "../qt-status";
+
 type FormData = {
   employees: { id: string; name: string; email: string; code: string }[];
   customers: {
@@ -31,6 +68,25 @@ type Item = {
   quantity: string;
   sortOrder: number;
 };
+
+function fmt(n: number): string {
+  return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function fmtDate(value: string | Date | undefined): string {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
+}
+
+/** Quote date + validity days (display only). */
+function validUntil(date: string, days: number): Date | undefined {
+  const d = new Date(date);
+  if (Number.isNaN(d.getTime()) || !Number.isFinite(days)) return undefined;
+  d.setDate(d.getDate() + days);
+  return d;
+}
 
 export default function QuotationEditPage() {
   const { id } = useParams<{ id: string }>();
@@ -77,7 +133,7 @@ export default function QuotationEditPage() {
           const q = await fetch(`/api/sales/quotation/${id}`).then((r) => r.json());
           if (q.error) throw new Error(q.error);
           setMeta({ quotationNo: q.quotationNo, revision: q.revision, status: q.status });
-          setReadOnly(q.status !== "Draft");
+          setReadOnly(!isQtEditable(q.status));
           setDate(new Date(q.date).toISOString().slice(0, 10));
           setSalespersonId(q.salespersonId);
           setCustomerId(q.customerId || "");
@@ -157,10 +213,10 @@ export default function QuotationEditPage() {
     );
     const disc = Number(lumpSumDisc || 0);
     const afterDisc = Math.max(0, subTotal - disc);
-    
+
     const isSez = customer?.isSez;
     const company = data?.companies?.[0]; // Default company if multiple exist
-    
+
     let taxRate = 0;
     if (isSez) {
       taxRate = Number(company?.sezTaxRate) || 0;
@@ -168,9 +224,9 @@ export default function QuotationEditPage() {
       const tax = data?.taxes.find((t) => t.id === taxTypeId);
       taxRate = tax?.taxRate ?? 0;
     }
-    
+
     const taxAmount = +(afterDisc * (taxRate / 100)).toFixed(2);
-    
+
     let total = afterDisc + taxAmount;
     if (isRoundOff) {
       total = Math.round(total);
@@ -192,7 +248,7 @@ export default function QuotationEditPage() {
       taxAmount,
       total,
     };
-  }, [items, lumpSumDisc, taxTypeId, data, currencyId, isRoundOff]);
+  }, [items, lumpSumDisc, taxTypeId, data, currencyId, isRoundOff, customer]);
 
   function updateItem(idx: number, patch: Partial<Item>) {
     setItems((cur) => cur.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
@@ -273,489 +329,639 @@ export default function QuotationEditPage() {
 
   if (loading) {
     return (
-      <div className="p-12 flex flex-col items-center justify-center gap-3">
-        <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
-        <p className="text-sm text-blue-500">Loading…</p>
+      <div className="flex h-full items-center justify-center p-12">
+        <Loader2 className="animate-spin text-indigo-600" size={22} />
       </div>
     );
   }
 
+  const status = isNew ? "Draft" : normalizeQtStatus(meta.status);
+  const currencyCode = data?.currencies.find((c) => c.id === currencyId)?.code || "";
+  const contact = customer?.contactPersons.find((p) => p.id === contactPersonId);
+  const salespersonName = data?.employees.find((e) => e.id === salespersonId)?.name || "";
+  const expiry = validUntil(date, Number(quoteValidityDays));
+  const totalQty = items.reduce((sum, it) => sum + (Number(it.quantity) || 0), 0);
+  const pricedLines = items.filter((it) => it.partId).length;
+  const discount = Number(lumpSumDisc || 0);
+  const rounding = +(totals.total - (totals.afterDisc + totals.taxAmount)).toFixed(2);
+  const sezRate = Number(data?.companies?.[0]?.sezTaxRate) || 0;
+  const roundingMode = data?.currencies.find((c) => c.id === currencyId)?.roundingMode;
+
   return (
-    <div className="py-3 space-y-4 w-full">
-      <div className="flex items-center justify-between pb-6 border-b border-blue-200">
-        <div>
-          <div className="flex items-center gap-2 text-xs text-blue-400 font-semibold uppercase mb-1">
-            <Link href="/dashboard/sales/quotation" className="hover:text-amber-600 inline-flex items-center gap-1">
+    <div className="w-full space-y-4">
+      {/* Document header / action bar */}
+      <div className="sticky top-0 z-20 -mx-1 overflow-hidden rounded-xl border border-slate-200 bg-white/90 shadow-[0_1px_3px_rgba(15,23,42,0.06)] backdrop-blur-md">
+        <div className="h-0.5 bg-gradient-to-r from-indigo-500 via-indigo-500 to-violet-500" />
+        <div className="flex flex-col gap-2.5 px-4 py-2.5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0 space-y-1">
+            <Link href="/dashboard/sales/quotation" className="inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-indigo-600">
               <ArrowLeft size={12} /> Quotations
             </Link>
-            {!isNew && meta.quotationNo && (
-              <>
-                <span>/</span>
-                <span className="text-blue-500">
-                  {meta.quotationNo} (Rev {meta.revision})
-                </span>
-                <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] border bg-amber-50 text-amber-700 border-amber-200">
-                  {meta.status}
-                </span>
-              </>
+            <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
+              {isNew || !meta.quotationNo ? (
+                <h1 className="text-lg font-semibold leading-tight text-slate-900">{isNew ? "New Quotation" : "Edit Quotation"}</h1>
+              ) : (
+                <h1 className="flex min-w-0 items-baseline gap-2 leading-tight">
+                  <span className="text-[11px] font-medium uppercase tracking-wide text-slate-400">QT</span>
+                  <span className="truncate font-mono text-lg font-semibold text-slate-900">{meta.quotationNo}</span>
+                  <span className="rounded bg-slate-100 px-1 py-px font-mono text-[11px] font-medium text-slate-500" title="Revision">
+                    R{meta.revision ?? 0}
+                  </span>
+                </h1>
+              )}
+              <StatusBadge status={status} tone={qtStatusTone(status)} size="md" label={isNew ? "New · Draft" : status} />
+            </div>
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+              <MetaChip icon={Building2} title="Customer">{customer?.customerName || "No customer yet"}</MetaChip>
+              <MetaChip icon={CalendarDays} title="Quotation date">{fmtDate(date)}</MetaChip>
+              <MetaChip icon={CalendarClock} label="Valid until" title={`${quoteValidityDays} days validity`}>{fmtDate(expiry)}</MetaChip>
+              {salespersonName && <MetaChip icon={UserRound} title="Our contact">{salespersonName}</MetaChip>}
+              <MetaChip icon={Wallet} title="Total amount">
+                <span className="tabular-nums">{currencyCode} {fmt(totals.total)}</span>
+              </MetaChip>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-start gap-2 lg:justify-end">
+            <button type="button" onClick={() => router.push("/dashboard/sales/quotation")} className={buttonClass("ghost", "md")}>
+              Back
+            </button>
+            {readOnly ? (
+              <span className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 text-xs font-medium text-slate-500">
+                <Lock size={13} /> View only
+              </span>
+            ) : (
+              <button type="button" onClick={onSave} disabled={saving} className={buttonClass("primary", "md")}>
+                {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                {saving ? "Saving…" : "Save"}
+              </button>
             )}
           </div>
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-amber-500/10 text-amber-600">
-              <FileText size={20} />
-            </div>
-            <h2 className="text-2xl font-bold tracking-tight text-blue-900">
-              {isNew ? "New Quotation" : "Edit Quotation"}
-            </h2>
-          </div>
         </div>
-
-        <button
-          onClick={onSave}
-          disabled={saving || readOnly}
-          className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 rounded-lg shadow-md active:scale-95 disabled:opacity-50"
-        >
-          {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-          {saving ? "Saving…" : "Save"}
-        </button>
       </div>
 
       {error && (
-        <div className="bg-rose-50 border border-rose-200 rounded-lg p-3 text-sm text-rose-700">{error}</div>
+        <div className="flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[13px] text-rose-700">
+          <AlertCircle size={14} className="shrink-0" />
+          {error}
+        </div>
       )}
       {readOnly && (
-        <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm text-slate-700">
-          This quotation is <strong>{meta.status}</strong> — read-only. Use Revise to create a new editable version.
+        <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[13px] text-slate-600">
+          <Lock size={14} className="shrink-0 text-slate-400" />
+          <span>
+            This quotation is <span className="font-semibold text-slate-800">{status}</span> — read-only. Use Revise to create a new editable version.
+          </span>
         </div>
       )}
 
-      {/* Header card */}
-      <div className="bg-white border border-blue-200 rounded-xl shadow-sm p-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Field label="Date" required>
-          <input
-            type="date"
-            value={date}
-            disabled={readOnly}
-            onChange={(e) => setDate(e.target.value)}
-            className={inputCls}
-          />
-        </Field>
-        <Field label="Our Contact (Salesperson)" required>
-          <SearchableSelect
-            value={salespersonId}
-            disabled={readOnly}
-            onChange={(e) => setSalespersonId(e.target.value)}
-            className={inputCls}
+      <fieldset disabled={readOnly} className="m-0 grid min-w-0 grid-cols-1 gap-4 border-0 p-0 xl:grid-cols-[minmax(0,1fr)_320px]">
+        {/* Main column */}
+        <div className="min-w-0 space-y-4">
+          {/* Quotation details */}
+          <Card icon={FileText} tone="indigo" title="Quotation details" description="Title, owner, validity and delivery terms">
+            <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
+              <Field label="Title" required className="sm:col-span-2 lg:col-span-4">
+                <input
+                  type="text"
+                  placeholder="e.g. PST_24_0102_COWLING FEEDTHRU COVER PLATE ASSY"
+                  value={title}
+                  disabled={readOnly}
+                  onChange={(e) => setTitle(e.target.value)}
+                  className={inputClass}
+                />
+              </Field>
+              <Field label="Date" required>
+                <input
+                  type="date"
+                  value={date}
+                  disabled={readOnly}
+                  onChange={(e) => setDate(e.target.value)}
+                  className={inputClass}
+                />
+              </Field>
+              <Field label="Our Contact (Salesperson)" required>
+                <SearchableSelect
+                  compact
+                  value={salespersonId}
+                  disabled={readOnly}
+                  onChange={(e) => setSalespersonId(e.target.value)}
+                  className={selectTriggerClass}
+                >
+                  <option value="">— Select —</option>
+                  {data?.employees.map((e) => (
+                    <option key={e.id} value={e.id}>
+                      {e.name}
+                    </option>
+                  ))}
+                </SearchableSelect>
+              </Field>
+              <Field label="Quote Validity (days)" help={expiry ? `Valid until ${fmtDate(expiry)}` : undefined}>
+                <input
+                  type="number"
+                  min={1}
+                  value={quoteValidityDays}
+                  disabled={readOnly}
+                  onChange={(e) => setQuoteValidityDays(Number(e.target.value))}
+                  className={`${inputClass} tabular-nums`}
+                />
+              </Field>
+              <Field label="Ref No">
+                <input
+                  type="text"
+                  value={refNo}
+                  disabled={readOnly}
+                  onChange={(e) => setRefNo(e.target.value)}
+                  className={inputClass}
+                />
+              </Field>
+              <Field label="Lead Time">
+                <input
+                  type="text"
+                  placeholder="e.g. 6 - 8 weeks"
+                  value={leadTime}
+                  disabled={readOnly}
+                  onChange={(e) => setLeadTime(e.target.value)}
+                  className={inputClass}
+                />
+              </Field>
+              <Field label="Incoterms">
+                <input
+                  type="text"
+                  value={incoterms}
+                  disabled={readOnly}
+                  onChange={(e) => setIncoterms(e.target.value)}
+                  className={inputClass}
+                />
+              </Field>
+            </div>
+          </Card>
+
+          {/* Customer */}
+          <Card icon={Users} tone="sky" title="Customer" description="Who the quotation is addressed to">
+            <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
+              <Field label="Customer" required>
+                <SearchableSelect
+                  compact
+                  value={customerId}
+                  disabled={readOnly}
+                  onChange={(e) => setCustomerId(e.target.value)}
+                  className={selectTriggerClass}
+                >
+                  <option value="">— Select —</option>
+                  {data?.customers.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.customerName}
+                    </option>
+                  ))}
+                </SearchableSelect>
+              </Field>
+              <Field label="Customer Contact" help={customer?.isSez ? "SEZ customer — SEZ tax rate applies." : undefined}>
+                <input
+                  type="text"
+                  readOnly
+                  value={contact ? `${contact.contactPersonName}${contact.email ? ` (${contact.email})` : ""}` : ""}
+                  placeholder={customer ? "No default contact" : "Select a customer first"}
+                  className={readOnlyClass}
+                />
+              </Field>
+              <Field label="Customer PO / Ref" className="sm:col-span-2 lg:col-span-1">
+                <input
+                  type="text"
+                  value={customerPoRef}
+                  disabled={readOnly}
+                  onChange={(e) => setCustomerPoRef(e.target.value)}
+                  className={inputClass}
+                />
+              </Field>
+            </div>
+          </Card>
+
+          {/* Line items */}
+          <Card
+            icon={Package}
+            tone="amber"
+            bodyClassName="p-0"
+            title={
+              <span className="inline-flex items-center gap-1.5">
+                Quote items
+                {items.length > 0 && (
+                  <span className="rounded-full bg-amber-50 px-1.5 text-[11px] font-semibold tabular-nums text-amber-700 ring-1 ring-inset ring-amber-600/15">
+                    {items.length}
+                  </span>
+                )}
+              </span>
+            }
+            description="Finished goods, unit price and quantity"
+            actions={
+              !readOnly && items.length > 0 ? (
+                <button type="button" onClick={addItem} className={buttonClass("link", "sm")}>
+                  <Plus size={14} /> Add Item
+                </button>
+              ) : undefined
+            }
           >
-            <option value="">— Select —</option>
-            {data?.employees.map((e) => (
-              <option key={e.id} value={e.id}>
-                {e.name}
-              </option>
-            ))}
-          </SearchableSelect>
-        </Field>
-        <Field label="Quote Validity (days)">
-          <input
-            type="number"
-            min={1}
-            value={quoteValidityDays}
-            disabled={readOnly}
-            onChange={(e) => setQuoteValidityDays(Number(e.target.value))}
-            className={inputCls}
-          />
-        </Field>
-
-        <Field label="Customer" required>
-          <SearchableSelect
-            value={customerId}
-            disabled={readOnly}
-            onChange={(e) => setCustomerId(e.target.value)}
-            className={inputCls}
-          >
-            <option value="">— Select —</option>
-            {data?.customers.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.customerName}
-              </option>
-            ))}
-          </SearchableSelect>
-        </Field>
-        <Field label="Customer Contact">
-          {(() => {
-            const contact = customer?.contactPersons.find((p) => p.id === contactPersonId);
-            return (
-              <input
-                type="text"
-                readOnly
-                value={
-                  contact
-                    ? `${contact.contactPersonName}${contact.email ? ` (${contact.email})` : ""}`
-                    : ""
-                }
-                placeholder={customer ? "No default contact" : "Select a customer first"}
-                className={inputCls}
-              />
-            );
-          })()}
-        </Field>
-        <Field label="Customer PO / Ref">
-          <input
-            type="text"
-            value={customerPoRef}
-            disabled={readOnly}
-            onChange={(e) => setCustomerPoRef(e.target.value)}
-            className={inputCls}
-          />
-        </Field>
-
-        <Field label="Ref No">
-          <input
-            type="text"
-            value={refNo}
-            disabled={readOnly}
-            onChange={(e) => setRefNo(e.target.value)}
-            className={inputCls}
-          />
-        </Field>
-        <Field label="Payment Terms">
-          <SearchableSelect
-            value={paymentTermId}
-            disabled={readOnly}
-            onChange={(e) => setPaymentTermId(e.target.value)}
-            className={inputCls}
-          >
-            <option value="">— Select —</option>
-            {data?.paymentTerms.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name} ({p.days} days)
-              </option>
-            ))}
-          </SearchableSelect>
-        </Field>
-        <Field label="Lead Time">
-          <input
-            type="text"
-            placeholder="e.g. 6 - 8 weeks"
-            value={leadTime}
-            disabled={readOnly}
-            onChange={(e) => setLeadTime(e.target.value)}
-            className={inputCls}
-          />
-        </Field>
-
-        <Field label="Currency" required>
-          <SearchableSelect
-            value={currencyId}
-            disabled={readOnly}
-            onChange={(e) => setCurrencyId(e.target.value)}
-            className={inputCls}
-          >
-            <option value="">— Select —</option>
-            {data?.currencies.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.code}
-              </option>
-            ))}
-          </SearchableSelect>
-        </Field>
-        <Field label="Exchange Rate">
-          <input
-            type="number"
-            step="0.001"
-            value={exchangeRate}
-            disabled={readOnly}
-            onChange={(e) => setExchangeRate(e.target.value)}
-            className={inputCls}
-          />
-        </Field>
-        <Field label="Incoterms">
-          <input
-            type="text"
-            value={incoterms}
-            disabled={readOnly}
-            onChange={(e) => setIncoterms(e.target.value)}
-            className={inputCls}
-          />
-        </Field>
-
-        <div className="md:col-span-3">
-          <Field label="Title" required>
-            <input
-              type="text"
-              placeholder="e.g. PST_24_0102_COWLING FEEDTHRU COVER PLATE ASSY"
-              value={title}
-              disabled={readOnly}
-              onChange={(e) => setTitle(e.target.value)}
-              className={inputCls}
-            />
-          </Field>
-        </div>
-      </div>
-
-      {/* Items */}
-      <div className="bg-white border border-blue-200 rounded-xl shadow-sm p-4 space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-base font-bold text-blue-900">Quote Items</h3>
-          {!readOnly && (
-            <button
-              onClick={addItem}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-amber-500 hover:bg-amber-400 rounded-md active:scale-95"
-            >
-              <Plus size={14} /> Add Item
-            </button>
-          )}
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full table-fixed text-[13px] text-left min-w-[760px]">
-            <colgroup>
-              <col />
-              <col className="w-28" />
-              <col className="w-28" />
-              <col className="w-24" />
-              <col className="w-28" />
-              {!readOnly && <col className="w-9" />}
-            </colgroup>
-            <thead className="text-[11px] text-blue-500 bg-blue-50/50 uppercase tracking-wide border-b border-blue-200">
-              <tr>
-                <th className="px-1.5 py-2 text-left">Finished Good</th>
-                <th className="px-1.5 py-2 text-left">UOM</th>
-                <th className="px-1.5 py-2 text-right">Unit Price</th>
-                <th className="px-1.5 py-2 text-right">Qty</th>
-                <th className="px-1.5 py-2 text-right">Price</th>
-                {!readOnly && <th className="px-1.5 py-2"></th>}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-blue-100">
-              {items.map((it, idx) => {
-                const line =
-                  Number(it.unitPrice || 0) * Number(it.quantity || 0);
-                return (
-                  <tr key={idx} className="hover:bg-blue-50/30 align-top">
-                    <td className="px-1.5 py-1.5 min-w-0">
-                      <SearchableSelect
-                        compact
-                        value={it.partId}
-                        disabled={readOnly}
-                        onChange={(e) => updateItem(idx, { partId: e.target.value })}
-                        className={itemInputCls}
-                      >
-                        <option value="">— Select —</option>
-                        {data?.finishedGoods.map((fg) => (
-                          <option key={fg.id} value={fg.id}>
-                            {fg.partNo ? `${fg.partNo} — ` : ""}{fg.description}
-                          </option>
-                        ))}
-                      </SearchableSelect>
-                    </td>
-                    <td className="px-1.5 py-1.5">
-                      <SearchableSelect
-                        compact
-                        value={it.uomId}
-                        disabled={readOnly}
-                        onChange={(e) => updateItem(idx, { uomId: e.target.value })}
-                        className={itemInputCls}
-                      >
-                        <option value="">—</option>
-                        {data?.uoms.map((u) => (
-                          <option key={u.id} value={u.id}>
-                            {u.uomName}
-                          </option>
-                        ))}
-                      </SearchableSelect>
-                    </td>
-                    <td className="px-1.5 py-1.5">
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={it.unitPrice}
-                        disabled={readOnly}
-                        onChange={(e) => updateItem(idx, { unitPrice: e.target.value })}
-                        className={`${itemInputCls} text-right tabular-nums`}
-                      />
-                    </td>
-                    <td className="px-1.5 py-1.5">
-                      <input
-                        type="number"
-                        min={0}
-                        value={it.quantity}
-                        disabled={readOnly}
-                        onChange={(e) => updateItem(idx, { quantity: e.target.value })}
-                        className={`${itemInputCls} text-right tabular-nums`}
-                      />
-                    </td>
-                    <td className="px-1.5 py-1.5 pt-2.5 text-right font-semibold text-blue-900 tabular-nums">
-                      {line.toFixed(2)}
-                    </td>
-                    {!readOnly && (
-                      <td className="px-1 py-1.5 text-center">
-                        <button
-                          onClick={() => removeItem(idx)}
-                          className="p-1 rounded-md hover:bg-rose-50 text-rose-500"
-                          title="Remove"
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      </td>
-                    )}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Totals + tax */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white border border-blue-200 rounded-xl shadow-sm p-5 md:col-span-2 space-y-4">
-          <Field label="Tax Type">
-            {customer?.isSez ? (
-              <div className="w-full px-3 py-2 bg-slate-100 border border-slate-200 rounded-lg text-slate-500 text-sm">
-                SEZ Tax ({Number(data?.companies?.[0]?.sezTaxRate) || 0}%) Auto-applied
+            {items.length === 0 ? (
+              <div className="p-4">
+                <EmptyState
+                  boxed
+                  icon={Package}
+                  tone="amber"
+                  title="No items yet"
+                  description="Add the finished goods you are quoting for. Each line is priced as unit price × quantity."
+                  action={
+                    !readOnly && (
+                      <button type="button" onClick={addItem} className={buttonClass("primary", "md")}>
+                        <Plus size={14} /> Add first item
+                      </button>
+                    )
+                  }
+                />
               </div>
             ) : (
-              <SearchableSelect
-                value={taxTypeId}
-                disabled={readOnly}
-                onChange={(e) => setTaxTypeId(e.target.value)}
-                className={inputCls}
-              >
-                <option value="">— None —</option>
-                {data?.taxes.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.taxType} ({t.taxRate}%)
-                  </option>
-                ))}
-              </SearchableSelect>
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[720px] table-fixed text-left text-[13px]">
+                    <colgroup>
+                      <col className="w-10" />
+                      <col />
+                      <col className="w-28" />
+                      <col className="w-28" />
+                      <col className="w-24" />
+                      <col className="w-32" />
+                      {!readOnly && <col className="w-10" />}
+                    </colgroup>
+                    <thead>
+                      <tr className="border-b border-slate-100 bg-slate-50/70 text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                        <th className="py-2 pl-4 pr-1 font-medium">#</th>
+                        <th className="px-2 py-2 font-medium">Finished Good</th>
+                        <th className="px-2 py-2 font-medium">UOM</th>
+                        <th className="px-2 py-2 text-right font-medium">Unit Price</th>
+                        <th className="px-2 py-2 text-right font-medium">Qty</th>
+                        <th className="px-3 py-2 text-right font-medium">Price</th>
+                        {!readOnly && <th className="px-2 py-2" />}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {items.map((it, idx) => {
+                        const line = Number(it.unitPrice || 0) * Number(it.quantity || 0);
+                        return (
+                          <tr key={idx} className="align-top transition-colors hover:bg-slate-50/60 focus-within:bg-indigo-50/30">
+                            <td className="py-1.5 pl-4 pr-1">
+                              <span className="mt-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-indigo-600 text-[11px] font-semibold tabular-nums text-white">
+                                {idx + 1}
+                              </span>
+                            </td>
+                            <td className="min-w-0 px-2 py-1.5">
+                              <SearchableSelect
+                                compact
+                                value={it.partId}
+                                disabled={readOnly}
+                                onChange={(e) => updateItem(idx, { partId: e.target.value })}
+                                className={selectTriggerSmClass}
+                              >
+                                <option value="">— Select —</option>
+                                {data?.finishedGoods.map((fg) => (
+                                  <option key={fg.id} value={fg.id}>
+                                    {fg.partNo ? `${fg.partNo} — ` : ""}{fg.description}
+                                  </option>
+                                ))}
+                              </SearchableSelect>
+                            </td>
+                            <td className="px-2 py-1.5">
+                              <SearchableSelect
+                                compact
+                                value={it.uomId}
+                                disabled={readOnly}
+                                onChange={(e) => updateItem(idx, { uomId: e.target.value })}
+                                className={selectTriggerSmClass}
+                              >
+                                <option value="">—</option>
+                                {data?.uoms.map((u) => (
+                                  <option key={u.id} value={u.id}>
+                                    {u.uomName}
+                                  </option>
+                                ))}
+                              </SearchableSelect>
+                            </td>
+                            <td className="px-2 py-1.5">
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={it.unitPrice}
+                                disabled={readOnly}
+                                onChange={(e) => updateItem(idx, { unitPrice: e.target.value })}
+                                className={`${inputSmClass} text-right tabular-nums`}
+                              />
+                            </td>
+                            <td className="px-2 py-1.5">
+                              <input
+                                type="number"
+                                min={0}
+                                value={it.quantity}
+                                disabled={readOnly}
+                                onChange={(e) => updateItem(idx, { quantity: e.target.value })}
+                                className={`${inputSmClass} text-right tabular-nums`}
+                              />
+                            </td>
+                            <td className="px-3 py-1.5 text-right">
+                              <span className="inline-block pt-1 font-semibold tabular-nums text-slate-900">{fmt(line)}</span>
+                            </td>
+                            {!readOnly && (
+                              <td className="px-2 py-1.5 text-center">
+                                <button type="button" onClick={() => removeItem(idx)} title="Remove" className={`${iconButtonDangerClass} mt-0.5`}>
+                                  <Trash2 size={13} />
+                                </button>
+                              </td>
+                            )}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t border-slate-200 bg-slate-50/70 text-[13px]">
+                        <td colSpan={4} className="py-2 pl-4 pr-2 text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                          Sub Total
+                          <span className="ml-1.5 normal-case tracking-normal text-slate-400">
+                            · {pricedLines} of {items.length} line{items.length === 1 ? "" : "s"} priced
+                          </span>
+                        </td>
+                        <td className="px-2 py-2 text-right font-medium tabular-nums text-slate-700">{totalQty}</td>
+                        <td className="px-3 py-2 text-right">
+                          <span className="mr-1 text-[11px] text-slate-400">{currencyCode}</span>
+                          <span className="font-semibold tabular-nums text-slate-900">{fmt(totals.subTotal)}</span>
+                        </td>
+                        {!readOnly && <td />}
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+                {!readOnly && (
+                  <div className="p-3">
+                    <button
+                      type="button"
+                      onClick={addItem}
+                      className="flex h-8 w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-slate-300 text-xs font-medium text-slate-500 transition-colors hover:border-indigo-300 hover:bg-indigo-50/50 hover:text-indigo-600"
+                    >
+                      <Plus size={14} /> Add another item
+                    </button>
+                  </div>
+                )}
+              </>
             )}
-          </Field>
-          <Field label="Terms & Conditions Preset">
-            <SearchableSelect
-              value={termsPresetId}
-              disabled={readOnly}
-              onChange={(e) => {
-                setTermsPresetId(e.target.value);
-                const p = data?.termsAndConditionProfiles?.find((x) => x.id === e.target.value);
-                if (p) setTermsAndConditions(p.content);
-              }}
-              className={inputCls}
-            >
-              <option value="">— Select to Auto-Fill —</option>
-              {data?.termsAndConditionProfiles?.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </SearchableSelect>
-          </Field>
-          <Field label="Terms & Conditions">
-            <textarea
-              rows={4}
-              value={termsAndConditions}
-              disabled={readOnly}
-              onChange={(e) => {
-                setTermsAndConditions(e.target.value);
-                setTermsPresetId(""); // Clear preset if manually edited
-              }}
-              className={inputCls}
-            />
-          </Field>
-          <Field label="Remark">
-            <textarea
-              rows={2}
-              value={remark}
-              disabled={readOnly}
-              onChange={(e) => setRemark(e.target.value)}
-              className={inputCls}
-            />
-          </Field>
+          </Card>
+
+          {/* Terms & remarks */}
+          <Card icon={ScrollText} tone="violet" title="Terms & remarks" description="Printed on the quotation">
+            <div className="grid gap-x-4 gap-y-3 lg:grid-cols-2">
+              <Field label="Terms & Conditions Preset" className="lg:col-span-2">
+                <SearchableSelect
+                  compact
+                  value={termsPresetId}
+                  disabled={readOnly}
+                  onChange={(e) => {
+                    setTermsPresetId(e.target.value);
+                    const p = data?.termsAndConditionProfiles?.find((x) => x.id === e.target.value);
+                    if (p) setTermsAndConditions(p.content);
+                  }}
+                  className={selectTriggerClass}
+                >
+                  <option value="">— Select to Auto-Fill —</option>
+                  {data?.termsAndConditionProfiles?.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </SearchableSelect>
+              </Field>
+              <Field label="Terms & Conditions">
+                <textarea
+                  rows={5}
+                  value={termsAndConditions}
+                  disabled={readOnly}
+                  onChange={(e) => {
+                    setTermsAndConditions(e.target.value);
+                    setTermsPresetId(""); // Clear preset if manually edited
+                  }}
+                  className={textareaClass}
+                />
+              </Field>
+              <Field label="Remark">
+                <textarea
+                  rows={5}
+                  value={remark}
+                  disabled={readOnly}
+                  onChange={(e) => setRemark(e.target.value)}
+                  className={textareaClass}
+                />
+              </Field>
+            </div>
+          </Card>
         </div>
 
-        <div className="bg-white border border-blue-200 rounded-xl shadow-sm p-5 space-y-3 font-mono text-sm">
-          <TotalsRow label="Sub Total" value={totals.subTotal} />
-          <div className="flex items-center justify-between">
-            <span className="text-blue-700">Lump Sum Discount</span>
-            <input
-              type="number"
-              step="0.01"
-              value={lumpSumDisc}
-              disabled={readOnly}
-              onChange={(e) => setLumpSumDisc(e.target.value)}
-              className="w-32 px-2 py-1 text-right bg-blue-50 border border-blue-200 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500/20"
-            />
-          </div>
-          <TotalsRow label="After Discount" value={totals.afterDisc} muted />
-          <TotalsRow
-            label={`Add${totals.taxRate ? ` (${totals.taxRate}%)` : ""}`}
-            value={totals.taxAmount}
-          />
-          <div className="flex items-center justify-between text-blue-700">
-            <span>Round Off Total</span>
-            <button
-              type="button"
-              disabled={readOnly}
-              onClick={() => setIsRoundOff(!isRoundOff)}
-              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500/40 focus:ring-offset-1 ${
-                isRoundOff ? "bg-amber-500" : "bg-slate-300"
-              } ${readOnly ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
-            >
-              <span
-                className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
-                  isRoundOff ? "translate-x-5" : "translate-x-1"
-                }`}
-              />
-            </button>
-          </div>
-          <div className="pt-3 border-t border-blue-200 flex items-center justify-between text-base">
-            <span className="font-bold text-blue-900">Total Amount</span>
-            <span className="font-bold text-blue-900">{totals.total.toFixed(2)}</span>
-          </div>
+        {/* Right rail */}
+        <div className="min-w-0 space-y-4">
+          <Card icon={Receipt} tone="emerald" title="Commercial terms" description="Currency and payment">
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Currency" required>
+                  <SearchableSelect
+                    compact
+                    value={currencyId}
+                    disabled={readOnly}
+                    onChange={(e) => setCurrencyId(e.target.value)}
+                    className={selectTriggerClass}
+                  >
+                    <option value="">— Select —</option>
+                    {data?.currencies.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.code}
+                      </option>
+                    ))}
+                  </SearchableSelect>
+                </Field>
+                <Field label="Exchange Rate">
+                  <input
+                    type="number"
+                    step="0.001"
+                    value={exchangeRate}
+                    disabled={readOnly}
+                    onChange={(e) => setExchangeRate(e.target.value)}
+                    className={`${inputClass} text-right tabular-nums`}
+                  />
+                </Field>
+              </div>
+              <Field label="Payment Terms">
+                <SearchableSelect
+                  compact
+                  value={paymentTermId}
+                  disabled={readOnly}
+                  onChange={(e) => setPaymentTermId(e.target.value)}
+                  className={selectTriggerClass}
+                >
+                  <option value="">— Select —</option>
+                  {data?.paymentTerms.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} ({p.days} days)
+                    </option>
+                  ))}
+                </SearchableSelect>
+              </Field>
+            </div>
+          </Card>
+
+          {/* Costing build-up */}
+          <Card icon={Calculator} tone="blue" title="Costing" description="Discount, tax and rounding">
+            <div className="space-y-3">
+              <Field label="Tax Type">
+                {customer?.isSez ? (
+                  <div className={`${readOnlyClass} flex items-center`}>SEZ Tax ({sezRate}%) Auto-applied</div>
+                ) : (
+                  <SearchableSelect
+                    compact
+                    value={taxTypeId}
+                    disabled={readOnly}
+                    onChange={(e) => setTaxTypeId(e.target.value)}
+                    className={selectTriggerClass}
+                  >
+                    <option value="">— None —</option>
+                    {data?.taxes.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.taxType} ({t.taxRate}%)
+                      </option>
+                    ))}
+                  </SearchableSelect>
+                )}
+              </Field>
+
+              <dl className="space-y-1.5 rounded-lg bg-slate-50/70 px-3 py-2.5 text-[13px] ring-1 ring-inset ring-slate-200/70">
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="text-slate-500">Sub Total</dt>
+                  <dd className="tabular-nums text-slate-800">{fmt(totals.subTotal)}</dd>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="text-slate-500">
+                    <label htmlFor="qt-lump-sum">Lump Sum Discount</label>
+                  </dt>
+                  <dd className="w-28">
+                    <input
+                      id="qt-lump-sum"
+                      type="number"
+                      step="0.01"
+                      value={lumpSumDisc}
+                      disabled={readOnly}
+                      onChange={(e) => setLumpSumDisc(e.target.value)}
+                      className={`${inputSmClass} text-right tabular-nums`}
+                    />
+                  </dd>
+                </div>
+                <div className="flex items-center justify-between gap-3 border-t border-dashed border-slate-200 pt-1.5">
+                  <dt className="font-medium text-slate-700">After Discount</dt>
+                  <dd className="font-semibold tabular-nums text-slate-900">{fmt(totals.afterDisc)}</dd>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="text-slate-500">
+                    Add Tax{totals.taxRate ? <span className="ml-1 text-[11px] text-slate-400">({totals.taxRate}%{customer?.isSez ? " SEZ" : ""})</span> : null}
+                  </dt>
+                  <dd className="tabular-nums text-slate-800">{fmt(totals.taxAmount)}</dd>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="text-slate-500">
+                    <label htmlFor="qt-round-off" className="cursor-pointer">Round Off Total</label>
+                  </dt>
+                  <dd>
+                    <button
+                      id="qt-round-off"
+                      type="button"
+                      role="switch"
+                      aria-checked={isRoundOff}
+                      disabled={readOnly}
+                      onClick={() => setIsRoundOff(!isRoundOff)}
+                      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 ${
+                        isRoundOff ? "bg-indigo-600" : "bg-slate-300"
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform ${
+                          isRoundOff ? "translate-x-[18px]" : "translate-x-[3px]"
+                        }`}
+                      />
+                    </button>
+                  </dd>
+                </div>
+                {rounding !== 0 && (
+                  <div className="flex items-center justify-between gap-3">
+                    <dt className="text-slate-500">
+                      Rounding
+                      <span className="ml-1 text-[11px] text-slate-400">
+                        ({isRoundOff ? "round off" : roundingMode === "UP" ? "currency: up" : roundingMode === "DOWN" ? "currency: down" : "2 dp"})
+                      </span>
+                    </dt>
+                    <dd className="tabular-nums text-slate-800">
+                      {rounding > 0 ? "+" : ""}
+                      {fmt(rounding)}
+                    </dd>
+                  </div>
+                )}
+                <div className="flex items-center justify-between gap-3 border-t border-slate-200 pt-1.5">
+                  <dt className="font-semibold text-slate-800">Total Amount</dt>
+                  <dd className="font-semibold tabular-nums text-slate-900">{fmt(totals.total)}</dd>
+                </div>
+              </dl>
+            </div>
+          </Card>
+
+          {/* Summary — dark anchor echoing the sidebar */}
+          <section className="overflow-hidden rounded-xl bg-[#111827] text-slate-300 shadow-lg shadow-slate-900/10 ring-1 ring-white/5">
+            <header className="flex items-center gap-2.5 border-b border-white/10 px-4 py-2.5">
+              <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-500/15 text-indigo-300 ring-1 ring-inset ring-indigo-400/20">
+                <Wallet size={15} />
+              </span>
+              <div>
+                <h2 className="text-[13px] font-semibold leading-tight text-white">Summary</h2>
+                <p className="text-[11px] leading-tight text-slate-400">Live totals for this quotation</p>
+              </div>
+            </header>
+            <dl className="space-y-2 px-4 py-3 text-[13px]">
+              <div className="flex items-center justify-between">
+                <dt className="text-slate-400">Items</dt>
+                <dd className="tabular-nums text-slate-200">
+                  {items.length}
+                  <span className="ml-1.5 text-[11px] text-slate-500">· {totalQty} qty</span>
+                </dd>
+              </div>
+              <div className="flex items-center justify-between">
+                <dt className="text-slate-400">Sub Total</dt>
+                <dd className="tabular-nums text-slate-200">{fmt(totals.subTotal)}</dd>
+              </div>
+              {discount !== 0 && (
+                <div className="flex items-center justify-between">
+                  <dt className="text-slate-400">Discount</dt>
+                  <dd className="tabular-nums text-slate-200">−{fmt(discount)}</dd>
+                </div>
+              )}
+              <div className="flex items-center justify-between">
+                <dt className="text-slate-400">
+                  Tax <span className="text-[11px] text-slate-500">({totals.taxRate}%{customer?.isSez ? " SEZ" : ""})</span>
+                </dt>
+                <dd className="tabular-nums text-slate-200">{fmt(totals.taxAmount)}</dd>
+              </div>
+              <div className="flex items-center justify-between">
+                <dt className="text-slate-400">Valid until</dt>
+                <dd className="text-slate-200">{fmtDate(expiry)}</dd>
+              </div>
+            </dl>
+            <div className="relative border-t border-white/10 bg-white/[0.03] px-4 py-3">
+              <span className="absolute inset-y-3 left-0 w-[3px] rounded-r bg-gradient-to-b from-indigo-400 to-violet-500" />
+              <p className="text-[11px] font-medium uppercase tracking-wide text-indigo-300">Total amount</p>
+              <p className="mt-0.5 flex items-baseline gap-1.5">
+                <span className="text-xs font-medium text-indigo-300">{currencyCode}</span>
+                <span className="text-2xl font-semibold tabular-nums tracking-tight text-white">{fmt(totals.total)}</span>
+              </p>
+            </div>
+          </section>
         </div>
-      </div>
-    </div>
-  );
-}
-
-const inputCls =
-  "w-full px-3 py-2 text-sm bg-blue-50 border border-blue-200 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 disabled:bg-slate-100 disabled:text-slate-500";
-
-// Compact variant for the line-items table.
-const itemInputCls =
-  "w-full px-2 py-1 text-[13px] bg-blue-50 border border-blue-200 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 disabled:bg-slate-100 disabled:text-slate-500";
-
-function Field({
-  label,
-  required,
-  children,
-}: {
-  label: string;
-  required?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <div>
-      <label className="block text-xs font-semibold text-blue-700 mb-1">
-        {label} {required && <span className="text-rose-500">*</span>}
-      </label>
-      {children}
-    </div>
-  );
-}
-
-function TotalsRow({
-  label,
-  value,
-  muted,
-}: {
-  label: string;
-  value: number;
-  muted?: boolean;
-}) {
-  return (
-    <div className={`flex items-center justify-between ${muted ? "text-blue-500" : "text-blue-800"}`}>
-      <span>{label}</span>
-      <span>{value.toFixed(2)}</span>
+      </fieldset>
     </div>
   );
 }

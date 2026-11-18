@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/authz";
 import { toUserMessage } from "@/lib/api-error";
+import { assertWithinWorkOrderQty, DeliveryOrderRuleError, lockDraftDeliveryOrder } from "@/lib/delivery-order-qty";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { error: authError } = await requirePermission("DELIVERY_ORDER", "e");
@@ -34,13 +35,25 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       }
     }
 
-    await prisma.deliveryOrder.update({
-      where: { id },
-      data: { status: "Submitted" },
+    await prisma.$transaction(async (tx) => {
+      await lockDraftDeliveryOrder(tx, id, "Delivery Order is already submitted.");
+      // Re-check the cap at submit: other DOs may have been saved since this one was.
+      const items = await tx.deliveryOrderItem.findMany({
+        where: { deliveryOrderId: id },
+        select: { workOrderNo: true, quantity: true },
+      });
+      await assertWithinWorkOrderQty(tx, items, id);
+      await tx.deliveryOrder.update({
+        where: { id },
+        data: { status: "Submitted" },
+      });
     });
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, id, doNo: doItem.doNo });
   } catch (error: any) {
+    if (error instanceof DeliveryOrderRuleError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
     console.error("Submit Delivery Order Error:", error);
     return NextResponse.json({ error: toUserMessage(error, "Could not submit the delivery order. Please try again.") }, { status: 500 });
   }

@@ -1,9 +1,12 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { toUserMessage } from "@/lib/api-error";
+import { deliveredQtyByWorkOrder } from "@/lib/delivery-order-qty";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    // The DO being edited; its own lines are not counted as "already delivered".
+    const excludeDoId = req.nextUrl.searchParams.get("excludeDoId");
     const [customers, salesOrders, workOrders, uoms] = await Promise.all([
       prisma.customerProfile.findMany({
         where: { status: "Active" },
@@ -11,6 +14,8 @@ export async function GET() {
           id: true,
           customerName: true,
           customerCode: true,
+          gstin: true,
+          roNumber: true,
         },
         orderBy: { customerName: "asc" },
       }),
@@ -61,10 +66,17 @@ export async function GET() {
       ),
     }));
 
+    // Qty already on other non-void DOs per WO, so the form can show the real remaining balance.
+    const delivered = await deliveredQtyByWorkOrder(prisma, workOrders.map((w) => w.workOrderNo), excludeDoId);
+    const workOrdersOut = workOrders.map((w) => {
+      const d = delivered.get(w.workOrderNo);
+      return { ...w, deliveredQty: d?.qty ?? 0, deliveredOn: d?.doNos ?? [] };
+    });
+
     return NextResponse.json({
       customers,
       salesOrders: salesOrdersOut,
-      workOrders,
+      workOrders: workOrdersOut,
       uoms,
     });
   } catch (e: any) {

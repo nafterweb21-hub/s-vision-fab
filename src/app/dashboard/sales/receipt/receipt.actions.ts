@@ -5,6 +5,17 @@ import { revalidatePath } from "next/cache";
 import { createReceipt, updateReceipt, transitionReceipt, ReceiptInput, ReceiptAction } from "@/lib/receipts";
 
 import { RecordStatus } from "@/lib/status";
+import { RECEIPT_PAYABLE_INVOICE_STATUSES, RECEIPT_PAYABLE_INVOICE_TYPES } from "@/lib/receipt-rules";
+// Confirm / void rewrites amountPaid, balanceDue and status on the linked Invoice row, which may be a
+// Customer Invoice, Credit Note or Debit Note (invoiceType). Each has its own list, and an open
+// form?id=... view, so refresh all of them.
+function revalidateLinkedDocuments() {
+  for (const base of ["/dashboard/sales/invoice", "/dashboard/sales/credit-note", "/dashboard/sales/debit-note"]) {
+    revalidatePath(base);
+    revalidatePath(`${base}/form`);
+  }
+}
+
 export async function getReceipts() {
   try {
     const receipts = await prisma.receipt.findMany({
@@ -48,8 +59,12 @@ export async function getReceiptFormData() {
       prisma.currency.findMany({ where: { status: "Active" } }),
       prisma.employee.findMany({ where: { status: RecordStatus.Active }, include: { user: true } }),
       prisma.invoice.findMany({
+        // Only documents a customer pays against (no Credit Notes), still open, with
+        // a balance left. Same rule as the server guard in src/lib/receipts.ts.
         where: {
-          status: { in: ["Submitted", "Partially Paid"] },
+          invoiceType: { in: [...RECEIPT_PAYABLE_INVOICE_TYPES] },
+          status: { in: [...RECEIPT_PAYABLE_INVOICE_STATUSES] },
+          balanceDue: { gt: 0 },
         },
         include: {
           currency: true,
@@ -99,23 +114,13 @@ export async function transitionReceiptAction(id: string, action: ReceiptAction)
   try {
     await transitionReceipt(id, action);
     revalidatePath("/dashboard/sales/receipt");
-    revalidatePath("/dashboard/sales/invoice");
+    revalidatePath(`/dashboard/sales/receipt/${id}`);
+    revalidateLinkedDocuments();
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
 }
 
-export async function deleteDraftReceiptAction(id: string) {
-  try {
-    const receipt = await prisma.receipt.findUnique({ where: { id } });
-    if (!receipt) throw new Error("Receipt not found");
-    if (receipt.status !== "Draft") throw new Error("Only Draft receipts can be deleted");
-
-    await prisma.receipt.delete({ where: { id } });
-    revalidatePath("/dashboard/sales/receipt");
-    return { success: true };
-  } catch (error: any) {
-    return { success: false, error: error.message };
-  }
-}
+// No deleteDraftReceiptAction: spec "No DELETE anywhere". A Draft is voided via
+// transitionReceiptAction(id, "void"), which keeps its running number used.

@@ -1,214 +1,365 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
-import { SearchableSelect } from "@/components/SearchableSelect";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
-import { Plus, Search, Loader2, Edit2, AlertCircle, Package, Printer, Mail } from "lucide-react";
-export default function DeliveryOrderListPage() {
-  const [orders, setOrders] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("All");
-  const [errorMsg, setErrorMsg] = useState("");
+import {
+  AlertCircle,
+  Eye,
+  Loader2,
+  Mail,
+  Package,
+  Pencil,
+  Plus,
+  Printer,
+  Search,
+  SearchX,
+  ShieldCheck,
+  Tag,
+  Truck,
+} from "lucide-react";
+import {
+  Badge,
+  EmptyState,
+  InitialsAvatar,
+  StatusBadge,
+  TONES,
+  buttonClass,
+  type Tone,
+} from "@/components/form-ui";
+import { DO_STATUSES, doStatusTone, isDoDraft, normalizeDoStatus, type DoStatus } from "./do-status";
 
-  const fetchOrders = async () => {
-    setLoading(true);
-    setErrorMsg("");
-    try {
-      const res = await fetch(`/api/sales/delivery-order?search=${encodeURIComponent(search)}&status=${statusFilter}`);
-      if (!res.ok) throw new Error("Failed to fetch delivery orders");
-      const data = await res.json();
-      setOrders(data.data || []);
-    } catch (err: any) {
-      setErrorMsg(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+type StatusFilter = "All" | DoStatus;
+
+// The list API paginates (default 10 rows). Fetch a large first page so the status
+// tiles and client-side status filter cover the whole result set.
+const PAGE_SIZE = 500;
+
+function dayDiff(d: Date): number {
+  const today = new Date();
+  const a = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
+  const b = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
+  return Math.round((a - b) / 86400000);
+}
+
+function relativeDate(value: string | Date | null | undefined): string {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  const diff = dayDiff(d);
+  if (diff === 0) return "Today";
+  if (diff === 1) return "Yesterday";
+  if (diff === -1) return "Tomorrow";
+  if (diff > 1 && diff < 7) return `${diff}d ago`;
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  return d.toLocaleDateString(undefined, { day: "2-digit", month: "short", ...(sameYear ? {} : { year: "numeric" }) });
+}
+
+type LoadResult = { key: string; orders: any[]; total: number; error: string };
+
+const iconLinkClass =
+  "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 transition-colors hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40";
+
+export default function DeliveryOrderListPage() {
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("All");
+  const [result, setResult] = useState<LoadResult | null>(null);
+
+  // Debounce the server-side search.
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 250);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  // Status is filtered client-side (the API ignores ?status=) so the tiles can count every status.
+  const queryKey = debouncedSearch;
+  const loading = result?.key !== queryKey;
 
   useEffect(() => {
-    fetchOrders();
-  }, [search, statusFilter]);
+    let ignore = false;
+    fetch(`/api/sales/delivery-order?search=${encodeURIComponent(queryKey)}&page=1&pageSize=${PAGE_SIZE}`)
+      .then(async (res) => {
+        if (!res.ok) throw new Error("Failed to fetch delivery orders");
+        return res.json();
+      })
+      .then((data) => {
+        if (!ignore) {
+          const orders = data.data || [];
+          setResult({ key: queryKey, orders, total: Number(data.total) || orders.length, error: "" });
+        }
+      })
+      .catch((err: any) => {
+        if (!ignore) setResult({ key: queryKey, orders: [], total: 0, error: err.message || "Failed to fetch delivery orders" });
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [queryKey]);
+
+  const allOrders = useMemo(() => result?.orders ?? [], [result]);
+  const errorMsg = result?.error ?? "";
+
+  const counts = useMemo(() => {
+    const c: Record<string, number> = { All: allOrders.length };
+    for (const s of DO_STATUSES) c[s] = 0;
+    for (const o of allOrders) {
+      const s = normalizeDoStatus(o.status);
+      c[s] = (c[s] || 0) + 1;
+    }
+    return c;
+  }, [allOrders]);
+
+  const orders = useMemo(
+    () => (statusFilter === "All" ? allOrders : allOrders.filter((o) => normalizeDoStatus(o.status) === statusFilter)),
+    [allOrders, statusFilter],
+  );
+
+  const hasFilters = search.trim() !== "" || statusFilter !== "All";
+  const clearFilters = () => {
+    setSearch("");
+    setStatusFilter("All");
+  };
+
+  const tiles: { key: StatusFilter; label: string; tone: Tone }[] = [
+    { key: "All", label: "All deliveries", tone: "indigo" },
+    ...DO_STATUSES.map((s) => ({ key: s as StatusFilter, label: s, tone: doStatusTone(s) })),
+  ];
 
   return (
-    <div className="p-6 lg:p-8 space-y-6">
-      {/* Header Panel */}
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 pb-6 border-b border-blue-200">
-        <div>
-          <div className="flex items-center gap-2 text-xs text-blue-400 font-semibold tracking-wider uppercase mb-1">
-            <Link href="/dashboard" className="hover:text-blue-600">Dashboard</Link>
-            <span>/</span>
-            <span className="text-blue-500">Sales</span>
-            <span>/</span>
-            <span className="text-blue-500">Delivery Orders</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-500">
-              <Package size={20} />
-            </div>
-            <div>
-              <h2 className="text-2xl font-bold tracking-tight text-blue-900">Delivery Orders</h2>
-              <p className="text-sm text-blue-500 mt-0.5">Manage deliveries for sales orders.</p>
-            </div>
+    <div className="space-y-4">
+      {/* Page header */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white shadow-sm shadow-indigo-600/20 sm:inline-flex">
+            <Truck size={18} />
+          </span>
+          <div className="min-w-0">
+            <nav className="mb-0.5 flex items-center gap-1 text-[11px] text-slate-400">
+              <Link href="/dashboard" className="hover:text-slate-600">Dashboard</Link>
+              <span>/</span>
+              <span>Sales</span>
+              <span>/</span>
+              <span className="text-slate-500">Delivery Orders</span>
+            </nav>
+            <h1 className="text-lg font-semibold leading-tight text-slate-900">Delivery Orders</h1>
+            <p className="text-xs text-slate-500">Manage deliveries for sales orders.</p>
           </div>
         </div>
 
-        <Link
-          href="/dashboard/sales/delivery-order/form"
-          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 rounded-lg shadow-md shadow-indigo-500/20 active:scale-95 transition-all duration-200 shrink-0"
-        >
-          <Plus size={16} /> New Delivery Order
+        <Link href="/dashboard/sales/delivery-order/form" className={buttonClass("primary", "md")}>
+          <Plus size={14} /> New Delivery Order
         </Link>
       </div>
 
-      {/* Filter and Search Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-4 bg-white border border-blue-200 p-4 rounded-xl shadow-sm">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-blue-400" />
-          <input
-            type="text"
-            placeholder="Search by DO No, Customer, PO No or Vehicle No..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 text-sm bg-blue-50 border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors"
-          />
-        </div>
-        <div className="sm:w-48">
-          <SearchableSelect
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="w-full px-3 py-2 text-sm bg-blue-50 border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-blue-700 transition-colors"
-          >
-            <option value="All">All Status</option>
-            <option value="Draft">Draft</option>
-            <option value="Submitted">Submitted</option>
-            <option value="Void">Void</option>
-          </SearchableSelect>
-        </div>
+      {/* Status summary tiles (also the status filter) */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="tablist" aria-label="Filter by status">
+        {tiles.map(({ key, label, tone }) => {
+          const active = statusFilter === key;
+          const count = result ? counts[key] ?? 0 : null;
+          return (
+            <button
+              key={key}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => setStatusFilter(key)}
+              className={`relative flex min-w-0 flex-col items-start overflow-hidden rounded-lg border px-3 py-2 pl-3.5 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40 ${
+                active
+                  ? "border-indigo-300 bg-indigo-50/60 shadow-sm ring-1 ring-indigo-500/15"
+                  : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
+              }`}
+            >
+              <span className={`absolute inset-y-0 left-0 w-[3px] ${TONES[tone].bar}`} />
+              <span className={`flex w-full items-center gap-1.5 truncate text-[11px] font-medium ${active ? "text-indigo-700" : "text-slate-500"}`}>
+                <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${TONES[tone].dot}`} />
+                <span className="truncate">{label}</span>
+              </span>
+              <span className={`text-base font-semibold leading-tight tabular-nums ${active ? "text-indigo-900" : "text-slate-900"} ${count === 0 ? "opacity-40" : ""}`}>
+                {count === null ? "–" : count}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
-      {/* Table Area */}
-      {loading ? (
-        <div className="h-64 flex flex-col items-center justify-center gap-2">
-          <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
-          <p className="text-sm text-blue-500">Loading delivery orders...</p>
-        </div>
-      ) : errorMsg ? (
-        <div className="bg-rose-50 border border-rose-200 rounded-xl p-6 flex items-center gap-3 text-rose-700">
-          <AlertCircle size={18} />
-          <p className="text-sm font-medium">{errorMsg}</p>
-        </div>
-      ) : orders.length === 0 ? (
-        <div className="bg-white border border-blue-200 rounded-xl p-12 text-center shadow-sm">
-          <div className="mx-auto w-12 h-12 rounded-full bg-indigo-500/10 flex items-center justify-center mb-4">
-            <Package size={22} className="text-indigo-500" />
+      {/* Card: toolbar + table */}
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+        <div className="flex flex-col gap-2 border-b border-slate-100 px-4 py-2.5 sm:flex-row sm:items-center">
+          <div className="relative w-full sm:max-w-sm">
+            <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search DO No, customer, PO No or vehicle…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="h-8 w-full rounded-md border border-slate-300 bg-white pl-8 pr-2.5 text-[13px] text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+            />
           </div>
-          <p className="text-blue-600 font-semibold">No delivery orders found.</p>
-          <p className="text-xs text-blue-400 mt-1">
-            Click &quot;New Delivery Order&quot; to create your first order.
-          </p>
+
+          <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
+            {loading && result && <Loader2 size={14} className="animate-spin text-indigo-500" aria-label="Refreshing" />}
+            {hasFilters && (
+              <button type="button" onClick={clearFilters} className={buttonClass("ghost", "sm")}>
+                Clear filters
+              </button>
+            )}
+          </div>
         </div>
-      ) : (
-        <div className="bg-white border border-blue-200 rounded-xl shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left whitespace-nowrap">
-              <thead className="text-xs text-blue-500 bg-blue-50/50 uppercase tracking-wider border-b border-blue-200">
-                <tr>
-                  <th className="px-6 py-4">DO No</th>
-                  <th className="px-6 py-4">Date</th>
-                  <th className="px-6 py-4">Customer</th>
-                  <th className="px-6 py-4">Sales Order</th>
-                  <th className="px-6 py-4">PO No</th>
-                  <th className="px-6 py-4">Transport</th>
-                  <th className="px-6 py-4">Vehicle No</th>
-                  <th className="px-6 py-4">COC Req.</th>
-                  <th className="px-6 py-4">Status</th>
-                  <th className="px-6 py-4 text-right">Action</th>
+
+        {/* Table Area */}
+        {loading && !result ? (
+          <div className="flex h-48 flex-col items-center justify-center gap-2">
+            <Loader2 size={20} className="animate-spin text-indigo-600" />
+            <p className="text-xs text-slate-500">Loading delivery orders…</p>
+          </div>
+        ) : errorMsg ? (
+          <div className="m-4 flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[13px] text-rose-700">
+            <AlertCircle size={14} />
+            <p className="font-medium">{errorMsg}</p>
+          </div>
+        ) : orders.length === 0 ? (
+          hasFilters ? (
+            <EmptyState
+              icon={SearchX}
+              tone="slate"
+              title="No delivery orders match these filters"
+              description="Try a different search term or status."
+              action={
+                <button type="button" onClick={clearFilters} className={buttonClass("secondary", "md")}>
+                  Clear filters
+                </button>
+              }
+            />
+          ) : (
+            <EmptyState
+              icon={Truck}
+              tone="indigo"
+              title="No delivery orders yet"
+              description="Create a delivery order once QC-approved work orders are ready to ship."
+              action={
+                <Link href="/dashboard/sales/delivery-order/form" className={buttonClass("primary", "md")}>
+                  <Plus size={14} /> New Delivery Order
+                </Link>
+              }
+            />
+          )
+        ) : (
+          <div className={`overflow-x-auto transition-opacity ${loading ? "opacity-60" : ""}`}>
+            <table className="w-full whitespace-nowrap text-left text-[13px]">
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50/70 text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                  <th className="px-4 py-2 font-medium">DO No</th>
+                  <th className="hidden px-3 py-2 font-medium sm:table-cell">Date</th>
+                  <th className="px-3 py-2 font-medium">Customer</th>
+                  <th className="hidden px-3 py-2 font-medium md:table-cell">Sales Order</th>
+                  <th className="hidden px-3 py-2 font-medium lg:table-cell">PO No</th>
+                  <th className="hidden px-3 py-2 font-medium xl:table-cell">Transport</th>
+                  <th className="hidden px-3 py-2 font-medium lg:table-cell">Vehicle No</th>
+                  <th className="hidden px-3 py-2 font-medium md:table-cell">COC Req.</th>
+                  <th className="px-3 py-2 font-medium">Status</th>
+                  <th className="px-4 py-2 text-right font-medium">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-blue-100">
-                {orders.map((order) => (
-                  <tr key={order.id} className="hover:bg-blue-50/50 transition-colors group">
-                    <td className="px-6 py-4 font-bold text-blue-900">
-                      <Link href={`/dashboard/sales/delivery-order/form?id=${order.id}`} className="hover:text-indigo-600 transition-colors">
-                        {order.doNo}
-                      </Link>
-                    </td>
-                    <td className="px-6 py-4 text-blue-700">
-                      {new Date(order.date).toLocaleDateString()}
-                    </td>
-                    <td className="px-6 py-4 font-medium text-blue-700">
-                      {order.customer?.customerName || "—"}
-                    </td>
-                    <td className="px-6 py-4 text-blue-700">
-                      {order.salesOrder?.orderNo || "—"}
-                    </td>
-                    <td className="px-6 py-4 text-blue-700">
-                      {order.poNo || order.salesOrder?.customerPoRef || "—"}
-                    </td>
-                    <td className="px-6 py-4 text-blue-700">
-                      {order.modeOfTransport || "—"}
-                    </td>
-                    <td className="px-6 py-4 text-blue-700">
-                      {order.vehicleNo || "—"}
-                    </td>
-                    <td className="px-6 py-4 text-blue-700">
-                      {order.cocRequired ? "Yes" : "No"}
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${
-                        order.status === "Submitted"
-                          ? "bg-emerald-50 text-emerald-700 border-emerald-200/60"
-                          : order.status === "Void"
-                          ? "bg-rose-50 text-rose-700 border-rose-200/60"
-                          : "bg-amber-50 text-amber-700 border-amber-200/60"
-                      }`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${
-                          order.status === "Submitted" ? "bg-emerald-500" : order.status === "Void" ? "bg-rose-500" : "bg-amber-500"
-                        }`} />
-                        {order.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex justify-end gap-2">
-                        <Link
-                          href={`/print/delivery-order/${order.id}`}
-                          target="_blank"
-                          className="inline-flex items-center justify-center p-1.5 rounded-lg border border-indigo-200 hover:bg-indigo-100 text-indigo-600 transition-colors active:scale-95"
-                          title="Print"
-                        >
-                          <Printer size={14} />
+              <tbody className="divide-y divide-slate-100">
+                {orders.map((order) => {
+                  const status = normalizeDoStatus(order.status);
+                  const isDraft = isDoDraft(status);
+                  const href = `/dashboard/sales/delivery-order/form?id=${order.id}`;
+                  const customerName = order.customer?.customerName || "";
+                  const poNo = order.poNo || order.salesOrder?.customerPoRef || "";
+                  return (
+                    <tr key={order.id} className="group transition-colors hover:bg-indigo-50/40">
+                      <td className="px-4 py-2">
+                        <Link href={href} className="font-mono text-[13px] font-semibold text-indigo-600 hover:text-indigo-800 hover:underline">
+                          {order.doNo}
                         </Link>
-                        <Link
-                          href={`/print/delivery-order-label/${order.id}?type=envelope`}
-                          target="_blank"
-                          className="inline-flex items-center justify-center p-1.5 rounded-lg border border-indigo-200 hover:bg-indigo-100 text-indigo-600 transition-colors active:scale-95"
-                          title="Envelope"
-                        >
-                          <Mail size={14} />
-                        </Link>
-                        <Link
-                          href={`/print/delivery-order-label/${order.id}?type=shipping`}
-                          target="_blank"
-                          className="inline-flex items-center justify-center p-1.5 rounded-lg border border-indigo-200 hover:bg-indigo-100 text-indigo-600 transition-colors active:scale-95"
-                          title="Shipping Label"
-                        >
-                          <Package size={14} />
-                        </Link>
-                        <Link
-                          href={`/dashboard/sales/delivery-order/form?id=${order.id}`}
-                          className="inline-flex items-center justify-center p-1.5 rounded-lg border border-blue-200 hover:bg-blue-100 text-blue-600 transition-colors active:scale-95"
-                          title="Edit/View"
-                        >
-                          <Edit2 size={14} />
-                        </Link>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                        {order.isReturnable && (
+                          <span className="ml-1.5 rounded bg-amber-50 px-1 py-px text-[10px] font-medium text-amber-700 ring-1 ring-inset ring-amber-600/15" title="Returnable Delivery Challan">
+                            RDC
+                          </span>
+                        )}
+                      </td>
+                      <td
+                        className="hidden px-3 py-2 text-xs text-slate-500 sm:table-cell"
+                        title={order.date ? new Date(order.date).toLocaleDateString() : undefined}
+                      >
+                        {relativeDate(order.date)}
+                      </td>
+                      <td className="px-3 py-2">
+                        <div className="flex min-w-0 max-w-[160px] items-center gap-2 sm:max-w-[240px]">
+                          <InitialsAvatar name={customerName} />
+                          <span className="truncate font-medium text-slate-800">{customerName || "—"}</span>
+                        </div>
+                      </td>
+                      <td className="hidden px-3 py-2 md:table-cell">
+                        {order.salesOrder?.orderNo ? (
+                          <span className="font-mono text-xs text-slate-600">{order.salesOrder.orderNo}</span>
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
+                      </td>
+                      <td className="hidden px-3 py-2 text-slate-600 lg:table-cell">{poNo || "—"}</td>
+                      <td className="hidden px-3 py-2 text-slate-600 xl:table-cell">{order.modeOfTransport || "—"}</td>
+                      <td className="hidden px-3 py-2 font-mono text-xs text-slate-600 lg:table-cell">{order.vehicleNo || "—"}</td>
+                      <td className="hidden px-3 py-2 md:table-cell">
+                        {order.cocRequired ? (
+                          <Badge tone="violet" icon={ShieldCheck}>Yes</Badge>
+                        ) : (
+                          <span className="text-xs text-slate-400">No</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2">
+                        <StatusBadge status={status} tone={doStatusTone(status)} />
+                      </td>
+                      <td className="px-4 py-2 text-right">
+                        <div className="flex items-center justify-end gap-1 transition-opacity lg:opacity-75 lg:group-hover:opacity-100 lg:focus-within:opacity-100">
+                          <Link href={`/print/delivery-order/${order.id}`} target="_blank" className={iconLinkClass} title="Print" aria-label="Print">
+                            <Printer size={13} />
+                          </Link>
+                          <Link
+                            href={`/print/delivery-order-label/${order.id}?type=envelope`}
+                            target="_blank"
+                            className={iconLinkClass}
+                            title="Envelope"
+                            aria-label="Envelope"
+                          >
+                            <Mail size={13} />
+                          </Link>
+                          <Link
+                            href={`/print/delivery-order-label/${order.id}?type=shipping`}
+                            target="_blank"
+                            className={iconLinkClass}
+                            title="Shipping Label"
+                            aria-label="Shipping Label"
+                          >
+                            <Tag size={13} />
+                          </Link>
+                          <Link href={href} className={buttonClass("secondary", "sm")} title="Edit/View">
+                            {isDraft ? <Pencil size={12} /> : <Eye size={12} />}
+                            {isDraft ? "Edit" : "View"}
+                          </Link>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
-        </div>
+        )}
+      </div>
+
+      {result && !errorMsg && orders.length > 0 && (
+        <p className="flex items-center gap-1 px-1 text-[11px] text-slate-400">
+          <Package size={11} />
+          Showing <span className="font-medium tabular-nums text-slate-600">{orders.length}</span> of{" "}
+          <span className="font-medium tabular-nums text-slate-600">{allOrders.length}</span> delivery orders
+          {result.total > allOrders.length && (
+            <span>
+              {" "}(latest {allOrders.length} of <span className="tabular-nums">{result.total}</span> loaded; refine the search to find older ones)
+            </span>
+          )}
+        </p>
       )}
     </div>
   );

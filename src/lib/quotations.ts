@@ -299,6 +299,7 @@ export async function transitionQuotation(
             exchangeRate: q.exchangeRate,
             subTotal: q.subTotal,
             lumpSumDisc: q.lumpSumDisc,
+            isRoundOff: q.isRoundOff,
             taxTypeId: q.taxTypeId,
             taxRate: q.taxRate,
             taxAmount: q.taxAmount,
