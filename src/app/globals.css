@@ -154,3 +154,22 @@ main table td {
     display: none !important;
   }
 }
+
+/* Sidebar scrollbars */
+.scrollbar-none {
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-dark {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+}
+.scrollbar-dark::-webkit-scrollbar {
+  width: 6px;
+}
+.scrollbar-dark::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 9999px;
+}

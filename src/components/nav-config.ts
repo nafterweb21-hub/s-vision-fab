@@ -28,6 +28,12 @@ import {
   Handshake,
   Hash,
   Hexagon,
+  Home,
+  Database,
+  BarChart3,
+  Wallet,
+  Cog,
+  ClipboardList,
   Key,
   Landmark,
   Layers,
@@ -85,6 +91,21 @@ export interface NavSection {
   items: NavNode[];
   /** Rendered behind a disclosure toggle in the sidebar. */
   collapsible?: boolean;
+}
+
+/**
+ * A top-level module in the sidebar's icon rail. Selecting one shows its
+ * sections in the secondary panel. Every `NAV_SECTIONS` title must belong to
+ * exactly one module.
+ */
+export interface NavModule {
+  key: string;
+  label: string;
+  icon: LucideIcon;
+  /** Titles of the `NAV_SECTIONS` this module shows. */
+  sections: string[];
+  /** Show a Dashboard link above the sections. */
+  includeDashboard?: boolean;
 }
 
 export const NAV_SECTIONS: NavSection[] = [
@@ -161,35 +182,55 @@ export const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
-    title: 'PROFILE',
+    title: 'ORGANISATION',
     items: [
       { href: '/dashboard/profiles/company', label: 'Company Profile', icon: Building2, iconClass: 'text-slate-500', filled: true },
       { href: '/dashboard/profiles/bank', label: 'Bank Profile', icon: Landmark, iconClass: 'text-slate-500' },
       { href: '/dashboard/master-profile/employee', label: 'Employee Profile', icon: User, iconClass: 'text-slate-500', filled: true },
-      { href: '/dashboard/master-profile/file-category', label: 'File Category Profile', icon: File, iconClass: 'text-blue-500' },
       { href: '/dashboard/master-profile/designation', label: 'Designation Profile', icon: Briefcase, iconClass: 'text-blue-500' },
       { href: '/dashboard/profiles/approval-levels', label: 'Approval Level Profile', icon: Key, iconClass: 'text-yellow-500', filled: true },
+      { href: '/dashboard/master-profile/file-category', label: 'File Category Profile', icon: File, iconClass: 'text-blue-500' },
+    ],
+  },
+  {
+    title: 'PARTIES',
+    items: [
       { href: '/dashboard/admin/master-profile/customer', label: 'Customer Profile', icon: Handshake, iconClass: 'text-yellow-600', filled: true },
       { href: '/dashboard/admin/master-profile/supplier', label: 'Supplier Profile', icon: Factory, iconClass: 'text-amber-800', filled: true },
+    ],
+  },
+  {
+    title: 'FINANCE SETUP',
+    items: [
       { href: '/dashboard/profiles/currency', label: 'Currency Profile', icon: Coins, iconClass: 'text-slate-600' },
       { href: '/dashboard/admin/master-profile/tax', label: 'Tax Profile', icon: Receipt, iconClass: 'text-slate-400' },
       { href: '/dashboard/profiles/payment-term', label: 'Payment Terms', icon: Calendar, iconClass: 'text-red-800', filled: true },
+      { href: '/dashboard/profiles/incoterm', label: 'Incoterm Profile', icon: Globe, iconClass: 'text-blue-500' },
+      { href: '/dashboard/master-profile/terms-condition', label: 'Terms & Conditions Profile', icon: Clipboard, iconClass: 'text-slate-600' },
+    ],
+  },
+  {
+    title: 'MATERIALS',
+    items: [
       { href: '/dashboard/profiles/uom', label: 'UOM Profile', icon: Scale, iconClass: 'text-slate-500' },
       { href: '/dashboard/profiles/material-categories', label: 'Material Category Profile', icon: Box, iconClass: 'text-amber-800', filled: true },
       { href: '/dashboard/master-profile/material', label: 'Material Profile', icon: Box, iconClass: 'text-blue-500' },
+      { href: '/dashboard/master-profile/material-type', label: 'Material Type Profile', icon: Package, iconClass: 'text-cyan-600' },
+      { href: '/dashboard/profiles/finished-good', label: 'Finished Good Profile', icon: Box, iconClass: 'text-emerald-600' },
+    ],
+  },
+  {
+    title: 'PRODUCTION SETUP',
+    items: [
       { href: '/dashboard/master-profile/process-profile', label: 'Process Profile', icon: RefreshCw, iconClass: 'text-cyan-500' },
       { href: '/dashboard/master-profile/main-process', label: 'Main Process Profile', icon: ListTree, iconClass: 'text-indigo-500' },
       { href: '/dashboard/master-profile/process-role-mapping', label: 'Process Role Mapping', icon: Users, iconClass: 'text-indigo-500' },
-      { href: '/dashboard/profiles/incoterm', label: 'Incoterm Profile', icon: Globe, iconClass: 'text-blue-500' },
-      { href: '/dashboard/master-profile/material-type', label: 'Material Type Profile', icon: Package, iconClass: 'text-cyan-600' },
-      { href: '/dashboard/profiles/finished-good', label: 'Finished Good Profile', icon: Box, iconClass: 'text-emerald-600' },
       { href: '/dashboard/master-profile/welding-type', label: 'Welding Type Profile', icon: Flame, iconClass: 'text-orange-500' },
       { href: '/dashboard/master-profile/joint', label: 'Joint Profile', icon: Link2, iconClass: 'text-purple-500' },
       { href: '/dashboard/profiles/machine', label: 'Machine Profile', icon: Cpu, iconClass: 'text-slate-600' },
       { href: '/dashboard/profiles/elcometer', label: 'Elcometer Profile', icon: Gauge, iconClass: 'text-red-500' },
       { href: '/dashboard/master-profile/painting-method', label: 'Painting Method Profile', icon: Brush, iconClass: 'text-pink-500' },
       { href: '/dashboard/master-profile/failure-mode', label: 'Failure Mode Profile', icon: AlertTriangle, iconClass: 'text-rose-600' },
-      { href: '/dashboard/master-profile/terms-condition', label: 'Terms & Conditions Profile', icon: Clipboard, iconClass: 'text-slate-600' },
     ],
   },
   {
@@ -205,4 +246,19 @@ export const NAV_SECTIONS: NavSection[] = [
       { href: '/dashboard/inventory/report', label: 'Inventory Report', icon: Box, iconClass: 'text-blue-600' },
     ],
   },
+];
+
+export const NAV_MODULES: NavModule[] = [
+  { key: 'home', label: 'Home', icon: Home, sections: ['SHOP FLOOR'], includeDashboard: true },
+  { key: 'operations', label: 'Operations', icon: ClipboardList, sections: ['OPERATION'] },
+  { key: 'purchase', label: 'Purchase', icon: ShoppingCart, sections: ['PROCUREMENT', 'SUBCON'] },
+  { key: 'finance', label: 'Finance', icon: Wallet, sections: ['FINANCE'] },
+  {
+    key: 'masters',
+    label: 'Masters',
+    icon: Database,
+    sections: ['ORGANISATION', 'PARTIES', 'FINANCE SETUP', 'MATERIALS', 'PRODUCTION SETUP'],
+  },
+  { key: 'reports', label: 'Reports', icon: BarChart3, sections: ['REPORT'] },
+  { key: 'admin', label: 'Admin', icon: Cog, sections: ['ADMINISTRATOR'] },
 ];

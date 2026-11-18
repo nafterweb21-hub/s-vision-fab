@@ -89,11 +89,14 @@ export function NavLink({
   active,
   onNavigate,
   className,
+  monoIcons,
 }: {
   item: NavItem;
   active: boolean;
   onNavigate?: () => void;
   className: string;
+  /** Ignore the item's colour class and inherit the text colour. */
+  monoIcons?: boolean;
 }) {
   const Icon = item.icon;
   return (
@@ -103,11 +106,31 @@ export function NavLink({
       aria-current={active ? "page" : undefined}
       className={className}
     >
-      <Icon size={16} className={item.iconClass} fill={item.filled ? "currentColor" : undefined} />
-      <span className="flex-1">{item.label}</span>
+      <Icon
+        size={16}
+        className={`shrink-0 ${monoIcons ? "" : item.iconClass}`}
+        fill={!monoIcons && item.filled ? "currentColor" : undefined}
+      />
+      <span className="flex-1 truncate">{item.label}</span>
     </Link>
   );
 }
+
+/** Styling for branch rows; the sidebar passes a dark variant. */
+export interface TreeTheme {
+  group: string;
+  toggle: string;
+  children: string;
+  /** Render every icon in the inherited text colour. */
+  monoIcons?: boolean;
+}
+
+const LIGHT_THEME: TreeTheme = {
+  group:
+    "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-indigo-600 transition-colors hover:bg-slate-50 hover:text-indigo-700",
+  toggle: "rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100",
+  children: "ml-4 mt-1 space-y-1 border-l border-slate-200 pl-2",
+};
 
 interface TreeProps {
   nodes: NavNode[];
@@ -116,10 +139,8 @@ interface TreeProps {
   linkClass: (href: string) => string;
   onNavigate?: () => void;
   depth?: number;
+  theme?: TreeTheme;
 }
-
-const GROUP_CLASS =
-  "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-indigo-600 transition-colors hover:bg-slate-50 hover:text-indigo-700";
 
 function Branch({
   node,
@@ -127,10 +148,13 @@ function Branch({
   linkClass,
   onNavigate,
   depth = 0,
+  theme = LIGHT_THEME,
 }: Omit<TreeProps, "nodes"> & { node: NavNode }) {
   const contains = nodeContainsPath(node, pathname);
   const [open, setOpen] = useState(contains);
   const Icon = node.icon;
+  const iconClass = theme.monoIcons ? "shrink-0" : node.iconClass;
+  const fill = !theme.monoIcons && node.filled ? "currentColor" : undefined;
 
   // Navigating into a branch from elsewhere should reveal where you landed.
   useEffect(() => {
@@ -156,35 +180,36 @@ function Branch({
             aria-current={isActivePath(pathname, node.href) ? "page" : undefined}
             className={`${linkClass(node.href)} flex-1`}
           >
-            <Icon size={16} className={node.iconClass} fill={node.filled ? "currentColor" : undefined} />
-            <span className="flex-1">{node.label}</span>
+            <Icon size={16} className={iconClass} fill={fill} />
+            <span className="flex-1 truncate">{node.label}</span>
           </Link>
           <button
             onClick={() => setOpen(!open)}
             aria-expanded={open}
             aria-label={`${open ? "Collapse" : "Expand"} ${node.label}`}
-            className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100"
+            className={theme.toggle}
           >
             {chevron}
           </button>
         </div>
       ) : (
         // A pure grouping label, e.g. Item Master.
-        <button onClick={() => setOpen(!open)} aria-expanded={open} className={GROUP_CLASS}>
-          <Icon size={16} className={node.iconClass} fill={node.filled ? "currentColor" : undefined} />
+        <button onClick={() => setOpen(!open)} aria-expanded={open} className={theme.group}>
+          <Icon size={16} className={iconClass} fill={fill} />
           <span className="flex-1 text-left">{node.label}</span>
           {chevron}
         </button>
       )}
 
       {open && node.children && (
-        <div className="ml-4 mt-1 space-y-1 border-l border-slate-200 pl-2">
+        <div className={theme.children}>
           <NavTree
             nodes={node.children}
             pathname={pathname}
             linkClass={linkClass}
             onNavigate={onNavigate}
             depth={depth + 1}
+            theme={theme}
           />
         </div>
       )}
@@ -193,7 +218,7 @@ function Branch({
 }
 
 /** Renders a navigation subtree. Shared by the sidebar and the header drawer. */
-export function NavTree({ nodes, pathname, linkClass, onNavigate, depth = 0 }: TreeProps) {
+export function NavTree({ nodes, pathname, linkClass, onNavigate, depth = 0, theme }: TreeProps) {
   return (
     <>
       {nodes.map((node) =>
@@ -205,6 +230,7 @@ export function NavTree({ nodes, pathname, linkClass, onNavigate, depth = 0 }: T
             linkClass={linkClass}
             onNavigate={onNavigate}
             depth={depth}
+            theme={theme}
           />
         ) : (
           <NavLink
@@ -213,6 +239,7 @@ export function NavTree({ nodes, pathname, linkClass, onNavigate, depth = 0 }: T
             active={isActivePath(pathname, node.href!)}
             onNavigate={onNavigate}
             className={linkClass(node.href!)}
+            monoIcons={theme?.monoIcons}
           />
         ),
       )}
