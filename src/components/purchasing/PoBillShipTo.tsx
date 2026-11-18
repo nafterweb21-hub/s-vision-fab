@@ -1,6 +1,8 @@
 "use client";
 
+import { MapPin } from "lucide-react";
 import { SearchableSelect } from "@/components/SearchableSelect";
+import { Badge, Card, Field, inputClass, selectTriggerClass } from "@/components/form-ui";
 
 // Optional "Details of Consignee | Shipped to" for purchase orders. Left blank, the
 // printout ships to the bill-to (the PO's company). Picking a customer
@@ -105,9 +107,6 @@ export function applyPoCustomer(value: PoShipTo, customers: PoCustomer[] | undef
   };
 }
 
-const inputCls =
-  "w-full px-3 py-1.5 text-sm bg-blue-50 border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-60";
-
 export default function PoBillShipTo({
   customers,
   value,
@@ -134,97 +133,86 @@ export default function PoBillShipTo({
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border-2 border-blue-300 p-4">
-      <div className="flex items-center justify-between border-b border-blue-200 pb-2 mb-3">
-        <h3 className="text-sm font-bold text-blue-950 flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-blue-600 inline-block"></span>
-          Details of Consignee | Shipped to :
-        </h3>
-        <span className="text-[11px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-bold">Optional</span>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-3">
-        <div className="sm:col-span-1 lg:col-span-2">
-          <label className="block text-xs font-semibold text-blue-900 mb-1">
-            Name (Consignee)
-          </label>
+    <Card
+      icon={MapPin}
+      tone="emerald"
+      title="Details of Consignee | Shipped to"
+      description="Picking a consignee fills its default address, GSTIN, state and phone"
+      actions={<Badge tone="slate">Optional</Badge>}
+      className="h-full"
+    >
+      <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
+        <Field label="Name (Consignee)" className="sm:col-span-2">
           <SearchableSelect
             value={customer?.id || ""}
             onChange={(e) => onChange(applyPoCustomer(value, customers, e.target.value))}
             disabled={readOnly}
-            className={inputCls}
+            className={selectTriggerClass}
           >
             <option value="">{!customer && value.consigneeName ? value.consigneeName : "Select Consignee..."}</option>
             {customers?.map((c) => (
               <option key={c.id} value={c.id}>{c.customerName}</option>
             ))}
           </SearchableSelect>
-        </div>
+        </Field>
 
-        <div className="sm:col-span-1 lg:col-span-2">
-          <label className="block text-xs font-semibold text-blue-900 mb-1">
-            Address (Ship To)
-          </label>
+        <Field label="Address (Ship To)" className="sm:col-span-2">
           <SearchableSelect
             value={shipToAddressId}
             onChange={(e) => handleAddressChange(e.target.value)}
             disabled={readOnly || !customer}
-            className={inputCls}
+            className={selectTriggerClass}
           >
             <option value="">{!shipToAddressId && value.consigneeAddress ? value.consigneeAddress : "Select Ship To Address..."}</option>
             {addresses.map((a) => (
               <option key={a.id} value={a.id}>{a.address}</option>
             ))}
           </SearchableSelect>
-        </div>
+        </Field>
 
-        <div>
-          <label className="block text-xs font-semibold text-blue-900 mb-1">Country</label>
+        <Field label="Country">
           <input
             type="text"
             value={value.consigneeCountry}
             onChange={(e) => set({ consigneeCountry: e.target.value })}
             disabled={readOnly}
-            className={inputCls}
+            className={inputClass}
           />
-        </div>
+        </Field>
 
-        <div>
-          <label className="block text-xs font-semibold text-blue-900 mb-1">Phone</label>
+        <Field label="Phone">
           <input
             type="text"
             placeholder="e.g. 9948300284"
             value={value.consigneePhone}
             onChange={(e) => set({ consigneePhone: e.target.value })}
             disabled={readOnly}
-            className={inputCls}
+            className={`${inputClass} tabular-nums`}
           />
-        </div>
+        </Field>
 
-        <div>
-          <label className="block text-xs font-semibold text-blue-900 mb-1">GSTIN</label>
+        <Field label="GSTIN">
           <input
             type="text"
             placeholder="e.g. GSTA728323"
             value={value.consigneeGstin}
             onChange={(e) => set({ consigneeGstin: e.target.value.toUpperCase() })}
             disabled={readOnly}
-            className={`${inputCls} uppercase`}
+            className={`${inputClass} font-mono uppercase`}
           />
-        </div>
+        </Field>
 
-        <div>
-          <label className="block text-xs font-semibold text-blue-900 mb-1">State</label>
+        <Field label="State">
           <input
             type="text"
             placeholder="e.g. Tamil Nadu ( 33 )"
             value={value.consigneeState}
             onChange={(e) => set({ consigneeState: e.target.value })}
             disabled={readOnly}
-            className={inputCls}
+            className={inputClass}
           />
-        </div>
+        </Field>
       </div>
-    </div>
+    </Card>
   );
 }

@@ -9,19 +9,41 @@ import { useRouter, useSearchParams } from "next/navigation";
 import {
   Plus,
   Search,
+  SearchX,
   Loader2,
   Edit2,
+  Eye,
   AlertCircle,
   FileText,
   Copy,
-  CheckCircle2,
   Send,
   Ban,
   GitBranch,
   History,
   X,
   Printer,
+  PackageCheck,
+  MousePointerClick,
+  ShieldCheck,
 } from "lucide-react";
+import {
+  Badge,
+  EmptyState,
+  InitialsAvatar,
+  StatusBadge,
+  TONES,
+  buttonClass,
+  type Tone,
+} from "@/components/form-ui";
+import {
+  PO_PENDING_STATUSES,
+  isPoEditable,
+  poApprovalStage,
+  poReceiveLabel,
+  poReceiveTone,
+  poStatusTone,
+  poVoidBlockReason,
+} from "./po-status";
 
 const REVISABLE_STATUSES = [
   "Pending For Approval",
@@ -41,6 +63,9 @@ const STATUS_TABS = [
   "Old Version",
 ] as const;
 
+const RECEIVE_STATUSES = ["NA", "Not Received", "Partially Received", "Fully Received"] as const;
+type ReceiveFilter = "All" | (typeof RECEIVE_STATUSES)[number];
+
 type PurchaseOrder = {
   id: string;
   poNo: string;
@@ -51,11 +76,41 @@ type PurchaseOrder = {
   receiveStatus: string;
   remark: string | null;
   workOrderNo: string | null;
+  amountAfterTax?: string | number | null;
+  approvalTier?: number | null;
+  firstApproverName?: string | null;
+  secondApproverName?: string | null;
   company: { companyName: string };
   supplier: { supplierName: string };
   purchaser: { name: string };
   workOrder?: { jobDescription: string | null } | null;
+  purchaseRequisition?: { prNo: string } | null;
 };
+
+type PendingAction = "submit" | "void" | "revise" | "copy";
+
+function dayDiff(d: Date): number {
+  const today = new Date();
+  const a = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
+  const b = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
+  return Math.round((a - b) / 86400000);
+}
+
+function relativeDate(value: string | Date | null | undefined): string {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  const diff = dayDiff(d);
+  if (diff === 0) return "Today";
+  if (diff === 1) return "Yesterday";
+  if (diff === -1) return "Tomorrow";
+  if (diff > 1 && diff < 7) return `${diff}d ago`;
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  return d.toLocaleDateString(undefined, { day: "2-digit", month: "short", ...(sameYear ? {} : { year: "numeric" }) });
+}
+
+const fmtAmount = (v: string | number | null | undefined) =>
+  Number(v || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default function PurchaseOrderListPage() {
   const router = useRouter();
@@ -63,7 +118,9 @@ export default function PurchaseOrderListPage() {
   const [rows, setRows] = useState<PurchaseOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [tab, setTab] = useState<(typeof STATUS_TABS)[number]>("All");
+  const [receiveFilter, setReceiveFilter] = useState<ReceiveFilter>("All");
   const [errorMsg, setErrorMsg] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -71,6 +128,11 @@ export default function PurchaseOrderListPage() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyRows, setHistoryRows] = useState<PurchaseOrder[]>([]);
   const [historyTitle, setHistoryTitle] = useState("");
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
+  // Status counts from the last "All" load for the current search, so the tiles keep their numbers
+  // while a single-status tab is open (the API filters by status server-side).
+  const [allCounts, setAllCounts] = useState<{ key: string; counts: Record<string, number> } | null>(null);
+  const actionLoading = pendingAction !== null;
 
   const toastParam = searchParams.get("toast");
   useEffect(() => {
@@ -82,12 +144,18 @@ export default function PurchaseOrderListPage() {
     return () => clearTimeout(t);
   }, [toastParam, router]);
 
+  // Debounce the server-side search.
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 250);
+    return () => clearTimeout(t);
+  }, [search]);
+
   const fetchRows = async () => {
     setLoading(true);
     setErrorMsg("");
     try {
       const res = await fetch(
-        `/api/purchasing/purchase-order?search=${encodeURIComponent(search)}&status=${tab}`,
+        `/api/purchasing/purchase-order?search=${encodeURIComponent(debouncedSearch)}&status=${tab}`,
       );
       if (!res.ok) throw new Error("Failed to fetch purchase orders");
       setRows(await res.json());
@@ -100,18 +168,50 @@ export default function PurchaseOrderListPage() {
 
   useEffect(() => {
     fetchRows();
-  }, [search, tab]);
+  }, [debouncedSearch, tab]);
 
   const counts = useMemo(() => {
     const c: Record<string, number> = { All: rows.length };
-    for (const r of rows) c[r.status] = (c[r.status] ?? 0) + 1;
+    for (const r of rows) {
+      // The "Pending For Approval" tab (and API filter) covers all three pending statuses.
+      const key = (PO_PENDING_STATUSES as readonly string[]).includes(r.status) ? "Pending For Approval" : r.status;
+      c[key] = (c[key] ?? 0) + 1;
+    }
     return c;
   }, [rows]);
+
+  // Remember the "All" counts (derived state, updated during render rather than in an effect).
+  if (tab === "All" && !loading && !errorMsg && allCounts?.counts !== counts) {
+    setAllCounts({ key: debouncedSearch, counts });
+  }
 
   const selected = useMemo(
     () => rows.find((r) => r.id === selectedId) || null,
     [rows, selectedId],
   );
+
+  // Receive-status filter is a view filter over the loaded rows.
+  const receiveCounts = useMemo(() => {
+    const c: Record<string, number> = {};
+    for (const s of RECEIVE_STATUSES) c[s] = 0;
+    for (const r of rows) c[r.receiveStatus] = (c[r.receiveStatus] ?? 0) + 1;
+    return c;
+  }, [rows]);
+
+  const visibleRows = useMemo(
+    () => (receiveFilter === "All" ? rows : rows.filter((r) => r.receiveStatus === receiveFilter)),
+    [rows, receiveFilter],
+  );
+
+  const hasFilters = search.trim() !== "" || tab !== "All" || receiveFilter !== "All";
+  const clearFilters = () => {
+    setSearch("");
+    setTab("All");
+    setReceiveFilter("All");
+  };
+
+  const patchRow = (id: string, patch: Partial<PurchaseOrder>) =>
+    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
 
   async function callAction(id: string, action: "submit" | "void" | "revise") {
     const res = await fetch(`/api/purchasing/purchase-order/${id}/transition`, {
@@ -129,17 +229,45 @@ export default function PurchaseOrderListPage() {
 
   async function onSubmit() {
     if (!selected) return;
-    if (selected.status !== "Draft") return hotToast.error("Only Draft can be Submitted");
-    await callAction(selected.id, "submit");
-    fetchRows();
+    if (!isPoEditable(selected.status)) return hotToast.error("Only Draft or Rejected can be Submitted");
+    const target = selected;
+    setPendingAction("submit");
+    try {
+      const updated = await callAction(target.id, "submit");
+      if (updated) {
+        patchRow(target.id, {
+          status: updated.status ?? "Pending For Approval",
+          approvalTier: updated.status === "Pending First Tier Approval" ? 2 : 1,
+          firstApproverName: null,
+          secondApproverName: null,
+        });
+        hotToast.success(`${target.poNo}-R${target.revision} submitted for approval`);
+      }
+    } catch (e) {
+      hotToast.error(e instanceof Error ? e.message : "Failed: submit");
+    } finally {
+      setPendingAction(null);
+    }
   }
 
   async function onVoid() {
     if (!selected) return;
-    if (selected.status === "Void") return hotToast.error("Already voided");
+    const blocked = poVoidBlockReason(selected.status);
+    if (blocked) return hotToast.error(blocked);
     if (!await customConfirm(`Void purchase order ${selected.poNo}-R${selected.revision}?`)) return;
-    await callAction(selected.id, "void");
-    fetchRows();
+    const target = selected;
+    setPendingAction("void");
+    try {
+      const updated = await callAction(target.id, "void");
+      if (updated) {
+        patchRow(target.id, { status: updated.status ?? "Void" });
+        hotToast.success(`${target.poNo}-R${target.revision} is now Void`);
+      }
+    } catch (e) {
+      hotToast.error(e instanceof Error ? e.message : "Failed: void");
+    } finally {
+      setPendingAction(null);
+    }
   }
 
   async function onRevise() {
@@ -151,13 +279,22 @@ export default function PurchaseOrderListPage() {
       ? `${selected.poNo} is pending approval. Revising will cancel the current approval and create a new Draft revision that must be re-submitted. Continue?`
       : `Create a new revision of ${selected.poNo}?`;
     if (!await customConfirm(msg)) return;
-    const res = await callAction(selected.id, "revise");
-    if (res?.id) router.push(`/dashboard/purchasing/purchase-order/${res.id}`);
+    setPendingAction("revise");
+    try {
+      const res = await callAction(selected.id, "revise");
+      if (res?.id) {
+        router.push(`/dashboard/purchasing/purchase-order/${res.id}`);
+        return;
+      }
+    } catch (e) {
+      hotToast.error(e instanceof Error ? e.message : "Failed: revise");
+    }
+    setPendingAction(null);
   }
 
   function onEdit() {
     if (!selected) return;
-    if (selected.status !== "Draft") return hotToast.error("Only Draft can be edited");
+    if (!isPoEditable(selected.status)) return hotToast.error("Only Draft or Rejected can be edited");
     router.push(`/dashboard/purchasing/purchase-order/${selected.id}`);
   }
 
@@ -182,28 +319,62 @@ export default function PurchaseOrderListPage() {
 
   async function onCopy() {
     if (!selected) return;
+    setPendingAction("copy");
     try {
-      const full = await fetch(`/api/purchasing/purchase-order/${selected.id}`).then((r) => r.json());
+      const fullRes = await fetch(`/api/purchasing/purchase-order/${selected.id}`);
+      const full = await fullRes.json();
+      if (!fullRes.ok || full.error) throw new Error(full.error || "Failed to load purchase order");
+      const today = new Date().toISOString().slice(0, 10);
+      // Same body the PO form posts. The copy is an independent Draft: it is not linked to the
+      // source PR (that would count its quantities against the PR twice) and takes the
+      // currency's latest exchange rate.
       const payload = {
         ...copyPoShipTo(full),
         companyId: full.companyId,
-        date: new Date().toISOString().slice(0, 10),
+        supplierId: full.supplierId,
+        date: today,
         workOrderNo: full.workOrderNo,
-        requestedById: full.requestedById,
+        purchaseRequisitionId: null,
+        purchaserId: full.purchaserId,
+        contactPersonId: full.contactPersonId || null,
+        email: full.email,
+        telNo: full.telNo,
+        faxNo: full.faxNo,
+        mobileNo: full.mobileNo,
+        currencyId: full.currencyId,
+        exchangeRate: Number(full.currency?.exchangeRate ?? full.exchangeRate ?? 1),
+        taxTypeId: full.taxTypeId || null,
+        taxRate: Number(full.taxRate) || 0,
+        amountBeforeTax: Number(full.amountBeforeTax) || 0,
+        taxAmount: Number(full.taxAmount) || 0,
+        amountAfterTax: Number(full.amountAfterTax) || 0,
+        roundOff: Number(full.roundOff) || 0,
+        supplierGst: full.supplierGst || null,
+        millCertificate: !!full.millCertificate,
+        certOfConformance: !!full.certOfConformance,
         remark: full.remark ? `${full.remark} (Copy)` : "Copy",
-        items: full.items.map((it: any) => ({
+        items: (full.items || []).map((it: any) => ({
           fromMaterialProfile: it.fromMaterialProfile,
-          material: it.material,
+          materialProfileId: it.fromMaterialProfile ? it.materialProfileId : null,
+          material: it.material || null,
           description: it.description,
-          shape: it.shape,
-          size: it.size,
-          uomId: it.uomId,
-          quantity: it.quantity,
-          cancelQuantity: 0,
-          deliveryDate: new Date().toISOString().slice(0, 10),
-          remark: it.remark,
-          materialProfileId: it.materialProfileId,
-          sortOrder: it.sortOrder,
+          supplierMaterialNo: it.supplierMaterialNo || null,
+          shape: it.shape || null,
+          size: it.size || null,
+          poUomId: it.poUomId,
+          quantity: Number(it.quantity),
+          unitPrice: Number(it.unitPrice),
+          amount: Number(it.amount),
+          conversion: Number(it.conversion),
+          internalUomId: it.internalUomId || null,
+          internalQuantity: Number(it.internalQuantity),
+          deliveryDate: today,
+          remark: it.remark || null,
+          hsnCode: it.hsnCode || null,
+          hsnDescription: it.hsnDescription || null,
+          taxTypeId: it.taxTypeId || null,
+          taxRate: Number(it.taxRate) || 0,
+          taxAmount: Number(it.taxAmount) || 0,
         })),
       };
       const res = await fetch(`/api/purchasing/purchase-order`, {
@@ -211,237 +382,442 @@ export default function PurchaseOrderListPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      if (!res.ok) return hotToast.error((await res.json()).error || "Copy failed");
+      if (!res.ok) {
+        setPendingAction(null);
+        return hotToast.error((await res.json().catch(() => ({}))).error || "Copy failed");
+      }
       const created = await res.json();
+      hotToast.success(`Copied to new Draft ${created.poNo ?? ""}`.trim());
       router.push(`/dashboard/purchasing/purchase-order/${created.id}`);
     } catch (e: any) {
       hotToast.error(e.message || "Failed to copy purchase order");
+      setPendingAction(null);
     }
   }
 
+  function onPrint() {
+    if (selected) window.open(`/print/purchase-order/${selected.id}`, "_blank");
+  }
+
+  // Applicability of each toolbar action.
+  const voidBlockReason = selected ? poVoidBlockReason(selected.status) : null;
+  const can = {
+    edit: !!selected && isPoEditable(selected.status),
+    void: !!selected && !voidBlockReason,
+    submit: !!selected && isPoEditable(selected.status),
+    revise: !!selected && REVISABLE_STATUSES.includes(selected.status),
+    history: !!selected,
+    copy: !!selected,
+    print: !!selected,
+  };
+
+  const firstLoad = loading && rows.length === 0;
+  const cachedCounts = allCounts && allCounts.key === debouncedSearch ? allCounts.counts : null;
+  const tileCount = (key: (typeof STATUS_TABS)[number]): number | null => {
+    if (firstLoad) return null;
+    if (key === tab && !loading && !errorMsg) return counts.All;
+    return cachedCounts ? cachedCounts[key] ?? 0 : null;
+  };
+  const statusTiles: { key: (typeof STATUS_TABS)[number]; label: string; tone: Tone }[] = STATUS_TABS.map((t) => ({
+    key: t,
+    label: t === "All" ? "All orders" : t === "Pending For Approval" ? "Pending approval" : t,
+    tone: t === "All" ? "indigo" : poStatusTone(t),
+  }));
+  const receiveTiles: { key: ReceiveFilter; label: string; tone: Tone }[] = [
+    { key: "All", label: "Any receive status", tone: "indigo" },
+    ...RECEIVE_STATUSES.map((s) => ({ key: s as ReceiveFilter, label: s === "NA" ? "Not issued (N/A)" : s, tone: poReceiveTone(s) })),
+  ];
+
   return (
-    <div className="p-6 lg:p-8 space-y-6 relative">
+    <div className="relative space-y-4">
       {toast && (
-        <div className="fixed top-6 right-6 z-50 flex items-center gap-3 rounded-xl bg-blue-900 px-4 py-3.5 text-xs font-bold text-white shadow-xl border border-blue-800">
-          <span className="flex h-2 w-2 rounded-full bg-emerald-500"></span>
+        <div className="fixed right-4 top-4 z-50 flex items-center gap-2.5 rounded-lg bg-slate-900 px-3.5 py-2.5 text-xs font-medium text-white shadow-xl ring-1 ring-white/10 sm:right-6 sm:top-6">
+          <span className="flex h-2 w-2 rounded-full bg-emerald-400"></span>
           {toast}
         </div>
       )}
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 pb-6 border-b border-blue-200">
-        <div>
-          <div className="flex items-center gap-2 text-xs text-blue-400 font-semibold tracking-wider uppercase mb-1">
-            <Link href="/dashboard" className="hover:text-blue-600">Dashboard</Link>
-            <span>/</span>
-            <span className="text-blue-500">Purchasing</span>
-            <span>/</span>
-            <span className="text-blue-500">Purchase Orders</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-blue-500/10 text-blue-600">
-              <FileText size={20} />
-            </div>
-            <div>
-              <h2 className="text-2xl font-bold tracking-tight text-blue-900">Purchase Order</h2>
-              <p className="text-sm text-blue-500 mt-0.5">Create and manage material or non-material purchase orders.</p>
-            </div>
+
+      {/* Page header */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white shadow-sm shadow-indigo-600/20 sm:inline-flex">
+            <FileText size={18} />
+          </span>
+          <div className="min-w-0">
+            <nav className="mb-0.5 flex items-center gap-1 text-[11px] text-slate-400">
+              <Link href="/dashboard" className="hover:text-slate-600">Dashboard</Link>
+              <span>/</span>
+              <span>Purchasing</span>
+              <span>/</span>
+              <span className="text-slate-500">Purchase Orders</span>
+            </nav>
+            <h1 className="text-lg font-semibold leading-tight text-slate-900">Purchase Order</h1>
+            <p className="text-xs text-slate-500">Create and manage material or non-material purchase orders.</p>
           </div>
         </div>
 
-        <Link
-          href="/dashboard/purchasing/purchase-order/new"
-          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-sky-600 hover:from-blue-500 hover:to-sky-500 rounded-lg shadow-md active:scale-95 transition-all duration-200 shrink-0"
-        >
-          <Plus size={16} /> New order
+        <Link href="/dashboard/purchasing/purchase-order/new" className={buttonClass("primary", "md")}>
+          <Plus size={14} /> New order
         </Link>
       </div>
 
-      {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-2 bg-white border border-blue-200 p-3 rounded-xl shadow-sm">
-        <ToolbarBtn icon={<Edit2 size={14} />} label="Edit" onClick={onEdit} disabled={!selected || selected.status !== "Draft"} />
-        <ToolbarBtn icon={<Ban size={14} />} label="Void" onClick={onVoid} disabled={!selected || selected.status === "Void"} />
-        <ToolbarBtn icon={<Send size={14} />} label="Submit" onClick={onSubmit} disabled={!selected || selected.status !== "Draft"} primary />
-        <ToolbarBtn icon={<GitBranch size={14} />} label="Revise" onClick={onRevise} disabled={!selected || !REVISABLE_STATUSES.includes(selected.status)} />
-        <ToolbarBtn icon={<History size={14} />} label="History" onClick={onHistory} disabled={!selected} />
-        <ToolbarBtn icon={<Copy size={14} />} label="Copy" onClick={onCopy} disabled={!selected} />
-        <ToolbarBtn icon={<Printer size={14} />} label="Print" onClick={() => { if (selected) window.open(`/print/purchase-order/${selected.id}`, "_blank"); }} disabled={!selected} />
+      {/* Status tiles (also the status filter) */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-7" role="tablist" aria-label="Filter by status">
+        {statusTiles.map(({ key, label, tone }) => {
+          const active = tab === key;
+          const count = tileCount(key);
+          return (
+            <button
+              key={key}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => setTab(key)}
+              className={`relative flex min-w-0 flex-col items-start overflow-hidden rounded-lg border px-3 py-2 pl-3.5 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40 ${
+                active
+                  ? "border-indigo-300 bg-indigo-50/60 shadow-sm ring-1 ring-indigo-500/15"
+                  : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
+              }`}
+            >
+              <span className={`absolute inset-y-0 left-0 w-[3px] ${TONES[tone].bar}`} />
+              <span className={`flex w-full items-center gap-1.5 truncate text-[11px] font-medium ${active ? "text-indigo-700" : "text-slate-500"}`}>
+                <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${TONES[tone].dot}`} />
+                <span className="truncate">{label}</span>
+              </span>
+              <span className={`text-base font-semibold leading-tight tabular-nums ${active ? "text-indigo-900" : "text-slate-900"} ${count === 0 ? "opacity-40" : ""}`}>
+                {count === null ? "–" : count}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
-      {/* Tabs */}
-      <div className="flex flex-wrap gap-2">
-        {STATUS_TABS.map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${
-              tab === t
-                ? "bg-blue-900 text-white border-blue-900"
-                : "bg-white text-blue-700 border-blue-200 hover:bg-blue-50"
-            }`}
-          >
-            {t} {counts[t] != null ? `(${counts[t]})` : ""}
-          </button>
-        ))}
+      {/* Receive-status tiles (view filter over the loaded rows) */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-5" role="tablist" aria-label="Filter by receive status">
+        {receiveTiles.map(({ key, label, tone }) => {
+          const active = receiveFilter === key;
+          const count = firstLoad ? null : key === "All" ? rows.length : receiveCounts[key] ?? 0;
+          return (
+            <button
+              key={key}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => setReceiveFilter(key)}
+              className={`flex min-w-0 items-center justify-between gap-2 rounded-lg border px-3 py-1.5 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40 ${
+                active
+                  ? "border-indigo-300 bg-indigo-50/60 shadow-sm ring-1 ring-indigo-500/15"
+                  : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
+              }`}
+            >
+              <span className={`flex min-w-0 items-center gap-1.5 text-[11px] font-medium ${active ? "text-indigo-700" : "text-slate-500"}`}>
+                <PackageCheck size={12} className={`shrink-0 ${TONES[tone].text}`} />
+                <span className="truncate">{label}</span>
+              </span>
+              <span className={`text-[13px] font-semibold tabular-nums ${active ? "text-indigo-900" : "text-slate-900"} ${count === 0 ? "opacity-40" : ""}`}>
+                {count === null ? "–" : count}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
-      {/* Search */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-4 bg-white border border-blue-200 p-4 rounded-xl shadow-sm">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-blue-400" />
-          <input
-            type="text"
-            placeholder="Search by PO No, Supplier, Purchaser, Work Order or Remark..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 text-sm bg-blue-50 border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
-          />
-        </div>
-      </div>
-
-      {/* Table */}
-      {loading ? (
-        <div className="h-64 flex flex-col items-center justify-center gap-2">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-          <p className="text-sm text-blue-500">Loading orders...</p>
-        </div>
-      ) : errorMsg ? (
-        <div className="bg-rose-50 border border-rose-200 rounded-xl p-6 flex items-center gap-3 text-rose-700">
-          <AlertCircle size={18} />
-          <p className="text-sm font-medium">{errorMsg}</p>
-        </div>
-      ) : rows.length === 0 ? (
-        <div className="bg-white border border-blue-200 rounded-xl p-6 sm:p-12 text-center shadow-sm">
-          <div className="mx-auto w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-blue-500/10 flex items-center justify-center mb-4">
-            <FileText size={22} className="text-blue-600" />
+      {/* Card: search + selection toolbar + table */}
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+        <div className="flex flex-col gap-2 border-b border-slate-100 px-4 py-2.5 sm:flex-row sm:items-center">
+          <div className="relative w-full sm:max-w-sm">
+            <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search by PO No, Supplier, Purchaser, Work Order or Remark..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="h-8 w-full rounded-md border border-slate-300 bg-white pl-8 pr-2.5 text-[13px] text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+            />
           </div>
-          <p className="text-blue-600 font-semibold">No purchase orders found.</p>
-          <p className="text-xs text-blue-400 mt-1">Click &quot;New Purchase Order&quot; to create your first.</p>
+          <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
+            {loading && rows.length > 0 && <Loader2 size={14} className="animate-spin text-indigo-500" aria-label="Refreshing" />}
+            {hasFilters && (
+              <button type="button" onClick={clearFilters} className={buttonClass("ghost", "sm")}>
+                Clear filters
+              </button>
+            )}
+          </div>
         </div>
-      ) : (
-        <div className="bg-white border border-blue-200 rounded-xl shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-[10px] sm:text-sm text-left whitespace-nowrap">
-              <thead className="text-[10px] sm:text-xs text-blue-500 bg-blue-50/50 uppercase tracking-wider border-b border-blue-200">
-                <tr>
-                  <th className="px-1.5 sm:px-4 py-2 sm:py-3 w-8 sm:w-10"></th>
-                  <th className="px-1.5 sm:px-4 py-2 sm:py-3">Status</th>
-                  <th className="px-1.5 sm:px-4 py-2 sm:py-3">PO No</th>
-                  <th className="px-1.5 sm:px-4 py-2 sm:py-3 hidden sm:table-cell">Rev</th>
-                  <th className="px-1.5 sm:px-4 py-2 sm:py-3 hidden md:table-cell">Date</th>
-                  <th className="px-1.5 sm:px-4 py-2 sm:py-3">Supplier</th>
-                  <th className="px-1.5 sm:px-4 py-2 sm:py-3 hidden lg:table-cell">Work Order No</th>
-                  <th className="px-1.5 sm:px-4 py-2 sm:py-3 hidden xl:table-cell">Work Description</th>
-                  <th className="px-1.5 sm:px-4 py-2 sm:py-3 hidden md:table-cell">Purchaser</th>
-                  <th className="px-1.5 sm:px-4 py-2 sm:py-3 hidden lg:table-cell">Receive Status</th>
-                  <th className="px-1.5 sm:px-4 py-2 sm:py-3 hidden print:table-cell">Remark</th>
+
+        {/* Contextual action bar for the selected order */}
+        <div
+          className={`flex flex-col gap-2 border-b px-4 py-2 transition-colors sm:flex-row sm:items-center ${
+            selected ? "border-indigo-100 bg-indigo-50/50" : "border-slate-100 bg-slate-50/50"
+          }`}
+        >
+          <div className="flex min-w-0 shrink-0 items-center gap-2 text-xs">
+            {selected ? (
+              <>
+                <span className="text-slate-500">Selected</span>
+                <span className="truncate font-mono font-semibold text-indigo-700">
+                  {selected.poNo}-R{selected.revision}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedId(null)}
+                  className="inline-flex h-5 w-5 items-center justify-center rounded text-slate-400 hover:bg-white hover:text-slate-600"
+                  title="Clear selection"
+                  aria-label="Clear selection"
+                >
+                  <X size={12} />
+                </button>
+              </>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 text-slate-400">
+                <MousePointerClick size={13} /> Select an order to act on it
+              </span>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-1 sm:ml-auto">
+            <ToolbarBtn icon={<Edit2 size={12} />} label="Edit" onClick={onEdit} disabled={!can.edit || actionLoading} />
+            <ToolbarBtn icon={<Ban size={12} />} label="Void" onClick={onVoid} disabled={!can.void || actionLoading} title={voidBlockReason ?? undefined} spinning={pendingAction === "void"} variant="danger" />
+            <ToolbarBtn icon={<GitBranch size={12} />} label="Revise" onClick={onRevise} disabled={!can.revise || actionLoading} spinning={pendingAction === "revise"} variant="warn" />
+            <ToolbarBtn icon={<History size={12} />} label="History" onClick={onHistory} disabled={!can.history || actionLoading} />
+            <ToolbarBtn icon={<Copy size={12} />} label="Copy" onClick={onCopy} disabled={!can.copy || actionLoading} spinning={pendingAction === "copy"} />
+            <ToolbarBtn icon={<Printer size={12} />} label="Print" onClick={onPrint} disabled={!can.print || actionLoading} />
+            <span className="mx-0.5 hidden h-4 w-px bg-slate-200 sm:inline-block" />
+            <ToolbarBtn icon={<Send size={12} />} label="Submit" onClick={onSubmit} disabled={!can.submit || actionLoading} spinning={pendingAction === "submit"} variant="primary" />
+          </div>
+        </div>
+
+        {/* Table area */}
+        {firstLoad ? (
+          <div className="flex h-48 flex-col items-center justify-center gap-2">
+            <Loader2 size={20} className="animate-spin text-indigo-600" />
+            <p className="text-xs text-slate-500">Loading orders...</p>
+          </div>
+        ) : errorMsg ? (
+          <div className="m-4 flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[13px] text-rose-700">
+            <AlertCircle size={14} />
+            <p className="font-medium">{errorMsg}</p>
+          </div>
+        ) : visibleRows.length === 0 ? (
+          hasFilters ? (
+            <EmptyState
+              icon={SearchX}
+              tone="slate"
+              title="No purchase orders match these filters"
+              description="Try a different search term, status or receive status."
+              action={
+                <button type="button" onClick={clearFilters} className={buttonClass("secondary", "md")}>
+                  Clear filters
+                </button>
+              }
+            />
+          ) : (
+            <EmptyState
+              icon={FileText}
+              tone="indigo"
+              title="No purchase orders found."
+              description={'Click "New order" to create your first, or convert a Submitted purchase requisition.'}
+              action={
+                <Link href="/dashboard/purchasing/purchase-order/new" className={buttonClass("primary", "md")}>
+                  <Plus size={14} /> New order
+                </Link>
+              }
+            />
+          )
+        ) : (
+          <div className={`overflow-x-auto transition-opacity ${loading ? "opacity-60" : ""}`}>
+            <table className="w-full whitespace-nowrap text-left text-[13px]">
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50/70 text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                  <th className="w-8 py-2 pl-4 pr-1 font-medium"><span className="sr-only">Select</span></th>
+                  <th className="px-3 py-2 font-medium">Status</th>
+                  <th className="px-3 py-2 font-medium">PO No</th>
+                  <th className="hidden px-3 py-2 font-medium md:table-cell">Rev</th>
+                  <th className="hidden px-3 py-2 font-medium sm:table-cell">Date</th>
+                  <th className="px-3 py-2 font-medium">Supplier</th>
+                  <th className="hidden px-3 py-2 font-medium lg:table-cell">PR No</th>
+                  <th className="hidden px-3 py-2 font-medium lg:table-cell">Work Order No</th>
+                  <th className="hidden px-3 py-2 font-medium xl:table-cell">Work Description</th>
+                  <th className="hidden px-3 py-2 font-medium md:table-cell">Purchaser</th>
+                  <th className="hidden px-3 py-2 font-medium xl:table-cell">Approval</th>
+                  <th className="hidden px-3 py-2 font-medium lg:table-cell">Receive Status</th>
+                  <th className="px-3 py-2 text-right font-medium">Amount</th>
+                  <th className="hidden px-3 py-2 font-medium print:table-cell">Remark</th>
+                  <th className="px-4 py-2 text-right font-medium print:hidden">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-blue-100">
-                {rows.map((r) => (
-                  <tr
-                    key={r.id}
-                    onClick={() => setSelectedId(r.id === selectedId ? null : r.id)}
-                    className={`cursor-pointer transition-colors ${
-                      selectedId === r.id ? "bg-blue-50/70" : "hover:bg-blue-50/30"
-                    }`}
-                  >
-                    <td className="px-1.5 sm:px-4 py-2 sm:py-3">
-                      <input
-                        type="radio"
-                        checked={selectedId === r.id}
-                        onChange={() => setSelectedId(r.id)}
-                        className="accent-blue-600 scale-75 sm:scale-100"
-                      />
-                    </td>
-                    <td className="px-1.5 sm:px-4 py-2 sm:py-3">
-                      <StatusPill status={r.status} />
-                    </td>
-                    <td className="px-1.5 sm:px-4 py-2 sm:py-3 font-bold text-blue-900">
-                      <Link
-                        href={`/dashboard/purchasing/purchase-order/${r.id}`}
-                        className="hover:text-blue-600"
-                        onClick={(e) => e.stopPropagation()}
+              <tbody className="divide-y divide-slate-100">
+                {visibleRows.map((r) => {
+                  const isSelected = selectedId === r.id;
+                  const href = `/dashboard/purchasing/purchase-order/${r.id}`;
+                  const editable = isPoEditable(r.status);
+                  const supplier = r.supplier?.supplierName || "";
+                  const stage = poApprovalStage(r);
+                  return (
+                    <tr
+                      key={r.id}
+                      onClick={() => setSelectedId(r.id === selectedId ? null : r.id)}
+                      aria-selected={isSelected}
+                      className={`group cursor-pointer transition-colors ${isSelected ? "bg-indigo-50/70" : "hover:bg-indigo-50/40"}`}
+                    >
+                      <td className="py-2 pl-4 pr-1">
+                        <input
+                          type="radio"
+                          checked={isSelected}
+                          onChange={() => setSelectedId(r.id)}
+                          onClick={(e) => e.stopPropagation()}
+                          aria-label={`Select ${r.poNo}-R${r.revision}`}
+                          className="h-3.5 w-3.5 accent-indigo-600"
+                        />
+                      </td>
+                      <td className="px-3 py-2">
+                        <StatusBadge status={r.status} tone={poStatusTone(r.status)} />
+                      </td>
+                      <td className="px-3 py-2">
+                        <Link
+                          href={href}
+                          onClick={(e) => e.stopPropagation()}
+                          className="font-mono text-[13px] font-semibold text-indigo-600 hover:text-indigo-800 hover:underline"
+                        >
+                          {r.poNo}<span className="hidden sm:inline">-R{r.revision}</span>
+                        </Link>
+                      </td>
+                      <td className="hidden px-3 py-2 md:table-cell">
+                        <span className="rounded bg-slate-100 px-1 py-px font-mono text-[11px] font-medium text-slate-500">{r.revision}</span>
+                      </td>
+                      <td
+                        className="hidden px-3 py-2 text-xs text-slate-500 sm:table-cell"
+                        title={r.date ? new Date(r.date).toLocaleDateString() : undefined}
                       >
-                        {r.poNo}<span className="hidden sm:inline">-R{r.revision}</span>
-                      </Link>
-                    </td>
-                    <td className="px-1.5 sm:px-4 py-2 sm:py-3 text-blue-700 hidden sm:table-cell">{r.revision}</td>
-                    <td className="px-1.5 sm:px-4 py-2 sm:py-3 text-blue-700 hidden md:table-cell">
-                      {new Date(r.date).toLocaleDateString()}
-                    </td>
-                    <td className="px-1.5 sm:px-4 py-2 sm:py-3 text-blue-700 font-medium truncate max-w-[120px] sm:max-w-none">{r.supplier?.supplierName}</td>
-                    <td className="px-1.5 sm:px-4 py-2 sm:py-3 text-blue-700 font-mono hidden lg:table-cell">{r.workOrderNo || "—"}</td>
-                    <td className="px-1.5 sm:px-4 py-2 sm:py-3 text-blue-700 max-w-[200px] truncate hidden xl:table-cell" title={r.workOrder?.jobDescription || ""}>
-                      {r.workOrder?.jobDescription || "—"}
-                    </td>
-                    <td className="px-1.5 sm:px-4 py-2 sm:py-3 text-blue-700 hidden md:table-cell">{r.purchaser?.name}</td>
-                    <td className="px-1.5 sm:px-4 py-2 sm:py-3 hidden lg:table-cell">
-                      <POStatusPill status={r.receiveStatus} />
-                    </td>
-                    <td className="px-1.5 sm:px-4 py-2 sm:py-3 text-blue-700 max-w-[150px] truncate hidden print:table-cell print:whitespace-normal" title={r.remark || ""}>
-                      {r.remark || "—"}
-                    </td>
-                  </tr>
-                ))}
+                        {relativeDate(r.date)}
+                      </td>
+                      <td className="px-3 py-2">
+                        <div className="flex min-w-0 max-w-[150px] items-center gap-2 sm:max-w-[220px]" title={supplier}>
+                          <InitialsAvatar name={supplier} />
+                          <span className="truncate font-medium text-slate-800">{supplier || "—"}</span>
+                        </div>
+                      </td>
+                      <td className="hidden px-3 py-2 font-mono text-xs text-slate-600 lg:table-cell">
+                        {r.purchaseRequisition?.prNo || <span className="font-sans text-slate-400">Independent</span>}
+                      </td>
+                      <td className="hidden px-3 py-2 font-mono text-xs text-slate-600 lg:table-cell">{r.workOrderNo || "—"}</td>
+                      <td className="hidden max-w-[200px] truncate px-3 py-2 text-slate-600 xl:table-cell" title={r.workOrder?.jobDescription || ""}>
+                        {r.workOrder?.jobDescription || "—"}
+                      </td>
+                      <td className="hidden px-3 py-2 text-slate-600 md:table-cell">{r.purchaser?.name}</td>
+                      <td className="hidden px-3 py-2 xl:table-cell">
+                        {stage.tiers ? (
+                          <Badge tone={stage.tone} icon={ShieldCheck}>{stage.label}</Badge>
+                        ) : (
+                          <span className="text-xs text-slate-400">—</span>
+                        )}
+                      </td>
+                      <td className="hidden px-3 py-2 lg:table-cell">
+                        <Badge tone={poReceiveTone(r.receiveStatus)} dot>{poReceiveLabel(r.receiveStatus)}</Badge>
+                      </td>
+                      <td className="px-3 py-2 text-right font-semibold tabular-nums text-slate-900">
+                        {fmtAmount(r.amountAfterTax)}
+                      </td>
+                      <td className="hidden max-w-[150px] truncate px-3 py-2 text-slate-600 print:table-cell print:whitespace-normal" title={r.remark || ""}>
+                        {r.remark || "—"}
+                      </td>
+                      <td className="px-4 py-2 text-right print:hidden">
+                        <Link
+                          href={href}
+                          onClick={(e) => e.stopPropagation()}
+                          className={buttonClass("secondary", "sm", "lg:opacity-75 lg:group-hover:opacity-100")}
+                        >
+                          {editable ? <Edit2 size={12} /> : <Eye size={12} />}
+                          {editable ? "Edit" : "View"}
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
-        </div>
+        )}
+      </div>
+
+      {!errorMsg && visibleRows.length > 0 && (
+        <p className="px-1 text-[11px] text-slate-400">
+          Showing <span className="font-medium tabular-nums text-slate-600">{visibleRows.length}</span> of{" "}
+          <span className="font-medium tabular-nums text-slate-600">{rows.length}</span> purchase orders
+        </p>
       )}
 
       {/* History Modal */}
       {historyOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4 py-6">
-          <div className="fixed inset-0 bg-blue-950/30 backdrop-blur-xs" onClick={() => setHistoryOpen(false)} />
-          <div className="relative w-full max-w-3xl bg-white rounded-xl shadow-xl border border-blue-200 max-h-[80vh] flex flex-col">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-blue-200">
-              <div>
-                <h3 className="text-base font-bold text-blue-900">Revision History</h3>
-                <p className="text-xs text-blue-500">{historyTitle}</p>
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setHistoryOpen(false)} />
+          <div className="relative flex max-h-[80vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
+            <div className="h-0.5 bg-gradient-to-r from-indigo-500 via-indigo-500 to-violet-500" />
+            <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2.5">
+              <div className="flex min-w-0 items-center gap-2.5">
+                <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600 ring-1 ring-inset ring-indigo-600/15">
+                  <History size={15} />
+                </span>
+                <div className="min-w-0">
+                  <h3 className="text-[13px] font-semibold leading-tight text-slate-800">Revision History</h3>
+                  <p className="truncate font-mono text-[11px] leading-tight text-slate-500">{historyTitle}</p>
+                </div>
               </div>
-              <button onClick={() => setHistoryOpen(false)} className="rounded-md p-1 text-blue-500 hover:bg-blue-50 cursor-pointer">
-                <X size={18} />
+              <button
+                type="button"
+                onClick={() => setHistoryOpen(false)}
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                aria-label="Close"
+              >
+                <X size={16} />
               </button>
             </div>
-            <div className="overflow-y-auto p-5">
+            <div className="overflow-y-auto">
               {historyLoading ? (
-                <div className="flex items-center justify-center py-10 text-blue-500">
+                <div className="flex items-center justify-center py-10 text-indigo-500">
                   <Loader2 className="animate-spin" size={20} />
                 </div>
               ) : historyRows.length === 0 ? (
-                <p className="text-center text-sm text-blue-500 py-6">No revisions found.</p>
+                <EmptyState icon={History} tone="slate" title="No revisions found." />
               ) : (
-                <table className="w-full text-sm border-collapse">
-                  <thead>
-                    <tr className="border-b border-blue-200 bg-blue-50 text-xs font-bold text-blue-700 uppercase tracking-wider">
-                      <th className="px-3 py-2.5 text-left">Rev</th>
-                      <th className="px-3 py-2.5 text-left">Date</th>
-                      <th className="px-3 py-2.5 text-left">Purchaser</th>
-                      <th className="px-3 py-2.5 text-left">Status</th>
-                      <th className="px-3 py-2.5 text-left">Receive Status</th>
-                      <th className="px-3 py-2.5 text-right">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-blue-100">
-                    {historyRows.map((h) => (
-                      <tr key={h.id} className="hover:bg-blue-50/40">
-                        <td className="px-3 py-2.5 font-bold text-blue-900">R{h.revision}</td>
-                        <td className="px-3 py-2.5 text-blue-700">{new Date(h.date).toLocaleDateString()}</td>
-                        <td className="px-3 py-2.5 text-blue-700">{h.purchaser?.name}</td>
-                        <td className="px-3 py-2.5"><StatusPill status={h.status} /></td>
-                        <td className="px-3 py-2.5"><POStatusPill status={h.receiveStatus} /></td>
-                        <td className="px-3 py-2.5 text-right">
-                          <Link
-                            href={`/dashboard/purchasing/purchase-order/${h.id}`}
-                            onClick={() => setHistoryOpen(false)}
-                            className="inline-flex items-center gap-1 rounded-md border border-blue-200 px-2.5 py-1 text-xs font-bold text-blue-700 hover:bg-blue-50"
-                          >
-                            View
-                          </Link>
-                        </td>
+                <div className="overflow-x-auto">
+                  <table className="w-full whitespace-nowrap text-[13px]">
+                    <thead>
+                      <tr className="border-b border-slate-100 bg-slate-50/70 text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                        <th className="px-4 py-2 text-left font-medium">Rev</th>
+                        <th className="px-3 py-2 text-left font-medium">Date</th>
+                        <th className="px-3 py-2 text-left font-medium">Purchaser</th>
+                        <th className="px-3 py-2 text-left font-medium">Status</th>
+                        <th className="px-3 py-2 text-left font-medium">Receive Status</th>
+                        <th className="px-4 py-2 text-right font-medium">Action</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {historyRows.map((h) => (
+                        <tr key={h.id} className="hover:bg-indigo-50/40">
+                          <td className="px-4 py-2 font-mono font-semibold text-slate-900">R{h.revision}</td>
+                          <td className="px-3 py-2 text-slate-600">{new Date(h.date).toLocaleDateString()}</td>
+                          <td className="px-3 py-2">
+                            <div className="flex items-center gap-2">
+                              <InitialsAvatar name={h.purchaser?.name} />
+                              <span className="text-slate-700">{h.purchaser?.name}</span>
+                            </div>
+                          </td>
+                          <td className="px-3 py-2"><StatusBadge status={h.status} tone={poStatusTone(h.status)} /></td>
+                          <td className="px-3 py-2"><Badge tone={poReceiveTone(h.receiveStatus)} dot>{poReceiveLabel(h.receiveStatus)}</Badge></td>
+                          <td className="px-4 py-2 text-right">
+                            <Link
+                              href={`/dashboard/purchasing/purchase-order/${h.id}`}
+                              onClick={() => setHistoryOpen(false)}
+                              className={buttonClass("secondary", "sm")}
+                            >
+                              View
+                            </Link>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </div>
           </div>
@@ -456,65 +832,21 @@ function ToolbarBtn({
   label,
   onClick,
   disabled,
-  primary,
+  title,
+  spinning,
+  variant = "secondary",
 }: {
   icon: React.ReactNode;
   label: string;
   onClick: () => void;
   disabled?: boolean;
-  primary?: boolean;
+  title?: string;
+  spinning?: boolean;
+  variant?: "secondary" | "primary" | "danger" | "warn" | "success";
 }) {
   return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md border transition-colors active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed ${
-        primary
-          ? "bg-blue-600 text-white border-blue-600 hover:bg-blue-500"
-          : "bg-white text-blue-700 border-blue-200 hover:bg-blue-50"
-      }`}
-    >
-      {icon} {label}
+    <button type="button" onClick={onClick} disabled={disabled} title={title} className={buttonClass(variant, "sm")}>
+      {spinning ? <Loader2 size={12} className="animate-spin" /> : icon} {label}
     </button>
-  );
-}
-
-function StatusPill({ status }: { status: string }) {
-  const cls =
-    status === "Issued" || status === "Approved"
-      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-      : status === "Pending First Tier Approval"
-      ? "bg-amber-50 text-amber-800 border-amber-300"
-      : status === "Pending Second Tier Approval"
-      ? "bg-indigo-50 text-indigo-800 border-indigo-300"
-      : status === "Pending For Approval"
-      ? "bg-sky-50 text-sky-700 border-sky-200"
-      : status === "Draft"
-      ? "bg-amber-50 text-amber-700 border-amber-200"
-      : status === "Void" || status === "Rejected"
-      ? "bg-rose-50 text-rose-700 border-rose-200"
-      : status === "Old Version"
-      ? "bg-slate-100 text-slate-600 border-slate-200"
-      : "bg-blue-50 text-blue-700 border-blue-200";
-  return (
-    <span className={`inline-flex items-center gap-0.5 sm:gap-1.5 px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[8px] sm:text-xs font-semibold border ${cls}`}>
-      {status}
-    </span>
-  );
-}
-
-function POStatusPill({ status }: { status: string }) {
-  const cls =
-    status === "Fully Received"
-      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-      : status === "Partially Received"
-      ? "bg-sky-50 text-sky-700 border-sky-200"
-      : status === "Not Received"
-      ? "bg-rose-50 text-rose-700 border-rose-200"
-      : "bg-slate-100 text-slate-600 border-slate-200";
-  return (
-    <span className={`inline-flex items-center gap-0.5 sm:gap-1.5 px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[8px] sm:text-xs font-semibold border ${cls}`}>
-      {status}
-    </span>
   );
 }

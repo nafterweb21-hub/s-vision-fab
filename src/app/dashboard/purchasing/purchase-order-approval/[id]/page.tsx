@@ -1,12 +1,46 @@
 "use client";
-import { SearchableSelect } from "@/components/SearchableSelect";
 import { customConfirm } from "@/lib/customConfirm";
 import { toast as hotToast } from "react-hot-toast";
 
 import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { Loader2, ArrowLeft, CheckCircle2, XCircle, FileText } from "lucide-react";
+import {
+  Loader2,
+  ArrowLeft,
+  CheckCircle2,
+  XCircle,
+  FileText,
+  AlertCircle,
+  Lock,
+  ShieldCheck,
+  Receipt,
+  Building2,
+  CalendarDays,
+  ClipboardList,
+  Wrench,
+  Coins,
+  Wallet,
+  UserRound,
+  MapPin,
+  Package,
+  StickyNote,
+  Gavel,
+  Check,
+  X,
+} from "lucide-react";
+import {
+  Badge,
+  Card,
+  EmptyState,
+  Field,
+  MetaChip,
+  StatusBadge,
+  buttonClass,
+  checkboxClass,
+  textareaClass,
+} from "@/components/form-ui";
+import { poApprovalStage, poStatusTone, type TierState } from "../../purchase-order/po-status";
 type Item = {
   id?: string;
   fromMaterialProfile: boolean;
@@ -33,6 +67,32 @@ type Item = {
   thickness?: string;
 };
 
+/** Display-only snapshot of the loaded PO (bill-to / ship-to text and relation names as fallbacks). */
+type PoDoc = {
+  company?: { companyName?: string | null } | null;
+  supplier?: { supplierName?: string | null } | null;
+  contactPerson?: { contactPersonName?: string | null } | null;
+  purchaser?: { name?: string | null; code?: string | null } | null;
+  purchaseRequisition?: { prNo?: string | null } | null;
+  currency?: { code?: string | null } | null;
+  taxType?: { taxType?: string | null } | null;
+  billToName?: string | null;
+  billToAddress?: string | null;
+  billToContactPerson?: string | null;
+  billToPhone?: string | null;
+  billToEmail?: string | null;
+  billToFax?: string | null;
+  billToGstin?: string | null;
+  billToState?: string | null;
+  differentShipTo?: boolean | null;
+  consigneeName?: string | null;
+  consigneeAddress?: string | null;
+  consigneeGstin?: string | null;
+  consigneePhone?: string | null;
+  consigneeState?: string | null;
+  consigneeCountry?: string | null;
+};
+
 export default function PurchaseOrderApprovalDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -52,6 +112,9 @@ export default function PurchaseOrderApprovalDetailPage() {
     secondApprovedAt?: string | null;
   }>({});
   const [evaluation, setEvaluation] = useState<any>(null);
+  // Display only.
+  const [doc, setDoc] = useState<PoDoc | null>(null);
+  const [lastAction, setLastAction] = useState<"approve" | "reject" | null>(null);
 
   const [companyId, setCompanyId] = useState("");
   const [date, setDate] = useState<string>(new Date().toISOString().slice(0, 10));
@@ -108,7 +171,8 @@ export default function PurchaseOrderApprovalDetailPage() {
         if (detailRes.error) throw new Error(detailRes.error);
         const po = detailRes.po || detailRes;
         setEvaluation(detailRes.evaluation || null);
-        
+        setDoc(po);
+
         setMeta({
           poNo: po.poNo,
           revision: po.revision,
@@ -181,7 +245,7 @@ export default function PurchaseOrderApprovalDetailPage() {
       hotToast.error("Please provide an approval remark for rejection.");
       return;
     }
-    
+
     if (!await customConfirm(`Are you sure you want to ${action} this Purchase Order?`)) {
       return;
     }
@@ -209,521 +273,622 @@ export default function PurchaseOrderApprovalDetailPage() {
 
   if (loading) {
     return (
-      <div className="p-12 flex flex-col items-center justify-center gap-3">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-        <p className="text-sm text-blue-500">Loading details…</p>
+      <div className="flex flex-col items-center justify-center gap-2 p-12">
+        <Loader2 size={20} className="animate-spin text-indigo-600" />
+        <p className="text-xs text-slate-500">Loading details…</p>
       </div>
     );
   }
 
+  // ---- Display-only derived values (no effect on the approval call) ----
+  const status = meta.status || "";
+  // The server decides the tier count from the live evaluation, so show that when it is available.
+  const stage = poApprovalStage({ ...meta, approvalTier: evaluation?.requiredTiers ?? meta.approvalTier });
+  const isSubcon = meta.type === "SUBCON";
+  const companyName = companies.find((c) => c.id === companyId)?.companyName || doc?.company?.companyName || "";
+  const purchaserEmp = employees.find((e) => e.id === purchaserId);
+  const purchaserLabel = purchaserEmp ? `${purchaserEmp.name} (${purchaserEmp.code})` : doc?.purchaser?.name || "";
+  const prNo = prs.find((pr) => pr.id === purchaseRequisitionId)?.prNo || doc?.purchaseRequisition?.prNo || "";
+  const supplier = suppliers.find((s) => s.id === supplierId);
+  const supplierName = supplier?.supplierName || doc?.supplier?.supplierName || "";
+  const contactName =
+    supplier?.contactPersons?.find((cp: { id: string }) => cp.id === contactPersonId)?.contactPersonName ||
+    doc?.contactPerson?.contactPersonName ||
+    "";
+  const workOrderLabel = workOrders.find((w) => w.workOrderNo === workOrderNo)?.workOrderNo || workOrderNo;
+  const curCode = currencies.find((c) => c.id === currencyId)?.code || doc?.currency?.code || "";
+  const taxLabel = taxes.find((t) => t.id === taxTypeId)?.taxType || doc?.taxType?.taxType || "";
+  const uomName = (uomId: string) => uoms.find((u) => u.id === uomId)?.uomName || "";
+  const materialCode = (it: Item) => materials.find((m) => m.id === it.materialProfileId)?.partNo || "N/A";
+  const billToLines = [doc?.billToAddress, doc?.billToState].filter((s) => s && s.trim());
+  const hasBillTo = !!(doc?.billToName || doc?.billToAddress);
+  const hasShipTo = !!doc?.differentShipTo && !!(doc?.consigneeName || doc?.consigneeAddress);
+  const decisionLocked = !!evaluation && !evaluation.canApprove && !evaluation.canReject;
+  const approveLabel =
+    evaluation?.isFirstTierPending && evaluation?.requiredTiers === 2
+      ? "Approve (1st Tier Sign-off)"
+      : "Approve (Issue Purchase Order)";
+
   return (
-    <div className="py-3 space-y-4 w-full">
-      <div className="flex items-center justify-between pb-6 border-b border-blue-200">
-        <div>
-          <div className="flex items-center gap-2 text-xs text-blue-400 font-semibold uppercase mb-1">
-            <Link href="/dashboard/purchasing/purchase-order-approval" className="hover:text-blue-600 inline-flex items-center gap-1">
+    <div className="w-full space-y-4 text-[13px]">
+      {/* Document header */}
+      <div className="sticky top-0 z-20 -mx-1 overflow-hidden rounded-xl border border-slate-200 bg-white/90 shadow-[0_1px_3px_rgba(15,23,42,0.06)] backdrop-blur-md">
+        <div className="h-0.5 bg-gradient-to-r from-indigo-500 via-indigo-500 to-violet-500" />
+        <div className="flex flex-col gap-2.5 px-4 py-2.5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0 space-y-1">
+            <Link
+              href="/dashboard/purchasing/purchase-order-approval"
+              className="inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-indigo-600"
+            >
               <ArrowLeft size={12} /> Purchase Order Approvals
             </Link>
-            {meta.poNo && (
-              <>
-                <span>/</span>
-                <span className="text-blue-500">
-                  {meta.poNo}-R{meta.revision}
-                </span>
-                <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] border bg-sky-50 text-sky-700 border-sky-200">
-                  {meta.status}
-                </span>
-              </>
-            )}
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-blue-500/10 text-blue-600">
-              <CheckCircle2 size={20} />
+            <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
+              {meta.poNo ? (
+                <h1 className="flex min-w-0 items-baseline gap-2 leading-tight">
+                  <span className="text-[11px] font-medium uppercase tracking-wide text-slate-400">PO</span>
+                  <span className="truncate font-mono text-xl font-semibold text-slate-900">{meta.poNo}</span>
+                  <span className="rounded bg-slate-100 px-1.5 py-px font-mono text-[11px] font-medium text-slate-500">
+                    R{meta.revision}
+                  </span>
+                </h1>
+              ) : (
+                <h1 className="text-lg font-semibold leading-tight text-slate-900">Review Purchase Order</h1>
+              )}
+              {status && <StatusBadge status={status} tone={poStatusTone(status)} size="md" />}
+              {stage.tiers && (
+                <Badge tone={stage.tone} icon={ShieldCheck} size="md">
+                  {stage.label}
+                </Badge>
+              )}
             </div>
-            <h2 className="text-2xl font-bold tracking-tight text-blue-900">
-              Review Purchase Order
-            </h2>
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+              <MetaChip icon={Building2} title="Supplier">{supplierName || "—"}</MetaChip>
+              <MetaChip icon={CalendarDays} label="PO" title="PO date">{fmtDate(date)}</MetaChip>
+              {purchaserLabel && (
+                <MetaChip icon={UserRound} title="Purchaser">{purchaserLabel}</MetaChip>
+              )}
+              <MetaChip icon={ClipboardList} label="PR" title="Purchase requisition">{prNo || "Independent"}</MetaChip>
+              {workOrderNo && (
+                <MetaChip icon={Wrench} label="WO" title="Work order">{workOrderNo}</MetaChip>
+              )}
+              <MetaChip icon={Coins} title="Currency and exchange rate">
+                {curCode || "—"} @ {exchangeRate}
+              </MetaChip>
+              <MetaChip icon={Wallet} label="Total" title="Amount after tax">
+                <span className="tabular-nums">{curCode} {amountAfterTax}</span>
+              </MetaChip>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+            <button
+              type="button"
+              onClick={() => router.push("/dashboard/purchasing/purchase-order-approval")}
+              className={buttonClass("ghost", "md")}
+            >
+              Back
+            </button>
+            <a href="#decision" className={buttonClass("primary", "md", "xl:hidden")}>
+              <Gavel size={14} /> Decide
+            </a>
           </div>
         </div>
       </div>
 
       {error && (
-        <div className="bg-rose-50 border border-rose-200 rounded-lg p-3 text-sm text-rose-700">{error}</div>
-      )}
-
-      {/* 2-Tier Approval Workflow Banner */}
-      {evaluation && (
-        <div className="bg-white border border-blue-200 rounded-xl p-5 shadow-sm space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
-            <div>
-              <span className="text-xs font-bold uppercase tracking-wider text-blue-600">Approval Workflow</span>
-              <h3 className="text-base font-bold text-slate-900 mt-0.5">
-                {evaluation.requiredTiers === 2 ? "Two-Tier Sequential Approval Required" : "Single-Tier Approval Required"}
-              </h3>
-            </div>
-            <div className="text-xs font-medium text-slate-500">
-              Total PO Value: <span className="font-bold text-slate-800 font-mono text-sm">${amountAfterTax}</span>
-              {formatThreshold(evaluation)}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Step 1: First Tier */}
-            <div className={`p-4 rounded-xl border ${meta.firstApproverName ? "bg-emerald-50/70 border-emerald-200" : evaluation.isFirstTierPending ? "bg-amber-50/70 border-amber-300 ring-2 ring-amber-100" : "bg-slate-50 border-slate-200"}`}>
-              <div className="flex items-start justify-between">
-                <div>
-                  <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-500">
-                    <span>Step 1: First Level</span>
-                    <span className="text-[10px] font-normal px-2 py-0.5 rounded-full bg-slate-200 text-slate-700">Tier 1</span>
-                  </div>
-                  <h4 className="text-sm font-bold text-slate-900 mt-1">First Tier Sign-off</h4>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Authorized: <span className="font-semibold text-slate-700">{evaluation.firstTierApprovers?.map((a: any) => a.name).join(", ") || "Shyue Yin"}</span>
-                  </p>
-                </div>
-                {meta.firstApproverName ? (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
-                    <CheckCircle2 size={13} /> Approved
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-300">
-                    Pending
-                  </span>
-                )}
-              </div>
-              {meta.firstApproverName && (
-                <div className="mt-3 pt-2 border-t border-emerald-200/60 text-xs text-emerald-800">
-                  Signed off by <span className="font-bold">{meta.firstApproverName}</span> {meta.firstApprovedAt ? `on ${new Date(meta.firstApprovedAt).toLocaleDateString()}` : ""}
-                </div>
-              )}
-            </div>
-
-            {/* Step 2: Second Tier */}
-            <div className={`p-4 rounded-xl border ${meta.secondApproverName || (evaluation.requiredTiers === 1 && meta.firstApproverName) ? "bg-emerald-50/70 border-emerald-200" : evaluation.isSecondTierPending ? "bg-amber-50/70 border-amber-300 ring-2 ring-amber-100" : "bg-slate-50 border-slate-200 opacity-80"}`}>
-              <div className="flex items-start justify-between">
-                <div>
-                  <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-500">
-                    <span>Step 2: Second Level</span>
-                    <span className="text-[10px] font-normal px-2 py-0.5 rounded-full bg-slate-200 text-slate-700">Tier 2</span>
-                  </div>
-                  <h4 className="text-sm font-bold text-slate-900 mt-1">
-                    {evaluation.requiredTiers === 2 ? "Second Tier Sign-off" : "Not Required for Single Tier"}
-                  </h4>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    {evaluation.requiredTiers === 2 ? (
-                      <>Authorized: <span className="font-semibold text-slate-700">{evaluation.secondTierApprovers?.map((a: any) => a.name).join(", ") || "Danny, Simeon"}</span></>
-                    ) : (
-                      "Single-tier PO is issued upon 1st Level approval"
-                    )}
-                  </p>
-                </div>
-                {meta.secondApproverName ? (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
-                    <CheckCircle2 size={13} /> Approved
-                  </span>
-                ) : evaluation.requiredTiers === 1 ? (
-                  <span className="text-xs text-slate-400 font-semibold">N/A</span>
-                ) : evaluation.isSecondTierPending ? (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-300">
-                    Awaiting Sign-off
-                  </span>
-                ) : (
-                  <span className="text-xs text-slate-400 font-medium">Awaiting Step 1</span>
-                )}
-              </div>
-              {meta.secondApproverName && (
-                <div className="mt-3 pt-2 border-t border-emerald-200/60 text-xs text-emerald-800">
-                  Signed off by <span className="font-bold">{meta.secondApproverName}</span> {meta.secondApprovedAt ? `on ${new Date(meta.secondApprovedAt).toLocaleDateString()}` : ""}
-                </div>
-              )}
-            </div>
-          </div>
+        <div className="flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[13px] text-rose-700">
+          <AlertCircle size={14} className="shrink-0" />
+          {error}
         </div>
       )}
 
-      {/* Header Fields - Read Only */}
-      <div className="bg-white border border-blue-200 rounded-xl shadow-sm p-6 grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
-        <Field label="Company">
-          <SearchableSelect value={companyId} disabled className={inputCls}>
-            <option value="">— Select —</option>
-            {companies.map((c) => (
-              <option key={c.id} value={c.id}>{c.companyName}</option>
-            ))}
-          </SearchableSelect>
-        </Field>
+      <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+        {/* Main column: read-only PO */}
+        <div className="min-w-0 space-y-4">
+          <Card icon={FileText} tone="indigo" title="Order details" description="Company, purchaser, source PR, work order and currency">
+            <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
+              <Field label="Company" className="sm:col-span-2">
+                <ReadValue>{companyName}</ReadValue>
+              </Field>
+              <Field label="PO Date">
+                <ReadValue>{fmtDate(date)}</ReadValue>
+              </Field>
+              <Field label="Purchaser">
+                <ReadValue>{purchaserLabel}</ReadValue>
+              </Field>
+              <Field label="PR No">
+                <ReadValue mono={!!prNo}>{prNo || "Independent PO"}</ReadValue>
+              </Field>
+              <Field label="Work Order">
+                <ReadValue mono={!!workOrderLabel}>{workOrderLabel || "None (Non Work Order)"}</ReadValue>
+              </Field>
+              <Field label="Currency">
+                <ReadValue>{curCode}</ReadValue>
+              </Field>
+              <Field label="Exchange Rate">
+                <ReadValue numeric>{exchangeRate}</ReadValue>
+              </Field>
+              <Field label="Tax Code">
+                <ReadValue>{taxLabel}</ReadValue>
+              </Field>
+              <Field label="Tax Rate %">
+                <ReadValue numeric>{taxRate}</ReadValue>
+              </Field>
+            </div>
+          </Card>
 
-        <Field label="PO Date">
-          <input type="date" value={date} disabled className={inputCls} />
-        </Field>
+          <div className="grid min-w-0 gap-4 lg:grid-cols-2">
+            <Card icon={Building2} tone="sky" title="Supplier" description="Supplier and contact on this order">
+              <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2">
+                <Field label="Supplier" className="sm:col-span-2">
+                  <ReadValue>{supplierName}</ReadValue>
+                </Field>
+                <Field label="Supplier Contact Person" className="sm:col-span-2">
+                  <ReadValue>{contactName}</ReadValue>
+                </Field>
+                <Field label="Supplier Email" className="sm:col-span-2">
+                  <ReadValue>{supplierEmail}</ReadValue>
+                </Field>
+                <Field label="Supplier Tel No">
+                  <ReadValue>{supplierTel}</ReadValue>
+                </Field>
+                <Field label="Supplier Fax No">
+                  <ReadValue>{supplierFax}</ReadValue>
+                </Field>
+                <Field label="Supplier Mobile No">
+                  <ReadValue>{supplierMobile}</ReadValue>
+                </Field>
+              </div>
+            </Card>
 
-        <Field label="Purchaser">
-          <SearchableSelect value={purchaserId} disabled className={inputCls}>
-            <option value="">— Select —</option>
-            {employees.map((e) => (
-              <option key={e.id} value={e.id}>{e.name} ({e.code})</option>
-            ))}
-          </SearchableSelect>
-        </Field>
-
-        <Field label="PR No">
-          <SearchableSelect value={purchaseRequisitionId} disabled className={inputCls}>
-            <option value="">— Independent PO —</option>
-            {prs.map((pr) => (
-              <option key={pr.id} value={pr.id}>{pr.prNo}</option>
-            ))}
-          </SearchableSelect>
-        </Field>
-
-        <Field label="Supplier">
-          <SearchableSelect value={supplierId} disabled className={inputCls}>
-            <option value="">— Select Supplier —</option>
-            {suppliers.map((s) => (
-              <option key={s.id} value={s.id}>{s.supplierName}</option>
-            ))}
-          </SearchableSelect>
-        </Field>
-
-        <Field label="Supplier Contact Person">
-          <SearchableSelect value={contactPersonId} disabled className={inputCls}>
-            <option value="">— Select —</option>
-            {suppliers.find(s => s.id === supplierId)?.contactPersons?.map((cp: any) => (
-              <option key={cp.id} value={cp.id}>{cp.contactPersonName}</option>
-            ))}
-          </SearchableSelect>
-        </Field>
-
-        <Field label="Supplier Email">
-          <input type="email" value={supplierEmail} disabled className={inputCls} />
-        </Field>
-
-        <Field label="Supplier Tel No">
-          <input type="text" value={supplierTel} disabled className={inputCls} />
-        </Field>
-
-        <Field label="Supplier Fax No">
-          <input type="text" value={supplierFax} disabled className={inputCls} />
-        </Field>
-
-        <Field label="Supplier Mobile No">
-          <input type="text" value={supplierMobile} disabled className={inputCls} />
-        </Field>
-        
-        <Field label="Work Order">
-          <SearchableSelect value={workOrderNo} disabled className={inputCls}>
-            <option value="">— None (Non Work Order) —</option>
-            {workOrders.map((w) => (
-              <option key={w.workOrderNo} value={w.workOrderNo}>{w.workOrderNo}</option>
-            ))}
-          </SearchableSelect>
-        </Field>
-
-        <Field label="Currency">
-          <SearchableSelect value={currencyId} disabled className={inputCls}>
-            <option value="">— Select —</option>
-            {currencies.map((c) => (
-              <option key={c.id} value={c.id}>{c.code}</option>
-            ))}
-          </SearchableSelect>
-        </Field>
-
-        <Field label="Exchange Rate">
-          <input type="number" value={exchangeRate} disabled className={inputCls} />
-        </Field>
-
-        <Field label="Tax Code">
-          <SearchableSelect value={taxTypeId} disabled className={inputCls}>
-            <option value="">— Select —</option>
-            {taxes.map((t) => (
-              <option key={t.id} value={t.id}>{t.taxType}</option>
-            ))}
-          </SearchableSelect>
-        </Field>
-
-        <Field label="Tax Rate %">
-          <input type="number" value={taxRate} disabled className={inputCls} />
-        </Field>
-      </div>
-
-      {/* Items Section - Read Only */}
-      <div className="bg-white border border-blue-200 rounded-xl shadow-sm overflow-hidden">
-        <div className="px-6 py-3 border-b border-blue-200">
-          <h3 className="text-sm font-semibold text-blue-900">Purchase Order Items</h3>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[900px]">
-            <thead className="text-xs text-blue-500 bg-blue-50/50 uppercase tracking-wider">
-              {meta.type === "SUBCON" ? (
-                <tr>
-                  {workOrderNo ? (
-                    <th className="px-3 py-2 text-left w-56">WO Process</th>
-                  ) : (
+            <Card icon={MapPin} tone="violet" title="Bill to / Ship to" description="As recorded on the purchase order">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1 2xl:grid-cols-2">
+                <AddressPanel label="Bill to">
+                  {hasBillTo ? (
                     <>
-                      <th className="px-3 py-2 text-left w-48">Main Process</th>
-                      <th className="px-3 py-2 text-left w-48">Routing Process</th>
-                    </>
-                  )}
-                  <th className="px-3 py-2 text-left w-56">Description</th>
-                  <th className="px-3 py-2 text-left w-24">Hardness</th>
-                  <th className="px-3 py-2 text-left w-24">Thickness</th>
-                  <th className="px-3 py-2 text-left w-28">PO UOM</th>
-                  <th className="px-3 py-2 text-right w-24">Qty</th>
-                  <th className="px-3 py-2 text-right w-32">Unit Price</th>
-                  <th className="px-3 py-2 text-right w-32">Amount</th>
-                  <th className="px-3 py-2 text-left w-40">Delivery Date</th>
-                  <th className="px-3 py-2 text-left min-w-[150px]">Remark</th>
-                </tr>
-              ) : (
-                <tr>
-                  <th className="px-3 py-2 text-left w-24">Type</th>
-                  <th className="px-3 py-2 text-left w-48">Material Profile / Code</th>
-                  <th className="px-3 py-2 text-left w-56">Description</th>
-                  <th className="px-3 py-2 text-left w-40">Supplier Part No</th>
-                  <th className="px-3 py-2 text-left w-32">Shape</th>
-                  <th className="px-3 py-2 text-left w-32">Size</th>
-                  <th className="px-3 py-2 text-left w-28">PO UOM</th>
-                  <th className="px-3 py-2 text-right w-24">Qty</th>
-                  <th className="px-3 py-2 text-right w-32">Unit Price</th>
-                  <th className="px-3 py-2 text-right w-32">Amount</th>
-                  <th className="px-3 py-2 text-right w-24">Conv</th>
-                  <th className="px-3 py-2 text-left w-28">Int UOM</th>
-                  <th className="px-3 py-2 text-right w-24">Int Qty</th>
-                  <th className="px-3 py-2 text-left w-40">Delivery Date</th>
-                  <th className="px-3 py-2 text-left min-w-[150px]">Remark</th>
-                </tr>
-              )}
-            </thead>
-            <tbody className="divide-y divide-blue-100">
-              {items.map((it, idx) => (
-                <tr key={idx} className="bg-white">
-                  {meta.type === "SUBCON" ? (
-                    <>
-                      {workOrderNo ? (
-                        <td className="px-3 py-2 align-top">
-                          <input type="text" value={it.woProcessName} disabled className={inputCls} />
-                        </td>
-                      ) : (
-                        <>
-                          <td className="px-3 py-2 align-top">
-                            <input type="text" value={it.mainProcessName} disabled className={inputCls} />
-                          </td>
-                          <td className="px-3 py-2 align-top">
-                            <input type="text" value={it.routingProcessName} disabled className={inputCls} />
-                          </td>
-                        </>
+                      <p className="font-medium text-slate-800">{doc?.billToName || "—"}</p>
+                      {billToLines.map((l, i) => (
+                        <p key={i} className="whitespace-pre-line text-slate-600">{l}</p>
+                      ))}
+                      {doc?.billToContactPerson && <p className="text-slate-600">Attn: {doc.billToContactPerson}</p>}
+                      {(doc?.billToPhone || doc?.billToFax) && (
+                        <p className="text-slate-500">
+                          {[doc?.billToPhone && `Tel ${doc.billToPhone}`, doc?.billToFax && `Fax ${doc.billToFax}`].filter(Boolean).join(" · ")}
+                        </p>
                       )}
-                      <td className="px-3 py-2 align-top">
-                        <textarea rows={1} value={it.description} disabled className={inputCls} />
-                      </td>
-                      <td className="px-3 py-2 align-top">
-                        <input type="text" value={it.hardness} disabled className={inputCls} />
-                      </td>
-                      <td className="px-3 py-2 align-top">
-                        <input type="text" value={it.thickness} disabled className={inputCls} />
-                      </td>
-                      <td className="px-3 py-2 align-top">
-                        <SearchableSelect value={it.poUomId} disabled className={inputCls}>
-                          <option value="">—</option>
-                          {uoms.map((u) => <option key={u.id} value={u.id}>{u.uomName}</option>)}
-                        </SearchableSelect>
-                      </td>
-                      <td className="px-3 py-2 align-top">
-                        <input type="number" value={it.quantity} disabled className={`${inputCls} text-right`} />
-                      </td>
-                      <td className="px-3 py-2 align-top">
-                        <input type="number" value={it.unitPrice} disabled className={`${inputCls} text-right`} />
-                      </td>
-                      <td className="px-3 py-2 align-top text-right font-mono text-blue-900 font-semibold pt-4">
-                        {it.amount}
-                      </td>
-                      <td className="px-3 py-2 align-top">
-                        <input type="date" value={it.deliveryDate} disabled className={inputCls} />
-                      </td>
-                      <td className="px-3 py-2 align-top">
-                        <input type="text" value={it.remark} disabled className={inputCls} />
-                      </td>
+                      {doc?.billToEmail && <p className="truncate text-slate-500">{doc.billToEmail}</p>}
+                      {doc?.billToGstin && <p className="font-mono text-[11px] text-slate-500">GSTIN {doc.billToGstin}</p>}
                     </>
                   ) : (
                     <>
-                      <td className="px-3 py-2 align-top">
-                        <input type="text" value={it.fromMaterialProfile ? "Profile" : "FreeText"} disabled className={inputCls} />
-                      </td>
-                      <td className="px-3 py-2 align-top">
-                        {it.fromMaterialProfile ? (
-                          <SearchableSelect value={it.materialProfileId} disabled className={inputCls}>
-                            <option value="">— Select —</option>
-                            {materials.map((m) => (
-                              <option key={m.id} value={m.id}>{m.partNo || "N/A"}</option>
-                            ))}
-                          </SearchableSelect>
-                        ) : (
-                          <input type="text" value={it.material} disabled className={inputCls} />
-                        )}
-                      </td>
-                      <td className="px-3 py-2 align-top">
-                        <textarea rows={1} value={it.description} disabled className={inputCls} />
-                      </td>
-                      <td className="px-3 py-2 align-top">
-                        <input type="text" value={it.supplierMaterialNo} disabled className={inputCls} />
-                      </td>
-                      <td className="px-3 py-2 align-top">
-                        <input type="text" value={it.shape} disabled className={inputCls} />
-                      </td>
-                      <td className="px-3 py-2 align-top">
-                        <input type="text" value={it.size} disabled className={inputCls} />
-                      </td>
-                      <td className="px-3 py-2 align-top">
-                        <SearchableSelect value={it.poUomId} disabled className={inputCls}>
-                          <option value="">—</option>
-                          {uoms.map((u) => <option key={u.id} value={u.id}>{u.uomName}</option>)}
-                        </SearchableSelect>
-                      </td>
-                      <td className="px-3 py-2 align-top">
-                        <input type="number" value={it.quantity} disabled className={`${inputCls} text-right`} />
-                      </td>
-                      <td className="px-3 py-2 align-top">
-                        <input type="number" value={it.unitPrice} disabled className={`${inputCls} text-right`} />
-                      </td>
-                      <td className="px-3 py-2 align-top text-right font-mono text-blue-900 font-semibold pt-4">
-                        {it.amount}
-                      </td>
-                      <td className="px-3 py-2 align-top">
-                        <input type="number" value={it.conversion} disabled className={`${inputCls} text-right`} />
-                      </td>
-                      <td className="px-3 py-2 align-top">
-                        <SearchableSelect value={it.internalUomId} disabled className={inputCls}>
-                          <option value="">—</option>
-                          {uoms.map((u) => <option key={u.id} value={u.id}>{u.uomName}</option>)}
-                        </SearchableSelect>
-                      </td>
-                      <td className="px-3 py-2 align-top text-right font-mono text-blue-900 pt-4">
-                        {it.internalQuantity}
-                      </td>
-                      <td className="px-3 py-2 align-top">
-                        <input type="date" value={it.deliveryDate} disabled className={inputCls} />
-                      </td>
-                      <td className="px-3 py-2 align-top">
-                        <input type="text" value={it.remark} disabled className={inputCls} />
-                      </td>
+                      <p className="font-medium text-slate-800">{companyName || "—"}</p>
+                      <p className="text-slate-400">No separate bill-to recorded</p>
                     </>
                   )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Quality Controls and Remarks */}
-        <div className="bg-white border border-blue-200 rounded-xl shadow-sm p-6 space-y-4">
-          <div className="flex items-center gap-4">
-            <label className="flex items-center gap-2 text-sm font-medium text-blue-900">
-              <input type="checkbox" checked={millCertificate} disabled className="w-4 h-4 text-blue-600 rounded border-blue-300 focus:ring-blue-500 disabled:opacity-50" />
-              Mill Certificate
-            </label>
-            <label className="flex items-center gap-2 text-sm font-medium text-blue-900">
-              <input type="checkbox" checked={certOfConformance} disabled className="w-4 h-4 text-blue-600 rounded border-blue-300 focus:ring-blue-500 disabled:opacity-50" />
-              Cert. of Conformance
-            </label>
+                </AddressPanel>
+                <AddressPanel label="Ship to">
+                  {hasShipTo ? (
+                    <>
+                      <p className="font-medium text-slate-800">{doc?.consigneeName || "—"}</p>
+                      {doc?.consigneeAddress && <p className="whitespace-pre-line text-slate-600">{doc.consigneeAddress}</p>}
+                      {(doc?.consigneeState || doc?.consigneeCountry) && (
+                        <p className="text-slate-600">{[doc?.consigneeState, doc?.consigneeCountry].filter(Boolean).join(", ")}</p>
+                      )}
+                      {doc?.consigneePhone && <p className="text-slate-500">Tel {doc.consigneePhone}</p>}
+                      {doc?.consigneeGstin && <p className="font-mono text-[11px] text-slate-500">GSTIN {doc.consigneeGstin}</p>}
+                    </>
+                  ) : (
+                    <p className="text-slate-500">Same as bill to</p>
+                  )}
+                </AddressPanel>
+              </div>
+            </Card>
           </div>
-          <Field label="Remark / Special Instructions">
-            <textarea rows={3} value={poRemark} disabled className={inputCls} />
-          </Field>
-        </div>
 
-        {/* Totals Summary */}
-        <div className="bg-white border border-blue-200 rounded-xl shadow-sm p-6 flex flex-col justify-end space-y-3">
-          <div className="flex items-center justify-between text-sm text-blue-700">
-            <span>Amount Before Tax:</span>
-            <span className="font-mono font-medium">{amountBeforeTax}</span>
-          </div>
-          <div className="flex items-center justify-between text-sm text-blue-700">
-            <span>Tax Amount:</span>
-            <span className="font-mono font-medium">{taxAmount}</span>
-          </div>
-          <div className="flex items-center justify-between text-lg font-bold text-blue-900 border-t border-blue-100 pt-3">
-            <span>Amount After Tax:</span>
-            <span className="font-mono">{amountAfterTax}</span>
-          </div>
-        </div>
-      </div>
+          {/* Items */}
+          <Card
+            icon={Package}
+            tone="indigo"
+            title="Purchase Order Items"
+            description={isSubcon ? "Subcon processes on this order" : "Materials on this order"}
+            actions={<Badge tone="slate">{items.length} {items.length === 1 ? "line" : "lines"}</Badge>}
+            bodyClassName="p-0"
+          >
+            {items.length === 0 ? (
+              <EmptyState icon={Package} tone="slate" title="No lines on this purchase order." />
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[900px] text-[13px]">
+                  <thead>
+                    {isSubcon ? (
+                      <tr className="border-b border-slate-100 bg-slate-50/70 text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                        <th className="w-8 py-2 pl-4 pr-1 text-left font-medium">#</th>
+                        {workOrderNo ? (
+                          <th className="px-3 py-2 text-left font-medium">WO Process</th>
+                        ) : (
+                          <>
+                            <th className="px-3 py-2 text-left font-medium">Main Process</th>
+                            <th className="px-3 py-2 text-left font-medium">Routing Process</th>
+                          </>
+                        )}
+                        <th className="px-3 py-2 text-left font-medium">Description</th>
+                        <th className="px-3 py-2 text-left font-medium">Hardness</th>
+                        <th className="px-3 py-2 text-left font-medium">Thickness</th>
+                        <th className="px-3 py-2 text-left font-medium">PO UOM</th>
+                        <th className="px-3 py-2 text-right font-medium">Qty</th>
+                        <th className="px-3 py-2 text-right font-medium">Unit Price</th>
+                        <th className="px-3 py-2 text-right font-medium">Amount</th>
+                        <th className="px-3 py-2 text-left font-medium">Delivery Date</th>
+                        <th className="px-3 py-2 pr-4 text-left font-medium">Remark</th>
+                      </tr>
+                    ) : (
+                      <tr className="border-b border-slate-100 bg-slate-50/70 text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                        <th className="w-8 py-2 pl-4 pr-1 text-left font-medium">#</th>
+                        <th className="px-3 py-2 text-left font-medium">Type</th>
+                        <th className="px-3 py-2 text-left font-medium">Material Profile / Code</th>
+                        <th className="px-3 py-2 text-left font-medium">Description</th>
+                        <th className="px-3 py-2 text-left font-medium">Supplier Part No</th>
+                        <th className="px-3 py-2 text-left font-medium">Shape</th>
+                        <th className="px-3 py-2 text-left font-medium">Size</th>
+                        <th className="px-3 py-2 text-left font-medium">PO UOM</th>
+                        <th className="px-3 py-2 text-right font-medium">Qty</th>
+                        <th className="px-3 py-2 text-right font-medium">Unit Price</th>
+                        <th className="px-3 py-2 text-right font-medium">Amount</th>
+                        <th className="px-3 py-2 text-right font-medium">Conv</th>
+                        <th className="px-3 py-2 text-left font-medium">Int UOM</th>
+                        <th className="px-3 py-2 text-right font-medium">Int Qty</th>
+                        <th className="px-3 py-2 text-left font-medium">Delivery Date</th>
+                        <th className="px-3 py-2 pr-4 text-left font-medium">Remark</th>
+                      </tr>
+                    )}
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {items.map((it, idx) => (
+                      <tr key={idx} className="align-top transition-colors hover:bg-indigo-50/30">
+                        <td className="py-2 pl-4 pr-1 text-[11px] tabular-nums text-slate-400">{idx + 1}</td>
+                        {isSubcon ? (
+                          <>
+                            {workOrderNo ? (
+                              <td className="px-3 py-2 text-slate-800">{it.woProcessName || "—"}</td>
+                            ) : (
+                              <>
+                                <td className="px-3 py-2 text-slate-800">{it.mainProcessName || "—"}</td>
+                                <td className="px-3 py-2 text-slate-800">{it.routingProcessName || "—"}</td>
+                              </>
+                            )}
+                            <td className="min-w-[200px] px-3 py-2 whitespace-pre-line text-slate-700">{it.description}</td>
+                            <td className="px-3 py-2 text-slate-600">{it.hardness || "—"}</td>
+                            <td className="px-3 py-2 text-slate-600">{it.thickness || "—"}</td>
+                            <td className="px-3 py-2 text-slate-600">{uomName(it.poUomId) || "—"}</td>
+                            <td className="px-3 py-2 text-right tabular-nums text-slate-800">{it.quantity}</td>
+                            <td className="px-3 py-2 text-right tabular-nums text-slate-800">{it.unitPrice}</td>
+                            <td className="px-3 py-2 text-right font-semibold tabular-nums text-slate-900">{it.amount}</td>
+                            <td className="whitespace-nowrap px-3 py-2 text-slate-600">{fmtDate(it.deliveryDate)}</td>
+                            <td className="min-w-[150px] px-3 py-2 pr-4 text-xs text-slate-500">{it.remark || "—"}</td>
+                          </>
+                        ) : (
+                          <>
+                            <td className="px-3 py-2">
+                              <Badge tone={it.fromMaterialProfile ? "indigo" : "slate"}>
+                                {it.fromMaterialProfile ? "Profile" : "FreeText"}
+                              </Badge>
+                            </td>
+                            <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-slate-800">
+                              {it.fromMaterialProfile ? materialCode(it) : <span className="font-sans text-[13px]">{it.material || "—"}</span>}
+                            </td>
+                            <td className="min-w-[200px] px-3 py-2 whitespace-pre-line text-slate-700">{it.description}</td>
+                            <td className="px-3 py-2 text-slate-600">{it.supplierMaterialNo || "—"}</td>
+                            <td className="px-3 py-2 text-slate-600">{it.shape || "—"}</td>
+                            <td className="px-3 py-2 text-slate-600">{it.size || "—"}</td>
+                            <td className="px-3 py-2 text-slate-600">{uomName(it.poUomId) || "—"}</td>
+                            <td className="px-3 py-2 text-right tabular-nums text-slate-800">{it.quantity}</td>
+                            <td className="px-3 py-2 text-right tabular-nums text-slate-800">{it.unitPrice}</td>
+                            <td className="px-3 py-2 text-right font-semibold tabular-nums text-slate-900">{it.amount}</td>
+                            <td className="px-3 py-2 text-right tabular-nums text-slate-600">{it.conversion}</td>
+                            <td className="px-3 py-2 text-slate-600">{uomName(it.internalUomId) || "—"}</td>
+                            <td className="px-3 py-2 text-right tabular-nums text-slate-800">{it.internalQuantity}</td>
+                            <td className="whitespace-nowrap px-3 py-2 text-slate-600">{fmtDate(it.deliveryDate)}</td>
+                            <td className="min-w-[150px] px-3 py-2 pr-4 text-xs text-slate-500">{it.remark || "—"}</td>
+                          </>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
 
-      {/* Approval Action Panel */}
-      <div className="bg-blue-50 border border-blue-200 rounded-xl shadow-sm p-6 space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <h3 className="text-lg font-bold text-blue-900 flex items-center gap-2">
-            <CheckCircle2 size={18} /> Approval Decision
-          </h3>
-          {evaluation && (
-            <span className="text-xs font-semibold px-2.5 py-1 rounded-md bg-blue-100 text-blue-800 border border-blue-200 w-fit">
-              Current Stage: {evaluation.currentStageTitle}
-            </span>
-          )}
-        </div>
-
-        {evaluation && !evaluation.canApprove && (
-          <div className="bg-amber-50 border border-amber-300 text-amber-900 p-4 rounded-xl text-sm flex items-start gap-3 shadow-xs">
-            <span className="text-lg">🔒</span>
-            <div>
-              <p className="font-bold text-amber-950">Action restricted for your current login</p>
-              <p className="text-xs text-amber-800 mt-1 leading-relaxed">{evaluation.cannotApproveReason}</p>
+          <Card icon={StickyNote} tone="amber" title="Quality & remarks" description="Certificates and special instructions">
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+                <label className="inline-flex items-center gap-2 text-[13px] text-slate-700">
+                  <input type="checkbox" checked={millCertificate} disabled className={`${checkboxClass} disabled:opacity-60`} />
+                  Mill Certificate
+                </label>
+                <label className="inline-flex items-center gap-2 text-[13px] text-slate-700">
+                  <input type="checkbox" checked={certOfConformance} disabled className={`${checkboxClass} disabled:opacity-60`} />
+                  Cert. of Conformance
+                </label>
+              </div>
+              <Field label="Remark / Special Instructions">
+                <div className="min-h-16 whitespace-pre-wrap break-words rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-[13px] text-slate-700">
+                  {poRemark || <span className="text-slate-400">—</span>}
+                </div>
+              </Field>
             </div>
-          </div>
-        )}
-        
-        <Field label="Approval / Rejection Remark">
-          <textarea
-            rows={2}
-            value={approvalRemark}
-            onChange={(e) => setApprovalRemark(e.target.value)}
-            disabled={submitting || (evaluation && !evaluation.canApprove && !evaluation.canReject)}
-            placeholder="Optional remark for approval, required for rejection..."
-            className="w-full px-3 py-2 text-sm bg-white border border-blue-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 disabled:bg-slate-100"
-          />
-        </Field>
+          </Card>
+        </div>
 
-        <div className="flex items-center justify-end gap-3 pt-2">
-          <button
-            onClick={() => handleAction("reject")}
-            disabled={submitting || (evaluation && !evaluation.canReject)}
-            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-rose-700 bg-rose-100 hover:bg-rose-200 rounded-lg transition-colors active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+        {/* Right rail */}
+        <div className="min-w-0 space-y-4">
+          {/* Approval progress */}
+          <Card
+            icon={ShieldCheck}
+            tone={stage.tone === "slate" ? "indigo" : stage.tone}
+            title="Approval"
+            description={
+              evaluation
+                ? evaluation.requiredTiers === 2
+                  ? "Two-Tier Sequential Approval Required"
+                  : "Single-Tier Approval Required"
+                : stage.tiers === 2
+                  ? "Two-tier, value banded"
+                  : "Single tier"
+            }
+            actions={<Badge tone={stage.tone}>{stage.label}</Badge>}
           >
-            {submitting ? <Loader2 size={16} className="animate-spin" /> : <XCircle size={16} />}
-            Reject
-          </button>
-          
-          <button
-            onClick={() => handleAction("approve")}
-            disabled={submitting || (evaluation && !evaluation.canApprove)}
-            className="inline-flex items-center gap-2 px-6 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-500 rounded-lg shadow-sm transition-colors active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+            <div className="space-y-2">
+              <ApprovalStep
+                n={1}
+                title="Tier 1 approval"
+                state={stage.tier1}
+                who={meta.firstApproverName}
+                when={meta.firstApprovedAt}
+                authorized={evaluation ? evaluation.firstTierApprovers?.map((a: any) => a.name).join(", ") || "Shyue Yin" : null}
+                last={stage.tiers !== 2}
+              />
+              {stage.tiers === 2 ? (
+                <ApprovalStep
+                  n={2}
+                  title="Tier 2 approval"
+                  state={stage.tier2}
+                  who={meta.secondApproverName}
+                  when={meta.secondApprovedAt}
+                  authorized={evaluation ? evaluation.secondTierApprovers?.map((a: any) => a.name).join(", ") || "Danny, Simeon" : null}
+                  last
+                />
+              ) : (
+                <p className="pl-8 text-[11px] text-slate-400">Single-tier PO is issued upon 1st Level approval.</p>
+              )}
+              {evaluation && (
+                <p className="border-t border-slate-100 pt-2 text-[11px] text-slate-500">
+                  Total PO Value:{" "}
+                  <span className="font-semibold tabular-nums text-slate-800">
+                    {curCode} {amountAfterTax}
+                  </span>
+                  {formatThreshold(evaluation)}
+                </p>
+              )}
+            </div>
+          </Card>
+
+          {/* Summary */}
+          <section className="overflow-hidden rounded-xl bg-[#111827] text-slate-300 shadow-lg shadow-slate-900/10 ring-1 ring-white/5">
+            <header className="flex items-center gap-2.5 border-b border-white/10 px-4 py-2.5">
+              <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-500/15 text-indigo-300 ring-1 ring-inset ring-indigo-400/20">
+                <Receipt size={15} />
+              </span>
+              <div>
+                <h2 className="text-[13px] font-semibold leading-tight text-white">Summary</h2>
+                <p className="text-[11px] leading-tight text-slate-400">Totals as submitted for approval</p>
+              </div>
+            </header>
+            <dl className="space-y-2 px-4 py-3 text-[13px]">
+              <div className="flex items-center justify-between gap-3">
+                <dt className="text-slate-400">Lines</dt>
+                <dd className="tabular-nums text-slate-200">{items.length}</dd>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <dt className="text-slate-400">Amount Before Tax</dt>
+                <dd className="tabular-nums text-slate-200">{amountBeforeTax}</dd>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <dt className="truncate text-slate-400">
+                  Tax Amount{taxLabel ? ` · ${taxLabel} (${taxRate}%)` : ""}
+                </dt>
+                <dd className="tabular-nums text-slate-200">{taxAmount}</dd>
+              </div>
+            </dl>
+            <div className="relative border-t border-white/10 bg-white/[0.03] px-4 py-3">
+              <span className="absolute inset-y-3 left-0 w-[3px] rounded-r bg-gradient-to-b from-indigo-400 to-violet-500" />
+              <p className="text-[11px] font-medium uppercase tracking-wide text-indigo-300">Amount After Tax</p>
+              <p className="mt-0.5 flex items-baseline gap-1.5">
+                {curCode && <span className="text-xs font-medium text-indigo-300">{curCode}</span>}
+                <span className="text-2xl font-semibold tabular-nums tracking-tight text-white">{amountAfterTax}</span>
+              </p>
+              <p className="mt-1 text-[11px] tabular-nums text-slate-400">Exchange rate {exchangeRate}</p>
+            </div>
+          </section>
+
+          {/* Decision */}
+          <section
+            id="decision"
+            className="scroll-mt-40 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] xl:sticky xl:top-28"
           >
-            {submitting ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
-            {evaluation?.isFirstTierPending && evaluation?.requiredTiers === 2
-              ? "Approve (1st Tier Sign-off)"
-              : "Approve (Issue Purchase Order)"}
-          </button>
+            <div className="h-0.5 bg-gradient-to-r from-emerald-500 via-indigo-500 to-rose-500" />
+            <header className="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-2.5">
+              <div className="flex min-w-0 items-center gap-2.5">
+                <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600 ring-1 ring-inset ring-indigo-600/15">
+                  <Gavel size={15} />
+                </span>
+                <h2 className="text-[13px] font-semibold leading-tight text-slate-800">Approval Decision</h2>
+              </div>
+              {evaluation && <Badge tone="indigo">Current Stage: {evaluation.currentStageTitle}</Badge>}
+            </header>
+            <div className="space-y-3 p-4">
+              {evaluation && !evaluation.canApprove && (
+                <div className="flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
+                  <Lock size={14} className="mt-0.5 shrink-0 text-amber-600" />
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-amber-900">Action restricted for your current login</p>
+                    <p className="mt-0.5 text-[11px] leading-relaxed text-amber-800">{evaluation.cannotApproveReason}</p>
+                  </div>
+                </div>
+              )}
+
+              <Field label="Approval / Rejection Remark" htmlFor="approval-remark" help="Optional to approve, required to reject.">
+                <textarea
+                  id="approval-remark"
+                  rows={3}
+                  value={approvalRemark}
+                  onChange={(e) => setApprovalRemark(e.target.value)}
+                  disabled={submitting || (evaluation && !evaluation.canApprove && !evaluation.canReject)}
+                  placeholder="Optional remark for approval, required for rejection..."
+                  className={textareaClass}
+                />
+              </Field>
+
+              <div className="grid gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLastAction("approve");
+                    handleAction("approve");
+                  }}
+                  disabled={submitting || (evaluation && !evaluation.canApprove)}
+                  className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 text-[13px] font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {submitting && lastAction === "approve" ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+                  {submitting && lastAction === "approve" ? "Approving…" : approveLabel}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLastAction("reject");
+                    handleAction("reject");
+                  }}
+                  disabled={submitting || (evaluation && !evaluation.canReject)}
+                  className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-4 text-[13px] font-semibold text-rose-700 transition-colors hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/40 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {submitting && lastAction === "reject" ? <Loader2 size={16} className="animate-spin" /> : <XCircle size={16} />}
+                  {submitting && lastAction === "reject" ? "Rejecting…" : "Reject"}
+                </button>
+              </div>
+              {decisionLocked && (
+                <p className="text-center text-[11px] text-slate-400">You can view this order but not decide on it.</p>
+              )}
+            </div>
+          </section>
         </div>
       </div>
     </div>
   );
 }
 
-const inputCls =
-  "w-full px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-md focus:outline-none disabled:text-slate-700 disabled:cursor-not-allowed";
-
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
+function ReadValue({ children, mono, numeric }: { children: React.ReactNode; mono?: boolean; numeric?: boolean }) {
+  const empty = children === "" || children === null || children === undefined;
   return (
-    <div>
-      <label className="block text-xs font-semibold text-blue-700 mb-1">
-        {label}
-      </label>
+    <div
+      className={`flex h-8 w-full min-w-0 items-center rounded-md border border-slate-200 bg-slate-50 px-2.5 text-[13px] text-slate-700 ${
+        numeric ? "justify-end tabular-nums" : ""
+      } ${mono ? "font-mono text-xs" : ""}`}
+    >
+      <span className="truncate">{empty ? <span className="text-slate-400">—</span> : children}</span>
+    </div>
+  );
+}
+
+function AddressPanel({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="min-w-0 space-y-0.5 rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2.5 text-xs">
+      <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-slate-400">{label}</p>
       {children}
+    </div>
+  );
+}
+
+function fmtDate(value: string | null | undefined): string {
+  if (!value) return "—";
+  const ymd = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  const d = ymd ? new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3])) : new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function fmtDateTime(value: string | null | undefined): string {
+  if (!value) return "";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString(undefined, { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+const STEP_DOT: Record<TierState, string> = {
+  done: "bg-emerald-500 text-white",
+  current: "bg-amber-500 text-white ring-4 ring-amber-100",
+  waiting: "bg-slate-200 text-slate-500",
+  rejected: "bg-rose-500 text-white",
+  skipped: "bg-slate-100 text-slate-400",
+  none: "bg-slate-100 text-slate-400",
+};
+
+const STEP_TEXT: Record<TierState, string> = {
+  done: "Approved",
+  current: "Awaiting approval",
+  waiting: "Waiting",
+  rejected: "Rejected",
+  skipped: "Skipped",
+  none: "Not started",
+};
+
+const STEP_TEXT_CLS: Record<TierState, string> = {
+  done: "text-emerald-700",
+  current: "text-amber-700",
+  waiting: "text-slate-500",
+  rejected: "text-rose-700",
+  skipped: "text-slate-400",
+  none: "text-slate-400",
+};
+
+function ApprovalStep({
+  n,
+  title,
+  state,
+  who,
+  when,
+  authorized,
+  last,
+}: {
+  n: number;
+  title: string;
+  state: TierState;
+  who?: string | null;
+  when?: string | null;
+  authorized?: string | null;
+  last?: boolean;
+}) {
+  const stamp = fmtDateTime(when);
+  return (
+    <div className="relative flex gap-2.5">
+      {!last && <span className="absolute left-[11px] top-6 h-[calc(100%-12px)] w-px bg-slate-200" />}
+      <span className={`relative z-10 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ${STEP_DOT[state]}`}>
+        {state === "done" ? <Check size={13} /> : state === "rejected" ? <X size={13} /> : n}
+      </span>
+      <div className="min-w-0 pb-2">
+        <p className="text-[13px] font-medium leading-tight text-slate-800">{title}</p>
+        <p className={`text-[11px] leading-tight ${STEP_TEXT_CLS[state]}`}>{STEP_TEXT[state]}</p>
+        {who && (
+          <p className="mt-0.5 truncate text-[11px] text-slate-500" title={who}>
+            by <span className="font-medium text-slate-700">{who}</span>
+            {stamp && <span className="text-slate-400"> · {stamp}</span>}
+          </p>
+        )}
+        {authorized && !who && (
+          <p className="mt-0.5 text-[11px] text-slate-500">
+            Authorized: <span className="font-medium text-slate-700">{authorized}</span>
+          </p>
+        )}
+      </div>
     </div>
   );
 }
