@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getOpeningStocks } from "@/lib/stock-balance";
+import { getOpeningStocks, outstandingInternalQty, poLineReceiptsSelect } from "@/lib/stock-balance";
 
 export async function GET(req: Request) {
   try {
@@ -41,8 +41,8 @@ export async function GET(req: Request) {
         purchaseOrder: poFilter
       },
       select: {
+        ...poLineReceiptsSelect,
         materialProfileId: true,
-        internalQuantity: true,
         purchaseOrderId: true,
         internalUom: { select: { uomName: true } },
       }
@@ -146,7 +146,7 @@ export async function GET(req: Request) {
       if (!item.materialProfileId) return;
       const data = summaryMap.get(item.materialProfileId);
       if (data) {
-        data.onOrderQty += Number(item.internalQuantity || 0);
+        data.onOrderQty += outstandingInternalQty(item);
         if (item.internalUom?.uomName && !data.internalUom) data.internalUom = item.internalUom.uomName;
       }
     });

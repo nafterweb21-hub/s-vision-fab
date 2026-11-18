@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { poShipToData } from "@/lib/po-ship-to";
 import { prisma } from "@/lib/prisma";
 import { nextDocumentNo } from "@/lib/document-numbering";
+import { recomputePrPoStatus } from "@/lib/pr-po-status";
 
 export async function GET(req: Request) {
   try {
@@ -114,9 +115,10 @@ export async function POST(req: Request) {
               taxTypeId: it.taxTypeId || null,
               taxRate: it.taxRate || 0,
               taxAmount: it.taxAmount || 0,
-              conversion: it.conversion || 1,
+              conversion: Number(it.conversion) || 1,
               internalUomId: it.internalUomId || null,
-              internalQuantity: it.internalQuantity || 0,
+              // Spec: Internal Quantity = Qty × Conversion. Derived here, never trusted from the client.
+              internalQuantity: (Number(it.quantity) || 0) * (Number(it.conversion) || 1),
               deliveryDate: it.deliveryDate ? new Date(it.deliveryDate) : new Date(),
               remark: it.remark || "",
               hsnCode: it.hsnCode || null,
@@ -131,6 +133,8 @@ export async function POST(req: Request) {
           },
         },
       });
+
+      await recomputePrPoStatus(tx, po.purchaseRequisitionId);
 
       return NextResponse.json(po);
     });

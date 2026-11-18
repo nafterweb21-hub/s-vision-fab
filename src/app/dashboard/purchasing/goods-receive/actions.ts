@@ -4,6 +4,15 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { nextDocumentNo } from "@/lib/document-numbering";
 import { RecordStatus } from "@/lib/status";
+import { assertWithinOpenQty, recomputePoReceiveStatus } from "@/lib/po-receive-status";
+
+/** Pages whose numbers are derived from submitted GRs. */
+function revalidateReceiptViews(id?: string) {
+  revalidatePath("/dashboard/purchasing/goods-receive");
+  if (id) revalidatePath(`/dashboard/purchasing/goods-receive/${id}`);
+  revalidatePath("/dashboard/purchasing/purchase-order");
+  revalidatePath("/dashboard/inventory", "layout");
+}
 
 function toUserFriendlyError(error: any, defaultMsg: string): string {
   if (!error) return defaultMsg;
@@ -87,6 +96,15 @@ export async function createGoodsReceive(data: any) {
     };
 
     const newGr = await prisma.$transaction(async (tx) => {
+      await assertWithinOpenQty(
+        tx,
+        cleanData.purchaseOrderId,
+        (items || []).map((item: any) => ({
+          purchaseOrderItemId: item.purchaseOrderItemId,
+          receiveQty: Number(item.receiveQty) || 0,
+        })),
+      );
+
       const grNo = await nextDocumentNo(tx, "GOODS_RECEIVE", {
         companyId: cleanData.companyId,
         isTaken: async (no) => (await tx.goodsReceive.count({ where: { grNo: no } })) > 0,
@@ -136,6 +154,27 @@ export async function updateGoodsReceive(id: string, data: any) {
     };
 
     await prisma.$transaction(async (tx) => {
+      const existing = await tx.goodsReceive.findUnique({
+        where: { id },
+        select: { status: true, purchaseOrderId: true, items: { select: { id: true, purchaseOrderItemId: true, receiveQty: true } } },
+      });
+      if (!existing) throw new Error("Goods Receive not found.");
+      if (existing.status === "Void") throw new Error("A voided Goods Receive cannot be edited.");
+
+      // Quantities after this save: edited lines take the new value, the rest keep theirs.
+      const edits = new Map<string, number>(
+        (items || []).filter((it: any) => it.id).map((it: any) => [it.id, Number(it.receiveQty) || 0]),
+      );
+      await assertWithinOpenQty(
+        tx,
+        cleanData.purchaseOrderId || existing.purchaseOrderId,
+        existing.items.map((it) => ({
+          purchaseOrderItemId: it.purchaseOrderItemId,
+          receiveQty: edits.has(it.id) ? edits.get(it.id)! : Number(it.receiveQty),
+        })),
+        id,
+      );
+
       await tx.goodsReceive.update({
         where: { id },
         data: cleanData,
@@ -151,10 +190,16 @@ export async function updateGoodsReceive(id: string, data: any) {
           }
         }
       }
+
+      if (existing.status === "Submitted") {
+        await recomputePoReceiveStatus(tx, existing.purchaseOrderId);
+        if (cleanData.purchaseOrderId && cleanData.purchaseOrderId !== existing.purchaseOrderId) {
+          await recomputePoReceiveStatus(tx, cleanData.purchaseOrderId);
+        }
+      }
     });
 
-    revalidatePath("/dashboard/purchasing/goods-receive");
-    revalidatePath(`/dashboard/purchasing/goods-receive/${id}`);
+    revalidateReceiptViews(id);
     return { success: true };
   } catch (error: any) {
     console.error("Error updating GR:", error);
@@ -164,13 +209,27 @@ export async function updateGoodsReceive(id: string, data: any) {
 
 export async function submitGoodsReceive(id: string) {
   try {
-    await prisma.goodsReceive.update({
-      where: { id },
-      data: { status: "Submitted" },
+    await prisma.$transaction(async (tx) => {
+      const gr = await tx.goodsReceive.findUnique({
+        where: { id },
+        select: { status: true, purchaseOrderId: true, items: { select: { purchaseOrderItemId: true, receiveQty: true } } },
+      });
+      if (!gr) throw new Error("Goods Receive not found.");
+      if (gr.status !== "Draft") throw new Error(`Only a Draft Goods Receive can be submitted (this one is ${gr.status}).`);
+
+      // Re-check at submit: other GRs may have been saved since this draft was.
+      await assertWithinOpenQty(
+        tx,
+        gr.purchaseOrderId,
+        gr.items.map((it) => ({ purchaseOrderItemId: it.purchaseOrderItemId, receiveQty: Number(it.receiveQty) })),
+        id,
+      );
+
+      await tx.goodsReceive.update({ where: { id }, data: { status: "Submitted" } });
+      await recomputePoReceiveStatus(tx, gr.purchaseOrderId);
     });
 
-    revalidatePath("/dashboard/purchasing/goods-receive");
-    revalidatePath(`/dashboard/purchasing/goods-receive/${id}`);
+    revalidateReceiptViews(id);
     return { success: true };
   } catch (error: any) {
     console.error("Error submitting GR:", error);
@@ -180,13 +239,22 @@ export async function submitGoodsReceive(id: string) {
 
 export async function voidGoodsReceive(id: string) {
   try {
-    await prisma.goodsReceive.update({
-      where: { id },
-      data: { status: "Void" },
+    await prisma.$transaction(async (tx) => {
+      const openReturns = await tx.goodsReturn.count({
+        where: { goodsReceiveId: id, status: { not: "Void" } },
+      });
+      if (openReturns > 0) {
+        throw new Error("This Goods Receive has Goods Returns against it. Void those returns first.");
+      }
+      const gr = await tx.goodsReceive.update({
+        where: { id },
+        data: { status: "Void" },
+        select: { purchaseOrderId: true },
+      });
+      await recomputePoReceiveStatus(tx, gr.purchaseOrderId);
     });
 
-    revalidatePath("/dashboard/purchasing/goods-receive");
-    revalidatePath(`/dashboard/purchasing/goods-receive/${id}`);
+    revalidateReceiptViews(id);
     return { success: true };
   } catch (error: any) {
     console.error("Error voiding GR:", error);

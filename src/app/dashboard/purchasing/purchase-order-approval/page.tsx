@@ -174,7 +174,7 @@ export default function PurchaseOrderApprovalListPage() {
                   <th className="px-4 py-3">Supplier</th>
                   <th className="px-4 py-3">Work Order No</th>
                   <th className="px-4 py-3">Purchaser</th>
-                  <th className="px-4 py-3">Remark</th>
+                  <th className="px-4 py-3 hidden print:table-cell">Remark</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-blue-100">
@@ -213,7 +213,7 @@ export default function PurchaseOrderApprovalListPage() {
                     <td className="px-4 py-3 text-blue-700 font-medium">{r.supplier?.supplierName}</td>
                     <td className="px-4 py-3 text-blue-700 font-mono">{r.workOrderNo || "—"}</td>
                     <td className="px-4 py-3 text-blue-700">{r.purchaser?.name}</td>
-                    <td className="px-4 py-3 text-blue-700 max-w-[150px] truncate" title={r.remark || ""}>
+                    <td className="px-4 py-3 text-blue-700 max-w-[150px] truncate hidden print:table-cell print:whitespace-normal" title={r.remark || ""}>
                       {r.remark || "—"}
                     </td>
                   </tr>

@@ -77,7 +77,7 @@ export default function PurchaseOrderSubconEditPage() {
   const [remark, setRemark] = useState("");
   const [shipTo, setShipTo] = useState<PoShipTo>(emptyPoShipTo);
 
-  // Selecting a work order auto-fills Billed to with that work order's customer.
+  // Selecting a work order auto-fills the Consignee | Shipped to with that work order's customer.
   function handleWorkOrderChange(woNo: string) {
     setWorkOrderNo(woNo);
     const customerId = data?.workOrders?.find((w) => w.workOrderNo === woNo)?.customerId;

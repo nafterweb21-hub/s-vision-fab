@@ -54,6 +54,37 @@ export function available(agg: StockAggregate, openingStock = 0): number {
   return onHand(agg, openingStock) - agg.reservedQty;
 }
 
+/**
+ * Select fragment for a PO line's own receipts, so on-order can be the open
+ * balance rather than the whole ordered quantity.
+ */
+export const poLineReceiptsSelect = {
+  internalQuantity: true,
+  conversion: true,
+  goodsReceiveItems: {
+    where: { goodsReceive: { status: "Submitted" } },
+    select: {
+      receiveQty: true,
+      goodsReturnItems: { where: { goodsReturn: { status: "Submitted" } }, select: { internalQty: true } },
+    },
+  },
+} as const;
+
+/** Still to arrive on one PO line, in internal UOM: ordered − nett received, never negative. */
+export function outstandingInternalQty(item: {
+  internalQuantity: unknown;
+  conversion: unknown;
+  goodsReceiveItems: { receiveQty: unknown; goodsReturnItems: { internalQty: unknown }[] }[];
+}): number {
+  const conversion = Number(item.conversion || 1);
+  let nett = 0;
+  for (const gi of item.goodsReceiveItems) {
+    nett += Number(gi.receiveQty || 0) * conversion;
+    for (const ri of gi.goodsReturnItems) nett -= Number(ri.internalQty || 0);
+  }
+  return Math.max(0, Number(item.internalQuantity || 0) - nett);
+}
+
 /** The subset of the Prisma client this module needs, so a `$transaction` handle fits. */
 type Db = Pick<
   typeof prisma,
@@ -137,8 +168,8 @@ export async function getStockAggregates(
         purchaseOrder: { status: "Issued", receiveStatus: { not: "Fully Received" } },
       },
       select: {
+        ...poLineReceiptsSelect,
         materialProfileId: true,
-        internalQuantity: true,
         purchaseOrderId: true,
         internalUom: { select: { uomName: true } },
       },
@@ -196,7 +227,9 @@ export async function getStockAggregates(
   for (const item of poItems) {
     const agg = item.materialProfileId && result.get(item.materialProfileId);
     if (!agg) continue;
-    agg.onOrderQty += Number(item.internalQuantity || 0);
+    const outstanding = outstandingInternalQty(item);
+    if (outstanding <= 0) continue; // over- or fully received: nothing on order
+    agg.onOrderQty += outstanding;
     if (!openPoIds.has(item.materialProfileId!)) openPoIds.set(item.materialProfileId!, new Set());
     openPoIds.get(item.materialProfileId!)!.add(item.purchaseOrderId);
     if (item.internalUom?.uomName && !agg.internalUom) agg.internalUom = item.internalUom.uomName;

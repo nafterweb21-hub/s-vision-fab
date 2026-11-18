@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { poShipToData } from "@/lib/po-ship-to";
 import { prisma } from "@/lib/prisma";
+import { recomputePrPoStatus, recomputePrPoStatusForPo } from "@/lib/pr-po-status";
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
@@ -123,9 +124,10 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
           taxTypeId: it.taxTypeId || null,
           taxRate: it.taxRate || 0,
           taxAmount: it.taxAmount || 0,
-          conversion: it.conversion || 1,
+          conversion: Number(it.conversion) || 1,
           internalUomId: it.internalUomId || null,
-          internalQuantity: it.internalQuantity || 0,
+          // Spec: Internal Quantity = Qty × Conversion. Derived here, never trusted from the client.
+          internalQuantity: (Number(it.quantity) || 0) * (Number(it.conversion) || 1),
           deliveryDate: it.deliveryDate ? new Date(it.deliveryDate) : new Date(),
           remark: it.remark || "",
           hsnCode: it.hsnCode || null,
@@ -144,6 +146,8 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
         }
       }
 
+      await recomputePrPoStatusForPo(tx, updated.purchaseRequisitionId, exist.purchaseRequisitionId);
+
       return NextResponse.json(updated);
     });
   } catch (e: any) {
@@ -161,7 +165,10 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
       return NextResponse.json({ error: "Only Draft can be deleted" }, { status: 400 });
     }
 
-    await prisma.purchaseOrder.delete({ where: { id } });
+    await prisma.$transaction(async (tx) => {
+      await tx.purchaseOrder.delete({ where: { id } });
+      await recomputePrPoStatus(tx, exist.purchaseRequisitionId);
+    });
     return NextResponse.json({ success: true });
   } catch (e: any) {
     console.error("DELETE PO error:", e);

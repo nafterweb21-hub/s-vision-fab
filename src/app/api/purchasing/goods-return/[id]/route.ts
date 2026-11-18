@@ -72,7 +72,10 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       if (!exist) throw new Error("Goods Return not found");
       if (exist.status !== "Draft") throw new Error("Only Draft Goods Returns can be edited.");
 
-      const { items, status, ...rtnData } = body;
+      // Status is not editable here: Submit / Void go through the actions, which
+      // validate the return and update the PO Receive Status.
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { items, status: _status, ...rtnData } = body;
 
       // Delete existing items and recreate
       await tx.goodsReturnItem.deleteMany({ where: { goodsReturnId: id } });
@@ -82,7 +85,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
         data: {
           ...rtnData,
           rtnDate: new Date(rtnData.rtnDate),
-          status: status || exist.status,
+          status: exist.status,
           items: {
             create: (items || []).map((item: any) => ({
               goodsReceiveItemId: item.goodsReceiveItemId,

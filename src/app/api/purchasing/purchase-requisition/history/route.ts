@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requirePermission } from "@/lib/authz";
 
 export async function GET(request: Request) {
+  const { error: authError } = await requirePermission("PURCHASE_REQUISITION", "v");
+  if (authError) return authError;
+
   try {
     const { searchParams } = new URL(request.url);
     const prNo = searchParams.get("prNo") || "";

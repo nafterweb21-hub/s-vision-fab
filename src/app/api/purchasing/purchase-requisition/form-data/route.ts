@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requirePermission } from "@/lib/authz";
 
 import { RecordStatus } from "@/lib/status";
 export async function GET() {
+  const { error: authError } = await requirePermission("PURCHASE_REQUISITION", "v");
+  if (authError) return authError;
+
   try {
     const [companies, employees, workOrders, materials, uoms] = await Promise.all([
       prisma.companyProfile.findMany({

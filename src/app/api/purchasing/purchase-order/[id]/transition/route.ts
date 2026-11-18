@@ -3,6 +3,7 @@ import { copyPoShipTo } from "@/lib/po-ship-to";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/authz";
 import { determineApprovalRequirement } from "@/lib/po-approval-logic";
+import { recomputePrPoStatus } from "@/lib/pr-po-status";
 
 const REVISABLE_STATUSES = [
   "Pending For Approval",
@@ -61,6 +62,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           where: { id: po.id },
           data: { status: "Void" },
         });
+        await recomputePrPoStatus(tx, po.purchaseRequisitionId);
         return NextResponse.json({ success: true, status: "Void" });
       }
 
@@ -170,6 +172,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           data: { purchaseOrderId: newPo.id },
         });
 
+        // The new revision now carries the PR quantities in place of the Old Version.
+        await recomputePrPoStatus(tx, po.purchaseRequisitionId);
+
         return NextResponse.json(newPo);
       }
 
@@ -200,7 +205,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           where: { id: po.id },
           data: { status: "Issued" },
         });
-        // We'd update PR poQuantityIssued here based on items.
         return NextResponse.json({ success: true, status: "Issued" });
       }
 

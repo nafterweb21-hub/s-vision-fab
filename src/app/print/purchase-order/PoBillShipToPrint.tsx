@@ -1,7 +1,6 @@
-// "Billed to | Shipped to" box for the PO and PO-Subcon printouts.
-// Uses the bill-to saved on the PO (falling back to the company profile for POs
-// saved before bill-to fields existed). Shipped to repeats the bill-to unless the
-// PO has a different ship-to (consignee) set.
+// "Shipped to" (consignee) box for the PO and PO-Subcon printouts.
+// Older POs saved without a consignee fall back to their bill-to (or, failing
+// that, the company profile) as the ship-to.
 
 type Company = {
   companyName?: string | null;
@@ -102,11 +101,7 @@ export default function PoBillShipToPrint({ company, po }: { company: Company; p
     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "11px", marginTop: "10px" }}>
       <tbody>
         <tr>
-          <td style={cell}>
-            <div style={heading}>Details of Buyer | Billed to :</div>
-            <PartyBlock {...billTo} />
-          </td>
-          <td style={cell}>
+          <td style={{ ...cell, width: "100%" }}>
             <div style={heading}>Details of Consignee | Shipped to :</div>
             <PartyBlock {...shipTo} />
           </td>

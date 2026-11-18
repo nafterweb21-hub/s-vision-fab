@@ -224,7 +224,7 @@ export default function GoodsReturnListPage() {
                   <th className="px-4 py-3">GR No</th>
                   <th className="px-4 py-3">Company</th>
                   <th className="px-4 py-3">Creator</th>
-                  <th className="px-4 py-3">Remark</th>
+                  <th className="px-4 py-3 hidden print:table-cell">Remark</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-blue-100">
@@ -264,7 +264,7 @@ export default function GoodsReturnListPage() {
                     <td className="px-4 py-3 text-blue-700 font-mono">{r.goodsReceive?.grNo}</td>
                     <td className="px-4 py-3 text-blue-700">{r.company?.companyName}</td>
                     <td className="px-4 py-3 text-blue-700">{r.creator?.name}</td>
-                    <td className="px-4 py-3 text-blue-700 max-w-[150px] truncate" title={r.remark || ""}>
+                    <td className="px-4 py-3 text-blue-700 max-w-[150px] truncate hidden print:table-cell print:whitespace-normal" title={r.remark || ""}>
                       {r.remark || "—"}
                     </td>
                   </tr>

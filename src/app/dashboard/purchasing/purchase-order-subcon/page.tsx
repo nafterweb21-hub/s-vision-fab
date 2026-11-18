@@ -332,7 +332,7 @@ export default function PurchaseOrderListPage() {
                   <th className="px-4 py-3">Work Description</th>
                   <th className="px-4 py-3">Purchaser</th>
                   <th className="px-4 py-3">Receive Status</th>
-                  <th className="px-4 py-3">Remark</th>
+                  <th className="px-4 py-3 hidden print:table-cell">Remark</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-blue-100">
@@ -377,7 +377,7 @@ export default function PurchaseOrderListPage() {
                     <td className="px-4 py-3">
                       <POStatusPill status={r.receiveStatus} />
                     </td>
-                    <td className="px-4 py-3 text-blue-700 max-w-[150px] truncate" title={r.remark || ""}>
+                    <td className="px-4 py-3 text-blue-700 max-w-[150px] truncate hidden print:table-cell print:whitespace-normal" title={r.remark || ""}>
                       {r.remark || "—"}
                     </td>
                   </tr>

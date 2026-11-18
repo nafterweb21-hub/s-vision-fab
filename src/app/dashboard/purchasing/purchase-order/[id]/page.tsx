@@ -80,7 +80,7 @@ export default function PurchaseOrderEditPage() {
   const [remark, setRemark] = useState("");
   const [shipTo, setShipTo] = useState<PoShipTo>(emptyPoShipTo);
 
-  // Selecting a work order auto-fills Billed to with that work order's customer.
+  // Selecting a work order auto-fills the Consignee | Shipped to with that work order's customer.
   function handleWorkOrderChange(woNo: string) {
     setWorkOrderNo(woNo);
     const customerId = data?.workOrders?.find((w) => w.workOrderNo === woNo)?.customerId;
@@ -181,6 +181,21 @@ export default function PurchaseOrderEditPage() {
             taxRate: "0.00",
             taxAmount: "0.00",
           }]);
+
+          // "Convert to PO" from the PR list: prefill company, work order, consignee and items from the PR.
+          const prId = new URLSearchParams(window.location.search).get("prId");
+          const pr = prId ? fd.purchaseRequisitions?.find((p: any) => p.id === prId) : null;
+          if (pr) {
+            if (pr.companyId) setCompanyId(pr.companyId);
+            if (pr.workOrderNo) {
+              setWorkOrderNo(pr.workOrderNo);
+              const customerId = fd.workOrders?.find((w: any) => w.workOrderNo === pr.workOrderNo)?.customerId;
+              if (customerId) setShipTo((prev) => applyPoCustomer(prev, fd.customers, customerId));
+            }
+            handlePrChange(pr.id, fd);
+          } else if (prId) {
+            setError("The selected Purchase Requisition is not available for conversion (it must be Submitted).");
+          }
         }
       } catch (e: any) {
         setError(e.message);
@@ -239,10 +254,10 @@ export default function PurchaseOrderEditPage() {
     }
   };
 
-  const handlePrChange = (prId: string) => {
+  const handlePrChange = (prId: string, fd: FormData | null = data) => {
     setPurchaseRequisitionId(prId);
     if (prId) {
-      const pr = data?.purchaseRequisitions?.find(p => p.id === prId);
+      const pr = fd?.purchaseRequisitions?.find(p => p.id === prId);
       if (pr) {
         const newItems: Item[] = pr.items.map(it => ({
           fromMaterialProfile: it.fromMaterialProfile,
@@ -299,7 +314,7 @@ export default function PurchaseOrderEditPage() {
         }
 
         // Recalculations
-        if (patch.quantity || patch.unitPrice) {
+        if (patch.quantity !== undefined || patch.unitPrice !== undefined) {
           const q = Number(updated.quantity) || 0;
           const p = Number(updated.unitPrice) || 0;
           updated.amount = (q * p).toFixed(2);
@@ -320,7 +335,7 @@ export default function PurchaseOrderEditPage() {
         const tRate = Number(updated.taxRate) || 0;
         updated.taxAmount = (amt * (tRate / 100)).toFixed(2);
 
-        if (patch.quantity || patch.conversion) {
+        if (patch.quantity !== undefined || patch.conversion !== undefined) {
           const q = Number(updated.quantity) || 0;
           const c = Number(updated.conversion) || 1;
           updated.internalQuantity = (q * c).toFixed(2);

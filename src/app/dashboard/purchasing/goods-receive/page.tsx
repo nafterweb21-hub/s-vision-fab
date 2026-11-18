@@ -27,8 +27,9 @@ type GoodsReceiveRow = {
   remark: string | null;
   company: { companyName: string };
   supplier: { supplierName: string };
-  purchaseOrder: { poNo: string };
+  purchaseOrder: { poNo: string; receiveStatus?: string };
   creator: { name: string };
+  progress?: { receivedPct: number; thisGrPct: number; overReceived: boolean };
 };
 
 export default function GoodsReceiveListPage() {
@@ -213,9 +214,10 @@ export default function GoodsReceiveListPage() {
                   <th className="px-4 py-3">Date</th>
                   <th className="px-4 py-3">Supplier</th>
                   <th className="px-4 py-3">PO No</th>
+                  <th className="px-4 py-3">PO Received</th>
                   <th className="px-4 py-3">Company</th>
                   <th className="px-4 py-3">Creator</th>
-                  <th className="px-4 py-3">Remark</th>
+                  <th className="px-4 py-3 hidden print:table-cell">Remark</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-blue-100">
@@ -252,9 +254,12 @@ export default function GoodsReceiveListPage() {
                     </td>
                     <td className="px-4 py-3 text-blue-700 font-medium">{r.supplier?.supplierName}</td>
                     <td className="px-4 py-3 text-blue-700 font-mono">{r.purchaseOrder?.poNo}</td>
+                    <td className="px-4 py-3">
+                      <ReceiveProgress row={r} />
+                    </td>
                     <td className="px-4 py-3 text-blue-700">{r.company?.companyName}</td>
                     <td className="px-4 py-3 text-blue-700">{r.creator?.name}</td>
-                    <td className="px-4 py-3 text-blue-700 max-w-[150px] truncate" title={r.remark || ""}>
+                    <td className="px-4 py-3 text-blue-700 max-w-[150px] truncate hidden print:table-cell print:whitespace-normal" title={r.remark || ""}>
                       {r.remark || "—"}
                     </td>
                   </tr>
@@ -264,6 +269,62 @@ export default function GoodsReceiveListPage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * How much of the row's PO has been received. The darker segment is this GR's
+ * share; a Draft GR's share is shown hatched on top, since it is not received yet.
+ */
+function ReceiveProgress({ row }: { row: GoodsReceiveRow }) {
+  const p = row.progress;
+  if (!p) return <span className="text-blue-300">—</span>;
+
+  const isDraft = row.status === "Draft";
+  const counted = row.status === "Submitted";
+  const total = Math.min(p.receivedPct, 100);
+  // A submitted GR is already inside receivedPct; a draft would add to it.
+  const mine = row.status === "Void" ? 0 : Math.min(p.thisGrPct, counted ? total : 100 - total);
+  const before = counted ? total - mine : total;
+
+  const done = p.receivedPct >= 100;
+  const barColor = p.overReceived ? "bg-red-500" : done ? "bg-emerald-500" : "bg-blue-500";
+  const priorColor = p.overReceived ? "bg-red-300" : done ? "bg-emerald-300" : "bg-blue-300";
+
+  const title = [
+    `${p.receivedPct}% of ${row.purchaseOrder?.poNo ?? "PO"} received`,
+    row.status !== "Void" ? `this GR: ${p.thisGrPct}%${isDraft ? " (draft, not yet counted)" : ""}` : null,
+    p.overReceived ? "over-received on at least one line" : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  return (
+    <div className="flex items-center gap-2 min-w-[160px]" title={title}>
+      <div
+        className="relative h-2 w-28 rounded-full bg-blue-100 overflow-hidden flex"
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={p.receivedPct}
+        aria-label={title}
+      >
+        <div className={priorColor} style={{ width: `${before}%` }} />
+        {mine > 0 && (
+          <div
+            className={isDraft ? "bg-amber-400 bg-[repeating-linear-gradient(45deg,transparent_0_3px,rgba(255,255,255,0.5)_3px_6px)]" : barColor}
+            style={{ width: `${mine}%` }}
+          />
+        )}
+      </div>
+      <span
+        className={`text-xs font-semibold tabular-nums ${
+          p.overReceived ? "text-red-600" : done ? "text-emerald-600" : "text-blue-700"
+        }`}
+      >
+        {p.overReceived ? "Over" : `${p.receivedPct}%`}
+      </span>
     </div>
   );
 }
