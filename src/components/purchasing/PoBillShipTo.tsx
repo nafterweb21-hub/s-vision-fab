@@ -2,7 +2,8 @@
 
 import { SearchableSelect } from "@/components/SearchableSelect";
 
-// Mandatory "Details of Consignee | Shipped to" for purchase orders. Picking a customer
+// Optional "Details of Consignee | Shipped to" for purchase orders. Left blank, the
+// printout ships to the bill-to (the PO's company). Picking a customer
 // auto-fills the consignee name, default address, GSTIN, state and phone; the chosen
 // values are stored as text on the PO. (Billed to on the printout is the PO's company.)
 
@@ -85,14 +86,6 @@ export function poShipToFromRecord(po: Partial<Record<keyof PoShipTo, string | b
   return out;
 }
 
-/** Returns an error message when the mandatory consignee / ship-to fields are missing, else "". */
-export function validatePoShipTo(v: PoShipTo): string {
-  if (!v.consigneeName.trim() || !v.consigneeAddress.trim()) {
-    return "Please complete all mandatory fields in 'Details of Consignee | Shipped to' (Name, Ship To Address).";
-  }
-  return "";
-}
-
 /** Fills the consignee from a customer: its name, default address, GSTIN, state and default contact phone. */
 export function applyPoCustomer(value: PoShipTo, customers: PoCustomer[] | undefined, customerId: string): PoShipTo {
   const c = customers?.find((x) => x.id === customerId);
@@ -147,13 +140,13 @@ export default function PoBillShipTo({
           <span className="w-2 h-2 rounded-full bg-blue-600 inline-block"></span>
           Details of Consignee | Shipped to :
         </h3>
-        <span className="text-[11px] bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full font-bold">Mandatory *</span>
+        <span className="text-[11px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-bold">Optional</span>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-3">
         <div className="sm:col-span-1 lg:col-span-2">
           <label className="block text-xs font-semibold text-blue-900 mb-1">
-            Name (Consignee) <span className="text-rose-500">*</span>
+            Name (Consignee)
           </label>
           <SearchableSelect
             value={customer?.id || ""}
@@ -170,7 +163,7 @@ export default function PoBillShipTo({
 
         <div className="sm:col-span-1 lg:col-span-2">
           <label className="block text-xs font-semibold text-blue-900 mb-1">
-            Address (Ship To) <span className="text-rose-500">*</span>
+            Address (Ship To)
           </label>
           <SearchableSelect
             value={shipToAddressId}

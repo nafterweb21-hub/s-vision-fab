@@ -3,7 +3,7 @@ import { SearchableSelect } from "@/components/SearchableSelect";
 import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import PoBillShipTo, { emptyPoShipTo, poShipToFromRecord, validatePoShipTo, applyPoCustomer, type PoCustomer, type PoShipTo } from "@/components/purchasing/PoBillShipTo";
+import PoBillShipTo, { emptyPoShipTo, poShipToFromRecord, applyPoCustomer, type PoCustomer, type PoShipTo } from "@/components/purchasing/PoBillShipTo";
 import { Loader2, ArrowLeft, Plus, Trash2, Save, FileText } from "lucide-react";
 type FormData = {
   companies: { id: string; companyName: string; allowPoForWo: boolean }[];
@@ -323,9 +323,6 @@ export default function PurchaseOrderSubconEditPage() {
         return setError(`Line ${ln}: PO UOM is required`);
       }
     }
-
-    const shipToError = validatePoShipTo(shipTo);
-    if (shipToError) return setError(shipToError);
 
     setSaving(true);
     try {

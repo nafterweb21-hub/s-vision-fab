@@ -1,5 +1,5 @@
 // "Shipped to" (consignee) box for the PO and PO-Subcon printouts.
-// Older POs saved without a consignee fall back to their bill-to (or, failing
+// The consignee is optional: POs saved without one fall back to their bill-to (or, failing
 // that, the company profile) as the ship-to.
 
 type Company = {
@@ -86,7 +86,7 @@ export default function PoBillShipToPrint({ company, po }: { company: Company; p
         gstin: company?.gstRegistrationNo,
       };
 
-  const shipTo: Party = po.differentShipTo
+  const shipTo: Party = po.differentShipTo && (po.consigneeName || po.consigneeAddress)
     ? {
         name: po.consigneeName || billTo.name,
         address: po.consigneeAddress,
