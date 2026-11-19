@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma";
-import { assertRejectWithinReturned, RejectQtyError } from "@/lib/subcon-reject";
+import { assertRejectWithinReturned, assertReturnWithinSrf, RejectQtyError, ReturnQtyError } from "@/lib/subcon-reject";
 
 export async function GET(
   request: Request,
@@ -96,6 +96,8 @@ export async function PUT(
       // Voiding a return must not leave more rejected than returned on the SRF.
       if (status === "Void") {
         await assertRejectWithinReturned(tx, existingSrt.subconRequestFormId);
+      } else {
+        await assertReturnWithinSrf(tx, existingSrt.subconRequestFormId);
       }
 
       // If status changed to Submitted or Void, update SRF receiveStatus
@@ -155,6 +157,9 @@ export async function PUT(
 
     return NextResponse.json(updatedSrt);
   } catch (error: any) {
+    if (error instanceof ReturnQtyError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
     if (error instanceof RejectQtyError) {
       return NextResponse.json(
         {
@@ -171,40 +176,5 @@ export async function PUT(
   }
 }
 
-export async function DELETE(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params;
-    const srt = await prisma.subconReturnTracking.findUnique({
-      where: { id },
-    });
-
-    if (!srt) {
-      return NextResponse.json(
-        { error: "Subcon Return Tracking not found" },
-        { status: 404 }
-      );
-    }
-
-    if (srt.status !== "Draft") {
-      return NextResponse.json(
-        { error: "Can only delete draft tracking" },
-        { status: 400 }
-      );
-    }
-
-    await prisma.subconReturnTracking.delete({
-      where: { id },
-    });
-
-    return NextResponse.json({ message: "Subcon Return Tracking deleted" });
-  } catch (error: any) {
-    console.error("Error deleting Subcon Return Tracking:", error);
-    return NextResponse.json(
-      { error: "Failed to delete Subcon Return Tracking" },
-      { status: 500 }
-    );
-  }
-}
+// No DELETE: per docs/spec (README "No DELETE anywhere"), a Subcon Return Tracking is voided
+// through PUT { status: "Void" } so its running number stays contiguous.

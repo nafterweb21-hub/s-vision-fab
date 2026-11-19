@@ -37,3 +37,35 @@ export class RejectQtyError extends Error {
     );
   }
 }
+
+// Spec (docs/spec/subcon.md, SRT): Σ SRT quantity ≤ SRF quantity. Counts every
+// non-Void return (Draft and Submitted), so drafts can't over-book the SRF either.
+// Call inside the transaction *after* the write, so a violation rolls it back.
+export async function assertReturnWithinSrf(
+  tx: Prisma.TransactionClient,
+  subconRequestFormId: string,
+) {
+  const [srf, returned] = await Promise.all([
+    tx.subconRequestForm.findUnique({ where: { id: subconRequestFormId }, select: { quantity: true } }),
+    tx.subconReturnTracking.aggregate({
+      where: { subconRequestFormId, status: { not: "Void" } },
+      _sum: { returnedQty: true },
+    }),
+  ]);
+  const srfQty = Number(srf?.quantity ?? 0);
+  const totalReturned = Number(returned._sum.returnedQty ?? 0);
+  if (totalReturned > srfQty) {
+    throw new ReturnQtyError(totalReturned, srfQty);
+  }
+}
+
+export class ReturnQtyError extends Error {
+  constructor(
+    readonly totalReturned: number,
+    readonly srfQty: number,
+  ) {
+    super(
+      `Total returned qty (${totalReturned}) on Subcon Return Trackings cannot exceed the SRF quantity (${srfQty})`,
+    );
+  }
+}

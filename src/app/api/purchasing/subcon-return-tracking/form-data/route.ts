@@ -15,14 +15,20 @@ export async function GET() {
         orderBy: { supplierName: "asc" },
       }),
       prisma.subconRequestForm.findMany({
+        // Items are only with the subcon once the SRF is Submitted.
         where: {
-          status: { not: "Void" }
+          status: "Submitted"
         },
         include: {
+          // Running totals, so the form can show what's left to return / reject.
+          subconReturnTrackings: { where: { status: { not: "Void" } }, select: { returnedQty: true, status: true } },
+          subconRejectTrackings: { where: { status: { not: "Void" } }, select: { rejectedQty: true } },
           purchaseOrderItem: {
             include: {
               purchaseOrder: true,
               poUom: true,
+              masterMainProcess: { select: { process: true } },
+              masterRoutingProcess: { select: { routingProcess: true } },
               woRoutingProcess: {
                 include: {
                   inProcess: true,
@@ -63,11 +69,23 @@ export async function GET() {
         poNo: srf.purchaseOrderItem.purchaseOrder.poNo,
         woNo: srf.purchaseOrderItem.purchaseOrder.workOrderNo,
         inProcessDescription: srf.purchaseOrderItem.woRoutingProcess?.inProcess?.description || "",
-        mainProcess: srf.purchaseOrderItem.woRoutingProcess?.mainProcess?.process || "",
-        routingProcess: srf.purchaseOrderItem.woRoutingProcess?.routingProcess?.routingProcess || "",
+        // A PO-Subcon line without a WO carries master processes instead.
+        mainProcess:
+          srf.purchaseOrderItem.woRoutingProcess?.mainProcess?.process ||
+          srf.purchaseOrderItem.masterMainProcess?.process ||
+          "",
+        routingProcess:
+          srf.purchaseOrderItem.woRoutingProcess?.routingProcess?.routingProcess ||
+          srf.purchaseOrderItem.masterRoutingProcess?.routingProcess ||
+          "",
         partDescription: srf.purchaseOrderItem.description || "",
         dateRequired: srf.dateRequired,
         acknowledgedQuantity: srf.quantity, // From SRF
+        returnedQty: srf.subconReturnTrackings.reduce((s, t) => s + Number(t.returnedQty), 0),
+        returnedSubmittedQty: srf.subconReturnTrackings
+          .filter((t) => t.status === "Submitted")
+          .reduce((s, t) => s + Number(t.returnedQty), 0),
+        rejectedQty: srf.subconRejectTrackings.reduce((s, t) => s + Number(t.rejectedQty), 0),
         uom: srf.purchaseOrderItem.poUom.uomName,
         unitPrice: srf.purchaseOrderItem.unitPrice,
         amount: srf.purchaseOrderItem.amount,

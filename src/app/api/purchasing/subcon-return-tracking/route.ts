@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma";
 import { nextDocumentNo } from "@/lib/document-numbering";
+import { assertReturnWithinSrf, ReturnQtyError } from "@/lib/subcon-reject";
 
 export async function GET(request: Request) {
   try {
@@ -114,6 +115,8 @@ export async function POST(request: Request) {
         },
       });
 
+      await assertReturnWithinSrf(tx, subconRequestFormId);
+
       // Update Subcon Request Form receiveStatus if status is Submitted
       if (srt.status === "Submitted") {
         const srf = await tx.subconRequestForm.findUnique({
@@ -160,6 +163,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json(newSrt, { status: 201 });
   } catch (error: any) {
+    if (error instanceof ReturnQtyError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
     console.error("Error creating Subcon Return Tracking:", error);
     return NextResponse.json(
       { error: "Failed to create Subcon Return Tracking" },

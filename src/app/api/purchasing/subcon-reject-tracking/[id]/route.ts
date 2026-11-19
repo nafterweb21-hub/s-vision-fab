@@ -113,40 +113,5 @@ export async function PUT(
   }
 }
 
-export async function DELETE(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params;
-    const srt = await prisma.subconRejectTracking.findUnique({
-      where: { id },
-    });
-
-    if (!srt) {
-      return NextResponse.json(
-        { error: "Subcon Reject Tracking not found" },
-        { status: 404 }
-      );
-    }
-
-    if (srt.status !== "Draft") {
-      return NextResponse.json(
-        { error: "Can only delete draft tracking" },
-        { status: 400 }
-      );
-    }
-
-    await prisma.subconRejectTracking.delete({
-      where: { id },
-    });
-
-    return NextResponse.json({ message: "Subcon Reject Tracking deleted" });
-  } catch (error: any) {
-    console.error("Error deleting Subcon Reject Tracking:", error);
-    return NextResponse.json(
-      { error: "Failed to delete Subcon Reject Tracking" },
-      { status: 500 }
-    );
-  }
-}
+// No DELETE: per docs/spec (README "No DELETE anywhere"), a Subcon Reject Tracking is voided
+// through PUT { status: "Void" } so its running number stays contiguous.
