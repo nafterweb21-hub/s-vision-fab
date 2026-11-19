@@ -5,23 +5,25 @@ import { toast as hotToast } from "react-hot-toast";
 import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Plus, SearchX, Edit2, Eye, ClipboardList, Send, Ban, Printer } from "lucide-react";
+import { Badge, EmptyState, InitialsAvatar, StatusBadge, buttonClass } from "@/components/form-ui";
 import {
-  Plus,
-  Search,
-  Loader2,
-  Edit2,
-  AlertCircle,
-  FileText,
-  Send,
-  Ban,
-} from "lucide-react";
+  Breadcrumb,
+  ErrorBlock,
+  LoadingBlock,
+  SearchBar,
+  SelectionBar,
+  StatusTiles,
+  Toast,
+  ToolbarBtn,
+  fmtDate,
+} from "@/components/purchasing/DocListParts";
+import { SRF_RECEIVE_TONE, SRF_TONE } from "./SrfParts";
 
-const STATUS_TABS = [
-  "All",
-  "Draft",
-  "Submitted",
-  "Void",
-] as const;
+const STATUS_TABS = ["All", "Draft", "Submitted", "Void"] as const;
+type StatusTab = (typeof STATUS_TABS)[number];
+
+type PendingAction = "submit" | "void";
 
 export default function SubconRequestFormListPage() {
   const router = useRouter();
@@ -29,10 +31,15 @@ export default function SubconRequestFormListPage() {
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [tab, setTab] = useState<(typeof STATUS_TABS)[number]>("All");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [tab, setTab] = useState<StatusTab>("All");
   const [errorMsg, setErrorMsg] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
+  // Status counts from the last "All" load for the current search, so the tiles keep their
+  // numbers while a single-status tab is open (the API filters by status server-side).
+  const [allCounts, setAllCounts] = useState<{ key: string; counts: Record<string, number> } | null>(null);
 
   const toastParam = searchParams.get("toast");
   useEffect(() => {
@@ -44,12 +51,18 @@ export default function SubconRequestFormListPage() {
     return () => clearTimeout(t);
   }, [toastParam, router]);
 
+  // Debounce the server-side search.
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 250);
+    return () => clearTimeout(t);
+  }, [search]);
+
   const fetchRows = async () => {
     setLoading(true);
     setErrorMsg("");
     try {
       const res = await fetch(
-        `/api/purchasing/subcon-request-form?search=${encodeURIComponent(search)}&status=${tab}`
+        `/api/purchasing/subcon-request-form?search=${encodeURIComponent(debouncedSearch)}&status=${tab}`
       );
       if (!res.ok) throw new Error("Failed to fetch subcon request forms");
       setRows(await res.json());
@@ -62,7 +75,7 @@ export default function SubconRequestFormListPage() {
 
   useEffect(() => {
     fetchRows();
-  }, [search, tab]);
+  }, [debouncedSearch, tab]);
 
   const counts = useMemo(() => {
     const c: Record<string, number> = { All: rows.length };
@@ -70,273 +83,270 @@ export default function SubconRequestFormListPage() {
     return c;
   }, [rows]);
 
-  const selected = useMemo(
-    () => rows.find((r) => r.id === selectedId) || null,
-    [rows, selectedId]
-  );
+  if (tab === "All" && !loading && !errorMsg && allCounts?.counts !== counts) {
+    setAllCounts({ key: debouncedSearch, counts });
+  }
 
-  async function callAction(id: string, action: "submit" | "void") {
-    const res = await fetch(`/api/purchasing/subcon-request-form/${id}/transition`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action }),
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      hotToast.error(err.error || `Failed: ${action}`);
-      return null;
+  const selected = useMemo(() => rows.find((r) => r.id === selectedId) || null, [rows, selectedId]);
+
+  const hasFilters = search.trim() !== "" || tab !== "All";
+  const clearFilters = () => {
+    setSearch("");
+    setTab("All");
+  };
+
+  async function callAction(action: PendingAction) {
+    if (!selected) return;
+    const target = selected;
+    setPendingAction(action);
+    try {
+      const res = await fetch(`/api/purchasing/subcon-request-form/${target.id}/transition`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        hotToast.error(err.error || `Failed: ${action}`);
+        return;
+      }
+      hotToast.success(action === "submit" ? `${target.srfNo} submitted` : `${target.srfNo} is now Void`);
+      setSelectedId(null);
+      fetchRows();
+    } finally {
+      setPendingAction(null);
     }
-    return res.json();
   }
 
   async function onSubmit() {
     if (!selected) return;
     if (selected.status !== "Draft") return hotToast.error("Only Draft can be Submitted");
-    await callAction(selected.id, "submit");
-    fetchRows();
+    if (!await customConfirm(`Submit Subcon Request Form ${selected.srfNo}?`)) return;
+    callAction("submit");
   }
 
   async function onVoid() {
     if (!selected) return;
     if (selected.status === "Void") return hotToast.error("Already voided");
-    if (!await customConfirm(`Void Subcon Request Form ${selected.srfNo}?`)) return;
-    await callAction(selected.id, "void");
-    fetchRows();
+    if (!await customConfirm(`Void Subcon Request Form ${selected.srfNo}? Its quantity goes back to the PO line.`)) return;
+    callAction("void");
   }
 
   function onEdit() {
-    if (!selected) return;
-    router.push(`/dashboard/purchasing/subcon-request-form/${selected.id}`);
+    if (selected) router.push(`/dashboard/purchasing/subcon-request-form/${selected.id}`);
   }
 
-  return (
-    <div className="p-6 lg:p-8 space-y-6 relative">
-      {toast && (
-        <div className="fixed top-6 right-6 z-50 flex items-center gap-3 rounded-xl bg-blue-900 px-4 py-3.5 text-xs font-bold text-white shadow-xl border border-blue-800">
-          <span className="flex h-2 w-2 rounded-full bg-emerald-500"></span>
-          {toast}
-        </div>
-      )}
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 pb-6 border-b border-blue-200">
-        <div>
-          <div className="flex items-center gap-2 text-xs text-blue-400 font-semibold tracking-wider uppercase mb-1">
-            <Link href="/dashboard" className="hover:text-blue-600">Dashboard</Link>
-            <span>/</span>
-            <span className="text-blue-500">Purchasing</span>
-            <span>/</span>
-            <span className="text-blue-500">Subcon Request Form</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-blue-500/10 text-blue-600">
-              <FileText size={20} />
-            </div>
-            <div>
-              <h2 className="text-2xl font-bold tracking-tight text-blue-900">Subcon Request Form</h2>
-              <p className="text-sm text-blue-500 mt-0.5">Manage delivery notes for subcontractor items.</p>
-            </div>
-          </div>
-        </div>
+  function onPrint() {
+    if (selected) window.open(`/print/subcon-request-form/${selected.id}`, "_blank");
+  }
 
-        <Link
-          href="/dashboard/purchasing/subcon-request-form/new"
-          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-sky-600 hover:from-blue-500 hover:to-sky-500 rounded-lg shadow-md active:scale-95 transition-all duration-200 shrink-0"
-        >
-          <Plus size={16} /> New Form
+  const actionLoading = pendingAction !== null;
+  const firstLoad = loading && rows.length === 0;
+  const cachedCounts = allCounts && allCounts.key === debouncedSearch ? allCounts.counts : null;
+  const tileCount = (key: StatusTab): number | null => {
+    if (firstLoad) return null;
+    if (key === tab && !loading && !errorMsg) return counts.All;
+    return cachedCounts ? cachedCounts[key] ?? 0 : null;
+  };
+
+  return (
+    <div className="relative space-y-4">
+      {toast && <Toast message={toast} />}
+
+      {/* Page header */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white shadow-sm shadow-indigo-600/20 sm:inline-flex">
+            <ClipboardList size={18} />
+          </span>
+          <div className="min-w-0">
+            <Breadcrumb current="Subcon Request Form" />
+            <h1 className="text-lg font-semibold leading-tight text-slate-900">Subcon Request Form</h1>
+            <p className="text-xs text-slate-500">Delivery notes for items handed over to subcontractors against an Issued PO-Subcon.</p>
+          </div>
+        </div>
+        <Link href="/dashboard/purchasing/subcon-request-form/new" className={buttonClass("primary", "md")}>
+          <Plus size={14} /> New Form
         </Link>
       </div>
 
-      {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-2 bg-white border border-blue-200 p-3 rounded-xl shadow-sm">
-        <ToolbarBtn icon={<Edit2 size={14} />} label="View / Edit" onClick={onEdit} disabled={!selected} />
-        <ToolbarBtn icon={<Ban size={14} />} label="Void" onClick={onVoid} disabled={!selected || selected.status === "Void"} />
-        <ToolbarBtn icon={<Send size={14} />} label="Submit" onClick={onSubmit} disabled={!selected || selected.status !== "Draft"} primary />
-      </div>
+      <StatusTiles
+        tabs={STATUS_TABS}
+        tab={tab}
+        onTab={setTab}
+        count={tileCount}
+        label={(t) => (t === "All" ? "All forms" : t)}
+        tone={(t) => (t === "All" ? "indigo" : SRF_TONE[t] ?? "slate")}
+      />
 
-      {/* Tabs */}
-      <div className="flex flex-wrap gap-2">
-        {STATUS_TABS.map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${
-              tab === t
-                ? "bg-blue-900 text-white border-blue-900"
-                : "bg-white text-blue-700 border-blue-200 hover:bg-blue-50"
-            }`}
-          >
-            {t} {counts[t] != null ? `(${counts[t]})` : ""}
-          </button>
-        ))}
-      </div>
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+        <SearchBar
+          value={search}
+          onChange={setSearch}
+          placeholder="Search by SRF No, PO No, Supplier, Company, Description or Remark..."
+          refreshing={loading && rows.length > 0}
+          hasFilters={hasFilters}
+          onClear={clearFilters}
+        />
 
-      {/* Search */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-4 bg-white border border-blue-200 p-4 rounded-xl shadow-sm">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-blue-400" />
-          <input
-            type="text"
-            placeholder="Search by SRF No, PO No, Supplier, Company or Remark..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 text-sm bg-blue-50 border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+        <SelectionBar selectedLabel={selected?.srfNo} onClear={() => setSelectedId(null)} hint="Select a form to act on it">
+          <ToolbarBtn
+            icon={selected && selected.status !== "Draft" ? <Eye size={12} /> : <Edit2 size={12} />}
+            label={selected && selected.status !== "Draft" ? "View" : "Edit"}
+            onClick={onEdit}
+            disabled={!selected || actionLoading}
           />
-        </div>
-      </div>
+          <ToolbarBtn
+            icon={<Ban size={12} />}
+            label="Void"
+            onClick={onVoid}
+            disabled={!selected || selected.status === "Void" || actionLoading}
+            spinning={pendingAction === "void"}
+            variant="danger"
+          />
+          <ToolbarBtn icon={<Printer size={12} />} label="Print" onClick={onPrint} disabled={!selected || actionLoading} />
+          <span className="mx-0.5 hidden h-4 w-px bg-slate-200 sm:inline-block" />
+          <ToolbarBtn
+            icon={<Send size={12} />}
+            label="Submit"
+            onClick={onSubmit}
+            disabled={!selected || selected.status !== "Draft" || actionLoading}
+            spinning={pendingAction === "submit"}
+            variant="primary"
+          />
+        </SelectionBar>
 
-      {/* Table */}
-      {loading ? (
-        <div className="h-64 flex flex-col items-center justify-center gap-2">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-          <p className="text-sm text-blue-500">Loading forms...</p>
-        </div>
-      ) : errorMsg ? (
-        <div className="bg-rose-50 border border-rose-200 rounded-xl p-6 flex items-center gap-3 text-rose-700">
-          <AlertCircle size={18} />
-          <p className="text-sm font-medium">{errorMsg}</p>
-        </div>
-      ) : rows.length === 0 ? (
-        <div className="bg-white border border-blue-200 rounded-xl p-12 text-center shadow-sm">
-          <div className="mx-auto w-12 h-12 rounded-full bg-blue-500/10 flex items-center justify-center mb-4">
-            <FileText size={22} className="text-blue-600" />
-          </div>
-          <p className="text-blue-600 font-semibold">No forms found.</p>
-          <p className="text-xs text-blue-400 mt-1">Click "New Form" to create your first.</p>
-        </div>
-      ) : (
-        <div className="bg-white border border-blue-200 rounded-xl shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left whitespace-nowrap">
-              <thead className="text-xs text-blue-500 bg-blue-50/50 uppercase tracking-wider border-b border-blue-200">
-                <tr>
-                  <th className="px-4 py-3 w-10"></th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">SRF No</th>
-                  <th className="px-4 py-3">Date</th>
-                  <th className="px-4 py-3">Company</th>
-                  <th className="px-4 py-3">Supplier</th>
-                  <th className="px-4 py-3">PO No</th>
-                  <th className="px-4 py-3">Part Description</th>
-                  <th className="px-4 py-3 text-right">Qty</th>
-                  <th className="px-4 py-3">Receive Status</th>
+        {firstLoad ? (
+          <LoadingBlock label="Loading forms..." />
+        ) : errorMsg ? (
+          <ErrorBlock message={errorMsg} />
+        ) : rows.length === 0 ? (
+          hasFilters ? (
+            <EmptyState
+              icon={SearchX}
+              tone="slate"
+              title="No request forms match these filters"
+              description="Try a different search term or status."
+              action={
+                <button type="button" onClick={clearFilters} className={buttonClass("secondary", "md")}>
+                  Clear filters
+                </button>
+              }
+            />
+          ) : (
+            <EmptyState
+              icon={ClipboardList}
+              tone="indigo"
+              title="No subcon request forms yet."
+              description="Create one for each batch of items handed over to a subcontractor on an Issued PO-Subcon."
+              action={
+                <Link href="/dashboard/purchasing/subcon-request-form/new" className={buttonClass("primary", "md")}>
+                  <Plus size={14} /> New Form
+                </Link>
+              }
+            />
+          )
+        ) : (
+          <div className={`overflow-x-auto transition-opacity ${loading ? "opacity-60" : ""}`}>
+            <table className="w-full text-left text-[13px]">
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50/70 text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                  <th className="w-8 py-2 pl-4 pr-1 font-medium"><span className="sr-only">Select</span></th>
+                  <th className="px-3 py-2 font-medium">Status</th>
+                  <th className="px-3 py-2 font-medium">SRF No</th>
+                  <th className="hidden px-3 py-2 font-medium sm:table-cell">Date</th>
+                  <th className="px-3 py-2 font-medium">Supplier</th>
+                  <th className="hidden px-3 py-2 font-medium md:table-cell">PO No</th>
+                  <th className="hidden px-3 py-2 font-medium lg:table-cell">Part Description</th>
+                  <th className="px-3 py-2 text-right font-medium">Qty</th>
+                  <th className="hidden px-3 py-2 font-medium md:table-cell">Returned</th>
+                  <th className="hidden px-3 py-2 font-medium xl:table-cell">Company</th>
+                  <th className="px-4 py-2 text-right font-medium print:hidden">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-blue-100">
-                {rows.map((r) => (
-                  <tr
-                    key={r.id}
-                    onClick={() => setSelectedId(r.id === selectedId ? null : r.id)}
-                    className={`cursor-pointer transition-colors ${
-                      selectedId === r.id ? "bg-blue-50/70" : "hover:bg-blue-50/30"
-                    }`}
-                  >
-                    <td className="px-4 py-3">
-                      <input
-                        type="radio"
-                        checked={selectedId === r.id}
-                        onChange={() => setSelectedId(r.id)}
-                        className="accent-blue-600"
-                      />
-                    </td>
-                    <td className="px-4 py-3">
-                      <StatusPill status={r.status} />
-                    </td>
-                    <td className="px-4 py-3 font-bold text-blue-900">
-                      <Link
-                        href={`/dashboard/purchasing/subcon-request-form/${r.id}`}
-                        className="hover:text-blue-600"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        {r.srfNo}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3 text-blue-700">
-                      {new Date(r.srfDate).toLocaleDateString()}
-                    </td>
-                    <td className="px-4 py-3 text-blue-700 font-medium">
-                      {r.purchaseOrderItem?.purchaseOrder?.company?.companyName}
-                    </td>
-                    <td className="px-4 py-3 text-blue-700 font-medium">
-                      {r.purchaseOrderItem?.purchaseOrder?.supplier?.supplierName}
-                    </td>
-                    <td className="px-4 py-3 text-blue-700 font-mono">
-                      {r.purchaseOrderItem?.purchaseOrder?.poNo}
-                    </td>
-                    <td className="px-4 py-3 text-blue-700 max-w-[200px] truncate" title={r.purchaseOrderItem?.description || ""}>
-                      {r.purchaseOrderItem?.description || "—"}
-                    </td>
-                    <td className="px-4 py-3 text-blue-700 text-right">
-                      {r.quantity}
-                    </td>
-                    <td className="px-4 py-3">
-                      <POStatusPill status={r.receiveStatus} />
-                    </td>
-                  </tr>
-                ))}
+              <tbody className="divide-y divide-slate-100">
+                {rows.map((r) => {
+                  const isSelected = selectedId === r.id;
+                  const href = `/dashboard/purchasing/subcon-request-form/${r.id}`;
+                  const editable = r.status === "Draft";
+                  const po = r.purchaseOrderItem?.purchaseOrder;
+                  const supplier = po?.supplier?.supplierName || "";
+                  const receive: string = r.receiveStatus || "N/A";
+                  return (
+                    <tr
+                      key={r.id}
+                      onClick={() => setSelectedId(isSelected ? null : r.id)}
+                      aria-selected={isSelected}
+                      className={`group cursor-pointer transition-colors ${isSelected ? "bg-indigo-50/70" : "hover:bg-indigo-50/40"}`}
+                    >
+                      <td className="py-2 pl-4 pr-1">
+                        <input
+                          type="radio"
+                          checked={isSelected}
+                          onChange={() => setSelectedId(r.id)}
+                          onClick={(e) => e.stopPropagation()}
+                          aria-label={`Select ${r.srfNo}`}
+                          className="h-3.5 w-3.5 accent-indigo-600"
+                        />
+                      </td>
+                      <td className="px-3 py-2">
+                        <StatusBadge status={r.status} tone={SRF_TONE[r.status] ?? "slate"} />
+                      </td>
+                      <td className="px-3 py-2">
+                        <Link
+                          href={href}
+                          onClick={(e) => e.stopPropagation()}
+                          className="font-mono text-[13px] font-semibold text-indigo-600 hover:text-indigo-800 hover:underline"
+                        >
+                          {r.srfNo}
+                        </Link>
+                      </td>
+                      <td className="hidden px-3 py-2 text-xs text-slate-500 sm:table-cell">{fmtDate(r.srfDate)}</td>
+                      <td className="px-3 py-2">
+                        <div className="flex min-w-0 max-w-[150px] items-center gap-2 sm:max-w-[220px]" title={supplier}>
+                          <InitialsAvatar name={supplier} />
+                          <span className="truncate font-medium text-slate-800">{supplier || "—"}</span>
+                        </div>
+                      </td>
+                      <td className="hidden px-3 py-2 font-mono text-xs text-slate-600 md:table-cell">{po?.poNo || "—"}</td>
+                      <td className="hidden max-w-[240px] px-3 py-2 text-slate-600 lg:table-cell">
+                        <p className="truncate" title={r.purchaseOrderItem?.description || ""}>{r.purchaseOrderItem?.description || "—"}</p>
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        <span className="font-semibold tabular-nums text-slate-900">{Number(r.quantity)}</span>
+                        <span className="ml-1 text-[11px] text-slate-400">{r.purchaseOrderItem?.poUom?.uomName}</span>
+                      </td>
+                      <td className="hidden px-3 py-2 md:table-cell">
+                        <Badge tone={SRF_RECEIVE_TONE[receive] ?? "slate"} dot>
+                          {receive === "N/A" ? "Not yet" : receive}
+                        </Badge>
+                      </td>
+                      <td className="hidden max-w-[180px] truncate px-3 py-2 text-slate-600 xl:table-cell">{po?.company?.companyName}</td>
+                      <td className="px-4 py-2 text-right print:hidden">
+                        <Link
+                          href={href}
+                          onClick={(e) => e.stopPropagation()}
+                          className={buttonClass("secondary", "sm", "lg:opacity-75 lg:group-hover:opacity-100")}
+                        >
+                          {editable ? <Edit2 size={12} /> : <Eye size={12} />}
+                          {editable ? "Edit" : "View"}
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
-        </div>
+        )}
+      </div>
+
+      {!errorMsg && rows.length > 0 && (
+        <p className="px-1 text-[11px] text-slate-400">
+          Showing <span className="font-medium tabular-nums text-slate-600">{rows.length}</span> request form
+          {rows.length === 1 ? "" : "s"}
+        </p>
       )}
     </div>
-  );
-}
-
-function ToolbarBtn({
-  icon,
-  label,
-  onClick,
-  disabled,
-  primary,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  onClick: () => void;
-  disabled?: boolean;
-  primary?: boolean;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md border transition-colors active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed ${
-        primary
-          ? "bg-blue-600 text-white border-blue-600 hover:bg-blue-500"
-          : "bg-white text-blue-700 border-blue-200 hover:bg-blue-50"
-      }`}
-    >
-      {icon} {label}
-    </button>
-  );
-}
-
-function StatusPill({ status }: { status: string }) {
-  const cls =
-    status === "Submitted"
-      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-      : status === "Draft"
-      ? "bg-amber-50 text-amber-700 border-amber-200"
-      : status === "Void"
-      ? "bg-rose-50 text-rose-700 border-rose-200"
-      : "bg-blue-50 text-blue-700 border-blue-200";
-  return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${cls}`}>
-      {status}
-    </span>
-  );
-}
-
-function POStatusPill({ status }: { status: string }) {
-  const cls =
-    status === "Fully Received"
-      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-      : status === "Partially Received"
-      ? "bg-sky-50 text-sky-700 border-sky-200"
-      : status === "N/A"
-      ? "bg-slate-100 text-slate-600 border-slate-200"
-      : "bg-slate-100 text-slate-600 border-slate-200";
-  return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${cls}`}>
-      {status}
-    </span>
   );
 }

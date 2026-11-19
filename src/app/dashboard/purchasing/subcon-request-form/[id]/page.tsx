@@ -1,5 +1,4 @@
 "use client";
-import { SearchableSelect } from "@/components/SearchableSelect";
 import { customConfirm } from "@/lib/customConfirm";
 import { toast as hotToast } from "react-hot-toast";
 
@@ -7,44 +6,44 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter, useParams } from "next/navigation";
 import {
-ArrowLeft,
+  ArrowLeft,
   Loader2,
   AlertCircle,
   Save,
   Printer,
   Ban,
   Send,
-  Trash2,
+  Lock,
+  Building2,
+  ClipboardList,
+  CalendarDays,
+  CalendarClock,
+  Wrench,
+  PackageCheck,
 } from "lucide-react";
+import { Badge, MetaChip, StatusBadge, buttonClass } from "@/components/form-ui";
+import { PoLineCard, SRF_RECEIVE_TONE, SRF_TONE, SrfFieldsCard, fmtDate, srfQuantityError, type SrfFieldValues } from "../SrfParts";
 
 export default function SubconRequestFormDetailPage() {
   const params = useParams();
   const id = params?.id as string;
-
   const router = useRouter();
-  
+
   const [srf, setSrf] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
-  
   const [employees, setEmployees] = useState<any[]>([]);
-  
-  const [saving, setSaving] = useState(false);
-  const [srfDate, setSrfDate] = useState("");
-  const [outsourcedById, setOutsourcedById] = useState("");
-  const [dateRequired, setDateRequired] = useState("");
-  const [receivedById, setReceivedById] = useState("");
-  const [quantity, setQuantity] = useState(0);
-  const [remark, setRemark] = useState("");
-
-  useEffect(() => {
-    if (!id) return;
-    fetchSrf();
-    fetchEmployees();
-  }, [id]);
+  const [pending, setPending] = useState<"save" | "submit" | "void" | null>(null);
+  const [values, setValues] = useState<SrfFieldValues>({
+    srfDate: "",
+    outsourcedById: "",
+    dateRequired: "",
+    receivedById: "",
+    quantity: 0,
+    remark: "",
+  });
 
   const fetchSrf = async () => {
-    setLoading(true);
     try {
       const res = await fetch(`/api/purchasing/subcon-request-form/${id}`);
       if (!res.ok) {
@@ -53,14 +52,14 @@ export default function SubconRequestFormDetailPage() {
       }
       const data = await res.json();
       setSrf(data);
-      
-      setSrfDate(data.srfDate ? new Date(data.srfDate).toISOString().slice(0, 10) : "");
-      setOutsourcedById(data.outsourcedById || "");
-      setDateRequired(data.dateRequired ? new Date(data.dateRequired).toISOString().slice(0, 10) : "");
-      setReceivedById(data.receivedById || "");
-      setQuantity(Number(data.quantity) || 0);
-      setRemark(data.remark || "");
-      
+      setValues({
+        srfDate: data.srfDate ? new Date(data.srfDate).toISOString().slice(0, 10) : "",
+        outsourcedById: data.outsourcedById || "",
+        dateRequired: data.dateRequired ? new Date(data.dateRequired).toISOString().slice(0, 10) : "",
+        receivedById: data.receivedById || "",
+        quantity: Number(data.quantity) || 0,
+        remark: data.remark || "",
+      });
     } catch (err: any) {
       setErrorMsg(err.message);
     } finally {
@@ -68,63 +67,56 @@ export default function SubconRequestFormDetailPage() {
     }
   };
 
-  const fetchEmployees = async () => {
-    try {
-      const res = await fetch("/api/employees");
-      if (res.ok) setEmployees(await res.json());
-    } catch (e) {
-      console.error(e);
-    }
-  };
+  useEffect(() => {
+    if (!id) return;
+    fetchSrf();
+    fetch("/api/employees")
+      .then((res) => (res.ok ? res.json() : []))
+      .then(setEmployees)
+      .catch((e) => console.error(e));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  // PO line quantity less the other live forms on it.
+  const available =
+    srf?.purchaseOrderItem
+      ? Number(srf.purchaseOrderItem.quantity) -
+        (srf.purchaseOrderItem.subconRequestForms ?? []).reduce((s: number, f: any) => s + Number(f.quantity), 0)
+      : null;
 
   const handleUpdate = async () => {
-    setSaving(true);
-    try {
-      const payload = {
-        srfDate,
-        outsourcedById,
-        dateRequired,
-        receivedById,
-        quantity: Number(quantity),
-        remark,
-      };
+    if (!values.outsourcedById) return hotToast.error("Outsourced By is required");
+    if (!values.dateRequired) return hotToast.error("Date Required is required");
+    const qtyError = srfQuantityError(values.quantity, available);
+    if (qtyError) return hotToast.error(qtyError);
 
+    setPending("save");
+    try {
       const res = await fetch(`/api/purchasing/subcon-request-form/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...values, quantity: Number(values.quantity) }),
       });
-
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || "Failed to update Subcon Request Form");
       }
-
-      router.push(`/dashboard/saved?module=Subcon Request&id=${srf.srfNo || id}&viewUrl=/dashboard/purchasing/subcon-request-form/${id}&backUrl=/dashboard/purchasing/subcon-request-form`);
+      router.push(
+        `/dashboard/saved?module=Subcon Request&id=${srf.srfNo || id}&viewUrl=/dashboard/purchasing/subcon-request-form/${id}&backUrl=/dashboard/purchasing/subcon-request-form`,
+      );
     } catch (err: any) {
       hotToast.error(err.message);
-      setSaving(false);
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!await customConfirm("Are you sure you want to delete this Subcon Request Form?")) return;
-    
-    try {
-      const res = await fetch(`/api/purchasing/subcon-request-form/${id}`, {
-        method: "DELETE",
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "Failed to delete");
-      }
-      router.push("/dashboard/purchasing/subcon-request-form");
-    } catch (err: any) {
-      hotToast.error(err.message);
+      setPending(null);
     }
   };
 
   const callAction = async (action: "submit" | "void") => {
+    const msg =
+      action === "submit"
+        ? `Submit ${srf.srfNo}? Unsaved changes on this page are not included.`
+        : `Void ${srf.srfNo}? Its quantity goes back to the PO line.`;
+    if (!await customConfirm(msg)) return;
+    setPending(action);
     try {
       const res = await fetch(`/api/purchasing/subcon-request-form/${id}/transition`, {
         method: "POST",
@@ -135,308 +127,125 @@ export default function SubconRequestFormDetailPage() {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || `Failed: ${action}`);
       }
-      fetchSrf();
+      hotToast.success(action === "submit" ? `${srf.srfNo} submitted` : `${srf.srfNo} is now Void`);
+      await fetchSrf();
     } catch (err: any) {
       hotToast.error(err.message);
+    } finally {
+      setPending(null);
     }
-  };
-
-  const handlePrint = () => {
-    window.open(`/print/subcon-request-form/${id}`, "_blank");
   };
 
   if (loading) {
     return (
-      <div className="p-6 h-screen flex flex-col items-center justify-center gap-2">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-        <p className="text-sm text-blue-500">Loading form...</p>
+      <div className="flex flex-col items-center justify-center gap-2 p-12">
+        <Loader2 size={20} className="animate-spin text-indigo-600" />
+        <p className="text-xs text-slate-500">Loading form…</p>
       </div>
     );
   }
 
-  if (errorMsg) {
+  if (errorMsg || !srf) {
     return (
-      <div className="p-6 lg:p-8">
-        <div className="bg-rose-50 border border-rose-200 rounded-xl p-6 flex flex-col items-center justify-center gap-3 text-rose-700">
-          <AlertCircle size={24} />
-          <p className="text-sm font-medium">{errorMsg}</p>
-          <Link href="/dashboard/purchasing/subcon-request-form" className="text-xs bg-white px-4 py-2 border border-rose-200 rounded-md hover:bg-rose-50 mt-2">
-            Go Back
-          </Link>
-        </div>
+      <div className="flex flex-col items-center gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-8 text-rose-700">
+        <AlertCircle size={20} />
+        <p className="text-[13px] font-medium">{errorMsg || "Subcon Request Form not found."}</p>
+        <Link href="/dashboard/purchasing/subcon-request-form" className={buttonClass("secondary", "md")}>
+          <ArrowLeft size={14} /> Back to list
+        </Link>
       </div>
     );
   }
 
   const isEditable = srf.status === "Draft";
+  const busy = pending !== null;
+  const item = srf.purchaseOrderItem;
+  const po = item?.purchaseOrder ?? {};
+  const receiveStatus: string = srf.receiveStatus || "N/A";
 
   return (
-    <div className="py-3 space-y-4 w-full">
-      <div className="flex items-center justify-between pb-6 border-b border-blue-200 print:hidden">
-        <div>
-          <div className="flex items-center gap-2 text-xs text-blue-400 font-semibold tracking-wider uppercase mb-1">
-            <Link href="/dashboard" className="hover:text-blue-600">Dashboard</Link>
-            <span>/</span>
-            <Link href="/dashboard/purchasing/subcon-request-form" className="hover:text-blue-600">Subcon Request Form</Link>
-            <span>/</span>
-            <span className="text-blue-500">{srf.srfNo}</span>
+    <div className="w-full space-y-4">
+      {/* Document header / action bar */}
+      <div className="sticky top-0 z-20 -mx-1 overflow-hidden rounded-xl border border-slate-200 bg-white/90 shadow-[0_1px_3px_rgba(15,23,42,0.06)] backdrop-blur-md print:hidden">
+        <div className="h-0.5 bg-gradient-to-r from-indigo-500 via-indigo-500 to-violet-500" />
+        <div className="flex flex-col gap-2.5 px-4 py-2.5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0 space-y-1">
+            <Link href="/dashboard/purchasing/subcon-request-form" className="inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-indigo-600">
+              <ArrowLeft size={12} /> Subcon Request Form
+            </Link>
+            <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
+              <h1 className="flex min-w-0 items-baseline gap-2 leading-tight">
+                <span className="text-[11px] font-medium uppercase tracking-wide text-slate-400">SRF</span>
+                <span className="truncate font-mono text-lg font-semibold text-slate-900">{srf.srfNo}</span>
+              </h1>
+              <StatusBadge status={srf.status} tone={SRF_TONE[srf.status] ?? "slate"} size="md" />
+              <Badge tone={SRF_RECEIVE_TONE[receiveStatus] ?? "slate"} icon={PackageCheck} size="md">
+                {receiveStatus === "N/A" ? "Not returned yet" : receiveStatus}
+              </Badge>
+            </div>
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+              <MetaChip icon={Building2} title="Supplier">{po.supplier?.supplierName || "—"}</MetaChip>
+              <MetaChip icon={ClipboardList} label="PO" title="Purchase order">{po.poNo || "—"}</MetaChip>
+              {po.workOrderNo && <MetaChip icon={Wrench} label="WO" title="Work order">{po.workOrderNo}</MetaChip>}
+              <MetaChip icon={CalendarDays} label="SRF" title="SRF date">{fmtDate(values.srfDate)}</MetaChip>
+              <MetaChip icon={CalendarClock} label="Required" title="Date required">{fmtDate(values.dateRequired)}</MetaChip>
+            </div>
           </div>
-          <div className="flex items-center gap-3">
-            <h2 className="text-2xl font-bold tracking-tight text-blue-900">{srf.srfNo}</h2>
-            <StatusPill status={srf.status} />
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => router.back()}
-            className="inline-flex items-center justify-center gap-2 px-3 py-1.5 text-xs font-semibold text-blue-700 bg-white border border-blue-200 hover:bg-blue-50 rounded-lg shadow-sm"
-          >
-            <ArrowLeft size={14} /> Back
-          </button>
-          <button
-            onClick={handlePrint}
-            className="inline-flex items-center justify-center gap-2 px-3 py-1.5 text-xs font-semibold text-blue-700 bg-white border border-blue-200 hover:bg-blue-50 rounded-lg shadow-sm"
-          >
-            <Printer size={14} /> Print
-          </button>
-          
-          {isEditable && (
-            <>
-              <button
-                onClick={handleDelete}
-                className="inline-flex items-center justify-center gap-2 px-3 py-1.5 text-xs font-semibold text-rose-700 bg-white border border-rose-200 hover:bg-rose-50 rounded-lg shadow-sm"
-              >
-                <Trash2 size={14} /> Delete
-              </button>
-              <button
-                onClick={() => callAction("submit")}
-                className="inline-flex items-center justify-center gap-2 px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 border border-blue-600 rounded-lg shadow-sm"
-              >
-                <Send size={14} /> Submit
-              </button>
-              <button
-                onClick={handleUpdate}
-                disabled={saving}
-                className="inline-flex items-center justify-center gap-2 px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 border border-emerald-600 rounded-lg shadow-sm disabled:opacity-50"
-              >
-                {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} 
-                {saving ? "Saving" : "Save Changes"}
-              </button>
-            </>
-          )}
 
-          {srf.status !== "Void" && srf.status !== "Draft" && (
-            <button
-              onClick={() => callAction("void")}
-              className="inline-flex items-center justify-center gap-2 px-3 py-1.5 text-xs font-semibold text-rose-700 bg-white border border-rose-200 hover:bg-rose-50 rounded-lg shadow-sm"
-            >
-              <Ban size={14} /> Void
+          <div className="flex flex-wrap items-center justify-start gap-2 lg:justify-end">
+            <button type="button" onClick={() => router.push("/dashboard/purchasing/subcon-request-form")} className={buttonClass("ghost", "md")}>
+              Back
             </button>
-          )}
+            <button type="button" onClick={() => window.open(`/print/subcon-request-form/${id}`, "_blank")} className={buttonClass("secondary", "md")}>
+              <Printer size={14} /> Print
+            </button>
+            {srf.status !== "Void" && (
+              <button type="button" onClick={() => callAction("void")} disabled={busy} className={buttonClass("danger", "md")}>
+                {pending === "void" ? <Loader2 size={14} className="animate-spin" /> : <Ban size={14} />} Void
+              </button>
+            )}
+            {isEditable ? (
+              <>
+                <button type="button" onClick={handleUpdate} disabled={busy} className={buttonClass("secondary", "md")}>
+                  {pending === "save" ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                  {pending === "save" ? "Saving…" : "Save Changes"}
+                </button>
+                <button type="button" onClick={() => callAction("submit")} disabled={busy} className={buttonClass("primary", "md")}>
+                  {pending === "submit" ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} Submit
+                </button>
+              </>
+            ) : (
+              <span className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 text-xs font-medium text-slate-500">
+                <Lock size={13} /> View only
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Read Only Info */}
-        <div className="bg-white border border-blue-200 rounded-xl shadow-sm p-6 space-y-4">
-          <h3 className="text-sm font-bold text-blue-900 uppercase tracking-wider border-b border-blue-100 pb-2">
-            Imported PO Details
-          </h3>
-          
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <span className="text-blue-400 font-semibold block text-xs">Company</span>
-              <span className="text-blue-900 font-medium">{srf.purchaseOrderItem.purchaseOrder.company?.companyName}</span>
-            </div>
-            <div>
-              <span className="text-blue-400 font-semibold block text-xs">Supplier</span>
-              <span className="text-blue-900 font-medium">{srf.purchaseOrderItem.purchaseOrder.supplier?.supplierName}</span>
-            </div>
-            <div>
-              <span className="text-blue-400 font-semibold block text-xs">PO No</span>
-              <span className="text-blue-900 font-mono">{srf.purchaseOrderItem.purchaseOrder.poNo}</span>
-            </div>
-            <div>
-              <span className="text-blue-400 font-semibold block text-xs">PO Date</span>
-              <span className="text-blue-900">{new Date(srf.purchaseOrderItem.purchaseOrder.date).toLocaleDateString()}</span>
-            </div>
-            <div>
-              <span className="text-blue-400 font-semibold block text-xs">Work Order No</span>
-              <span className="text-blue-900 font-mono">{srf.purchaseOrderItem.purchaseOrder.workOrderNo || "—"}</span>
-            </div>
-            <div>
-              <span className="text-blue-400 font-semibold block text-xs">In-Process Description</span>
-              <span className="text-blue-900">{srf.purchaseOrderItem.woRoutingProcess?.inProcess?.description || "—"}</span>
-            </div>
-            <div>
-              <span className="text-blue-400 font-semibold block text-xs">Main Process</span>
-              <span className="text-blue-900">{srf.purchaseOrderItem.masterMainProcess?.process || "—"}</span>
-            </div>
-            <div>
-              <span className="text-blue-400 font-semibold block text-xs">Routing Process</span>
-              <span className="text-blue-900">{srf.purchaseOrderItem.masterRoutingProcess?.routingProcess || "—"}</span>
-            </div>
-            <div className="col-span-2">
-              <span className="text-blue-400 font-semibold block text-xs">Part Description</span>
-              <span className="text-blue-900">{srf.purchaseOrderItem.description}</span>
-            </div>
-            <div>
-              <span className="text-blue-400 font-semibold block text-xs">Currency</span>
-              <span className="text-blue-900">{srf.purchaseOrderItem.purchaseOrder.currency?.code}</span>
-            </div>
-            <div>
-              <span className="text-blue-400 font-semibold block text-xs">PO UOM</span>
-              <span className="text-blue-900">{srf.purchaseOrderItem.poUom?.uomName || "—"}</span>
-            </div>
-            <div>
-              <span className="text-blue-400 font-semibold block text-xs">Unit Price</span>
-              <span className="text-blue-900">{srf.purchaseOrderItem.unitPrice}</span>
-            </div>
-            <div>
-              <span className="text-blue-400 font-semibold block text-xs">Amount</span>
-              <span className="text-blue-900">{srf.purchaseOrderItem.amount}</span>
-            </div>
-            <div>
-              <span className="text-blue-400 font-semibold block text-xs">Hardness</span>
-              <span className="text-blue-900">{srf.purchaseOrderItem.hardness || "—"}</span>
-            </div>
-            <div>
-              <span className="text-blue-400 font-semibold block text-xs">Thickness</span>
-              <span className="text-blue-900">{srf.purchaseOrderItem.thickness || "—"}</span>
-            </div>
-          </div>
+      {!isEditable && (
+        <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[13px] text-slate-600">
+          <Lock size={14} className="shrink-0 text-slate-400" />
+          <span>
+            This request form is <strong className="font-semibold text-slate-800">{srf.status}</strong> — read-only.
+          </span>
         </div>
+      )}
 
-        {/* Editable Form */}
-        <div className="bg-white border border-blue-200 rounded-xl shadow-sm p-6 space-y-4">
-          <h3 className="text-sm font-bold text-blue-900 uppercase tracking-wider border-b border-blue-100 pb-2">
-            Subcon Request Form Data
-          </h3>
-          
-          <div className="space-y-4 text-sm">
-            <div>
-              <label className="block text-xs font-semibold text-blue-500 mb-1">SRF No</label>
-              <input
-                type="text"
-                value={srf.srfNo}
-                readOnly
-                className="w-full px-3 py-2 bg-blue-50/50 border border-blue-200 rounded-lg text-blue-900 focus:outline-none"
-              />
-            </div>
-            
-            <div>
-              <label className="block text-xs font-semibold text-blue-500 mb-1">SRF Date *</label>
-              <input
-                type="date"
-                value={srfDate}
-                onChange={(e) => setSrfDate(e.target.value)}
-                readOnly={!isEditable}
-                className={`w-full px-3 py-2 border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${!isEditable ? "bg-blue-50/50 text-blue-900" : "bg-blue-50"}`}
-                required
-              />
-            </div>
-            
-            <div>
-              <label className="block text-xs font-semibold text-blue-500 mb-1">Outsourced By *</label>
-              {isEditable ? (
-                <SearchableSelect
-                  value={outsourcedById}
-                  onChange={(e) => setOutsourcedById(e.target.value)}
-                  className="w-full px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                  required
-                >
-                  <option value="">-- Select Purchaser --</option>
-                  {employees.map(emp => (
-                    <option key={emp.id} value={emp.id}>{emp.name}</option>
-                  ))}
-                </SearchableSelect>
-              ) : (
-                <input
-                  type="text"
-                  value={srf.outsourcedBy?.name || ""}
-                  readOnly
-                  className="w-full px-3 py-2 bg-blue-50/50 border border-blue-200 rounded-lg text-blue-900 focus:outline-none"
-                />
-              )}
-            </div>
-            
-            <div>
-              <label className="block text-xs font-semibold text-blue-500 mb-1">Date Required *</label>
-              <input
-                type="date"
-                value={dateRequired}
-                onChange={(e) => setDateRequired(e.target.value)}
-                readOnly={!isEditable}
-                className={`w-full px-3 py-2 border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${!isEditable ? "bg-blue-50/50 text-blue-900" : "bg-blue-50"}`}
-                required
-              />
-            </div>
-            
-            <div>
-              <label className="block text-xs font-semibold text-blue-500 mb-1">Received By</label>
-              {isEditable ? (
-                <SearchableSelect
-                  value={receivedById}
-                  onChange={(e) => setReceivedById(e.target.value)}
-                  className="w-full px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                >
-                  <option value="">-- Select Contact Person --</option>
-                  {srf.purchaseOrderItem.purchaseOrder.supplier?.contactPersons?.map((cp: any) => (
-                    <option key={cp.id} value={cp.id}>{cp.contactPersonName}</option>
-                  ))}
-                </SearchableSelect>
-              ) : (
-                <input
-                  type="text"
-                  value={srf.receivedBy?.contactPersonName || ""}
-                  readOnly
-                  className="w-full px-3 py-2 bg-blue-50/50 border border-blue-200 rounded-lg text-blue-900 focus:outline-none"
-                />
-              )}
-            </div>
-            
-            <div>
-              <label className="block text-xs font-semibold text-blue-500 mb-1">Quantity *</label>
-              <input
-                type="number"
-                value={quantity}
-                onChange={(e) => setQuantity(Number(e.target.value))}
-                min={1}
-                readOnly={!isEditable}
-                className={`w-full px-3 py-2 border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${!isEditable ? "bg-blue-50/50 text-blue-900" : "bg-blue-50"}`}
-                required
-              />
-            </div>
-            
-            <div>
-              <label className="block text-xs font-semibold text-blue-500 mb-1">Remark</label>
-              <textarea
-                value={remark}
-                onChange={(e) => setRemark(e.target.value)}
-                rows={4}
-                readOnly={!isEditable}
-                className={`w-full px-3 py-2 border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${!isEditable ? "bg-blue-50/50 text-blue-900" : "bg-blue-50"}`}
-              />
-            </div>
-          </div>
-        </div>
+      <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-2">
+        <SrfFieldsCard
+          values={values}
+          onChange={(patch) => setValues((v) => ({ ...v, ...patch }))}
+          readOnly={!isEditable}
+          srfNo={srf.srfNo}
+          employees={employees}
+          contactPersons={po.supplier?.contactPersons ?? []}
+          available={isEditable ? available : null}
+          uom={item?.poUom?.uomName}
+          readOnlyNames={{ outsourcedBy: srf.outsourcedBy?.name, receivedBy: srf.receivedBy?.contactPersonName }}
+        />
+        <PoLineCard item={item} />
       </div>
     </div>
-  );
-}
-
-function StatusPill({ status }: { status: string }) {
-  const cls =
-    status === "Submitted"
-      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-      : status === "Draft"
-      ? "bg-amber-50 text-amber-700 border-amber-200"
-      : status === "Void"
-      ? "bg-rose-50 text-rose-700 border-rose-200"
-      : "bg-blue-50 text-blue-700 border-blue-200";
-  return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${cls}`}>
-      {status}
-    </span>
   );
 }

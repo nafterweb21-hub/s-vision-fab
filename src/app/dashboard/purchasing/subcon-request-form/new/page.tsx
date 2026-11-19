@@ -1,399 +1,304 @@
 "use client";
-import { SearchableSelect } from "@/components/SearchableSelect";
 import { toast as hotToast } from "react-hot-toast";
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-ArrowLeft,
-  Search,
+  ArrowLeft,
   Loader2,
-  AlertCircle,
-  FileText,
   Save,
+  SearchX,
+  ClipboardList,
+  Building2,
+  Wrench,
+  Package,
+  ChevronRight,
 } from "lucide-react";
+import { EmptyState, InitialsAvatar, MetaChip, StatusBadge, buttonClass } from "@/components/form-ui";
+import { Breadcrumb, ErrorBlock, LoadingBlock, SearchBar } from "@/components/purchasing/DocListParts";
+import { PoLineCard, SrfFieldsCard, fmtDate, srfQuantityError, type SrfFieldValues } from "../SrfParts";
+
+const today = () => new Date().toISOString().slice(0, 10);
 
 export default function NewSubconRequestFormPage() {
   const router = useRouter();
-  
-  // Outstanding Items State
+
+  // Step 1: outstanding PO-Subcon lines
   const [outstandingItems, setOutstandingItems] = useState<any[]>([]);
   const [loadingItems, setLoadingItems] = useState(true);
   const [itemsError, setItemsError] = useState("");
   const [search, setSearch] = useState("");
-  
-  // Selection & Form State
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  // Step 2: the form
   const [selectedItem, setSelectedItem] = useState<any | null>(null);
-  
   const [employees, setEmployees] = useState<any[]>([]);
-  
-  // Form fields
-  const [srfDate, setSrfDate] = useState<string>(new Date().toISOString().slice(0, 10));
-  const [outsourcedById, setOutsourcedById] = useState<string>("");
-  const [dateRequired, setDateRequired] = useState<string>("");
-  const [receivedById, setReceivedById] = useState<string>("");
-  const [quantity, setQuantity] = useState<number>(0);
-  const [remark, setRemark] = useState("");
-  
+  const [values, setValues] = useState<SrfFieldValues>({
+    srfDate: today(),
+    outsourcedById: "",
+    dateRequired: "",
+    receivedById: "",
+    quantity: 0,
+    remark: "",
+  });
   const [saving, setSaving] = useState(false);
 
+  // Debounce the server-side search.
   useEffect(() => {
-    fetchOutstandingItems();
-    fetchEmployees();
+    const t = setTimeout(() => setDebouncedSearch(search), 250);
+    return () => clearTimeout(t);
   }, [search]);
 
-  const fetchOutstandingItems = async () => {
-    setLoadingItems(true);
-    setItemsError("");
-    try {
-      const res = await fetch(`/api/purchasing/subcon-request-form/outstanding-po-items?search=${encodeURIComponent(search)}`);
-      if (!res.ok) throw new Error("Failed to fetch outstanding PO items");
-      setOutstandingItems(await res.json());
-    } catch (err: any) {
-      setItemsError(err.message);
-    } finally {
-      setLoadingItems(false);
-    }
-  };
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoadingItems(true);
+      setItemsError("");
+      try {
+        const res = await fetch(`/api/purchasing/subcon-request-form/outstanding-po-items?search=${encodeURIComponent(debouncedSearch)}`);
+        if (!res.ok) throw new Error("Failed to fetch outstanding PO items");
+        const data = await res.json();
+        if (!cancelled) setOutstandingItems(data);
+      } catch (err: any) {
+        if (!cancelled) setItemsError(err.message);
+      } finally {
+        if (!cancelled) setLoadingItems(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [debouncedSearch]);
 
-  const fetchEmployees = async () => {
-    try {
-      const res = await fetch("/api/employees");
-      if (res.ok) setEmployees(await res.json());
-    } catch (e) {
-      console.error(e);
-    }
-  };
+  // Employees only need loading once.
+  useEffect(() => {
+    fetch("/api/employees")
+      .then((res) => (res.ok ? res.json() : []))
+      .then(setEmployees)
+      .catch((e) => console.error(e));
+  }, []);
 
   const handleSelectItem = (item: any) => {
     setSelectedItem(item);
-    
-    // Pre-fill form
-    setOutsourcedById(item.purchaseOrder.purchaser?.id || "");
-    setDateRequired(item.deliveryDate ? new Date(item.deliveryDate).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10));
-    setReceivedById(item.purchaseOrder.contactPerson?.id || "");
-    setQuantity(item.availableQuantity || 0);
+    // Spec defaults: Outsourced By = PO purchaser, Date Required = PO delivery date,
+    // Received By = PO contact person, Quantity = what is still available on the line.
+    setValues((v) => ({
+      ...v,
+      outsourcedById: item.purchaseOrder.purchaser?.id || "",
+      dateRequired: item.deliveryDate ? new Date(item.deliveryDate).toISOString().slice(0, 10) : today(),
+      receivedById: item.purchaseOrder.contactPerson?.id || "",
+      quantity: item.availableQuantity || 0,
+    }));
   };
 
   const handleSave = async () => {
     if (!selectedItem) return;
-    
-    if (quantity <= 0 || quantity > selectedItem.availableQuantity) {
-      return hotToast.error(`Quantity must be between 1 and ${selectedItem.availableQuantity}`);
-    }
+    if (!values.outsourcedById) return hotToast.error("Outsourced By is required");
+    if (!values.dateRequired) return hotToast.error("Date Required is required");
+    const qtyError = srfQuantityError(values.quantity, selectedItem.availableQuantity);
+    if (qtyError) return hotToast.error(qtyError);
 
     setSaving(true);
     try {
-      const payload = {
-        srfDate,
-        purchaseOrderItemId: selectedItem.id,
-        outsourcedById,
-        dateRequired,
-        receivedById,
-        quantity: Number(quantity),
-        remark,
-      };
-
       const res = await fetch("/api/purchasing/subcon-request-form", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          ...values,
+          purchaseOrderItemId: selectedItem.id,
+          quantity: Number(values.quantity),
+        }),
       });
-
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || "Failed to create Subcon Request Form");
       }
-
       const created = await res.json();
-      router.push(`/dashboard/saved?module=Subcon Request&id=${created.srfNo || created.id}&viewUrl=/dashboard/purchasing/subcon-request-form/${created.id}&backUrl=/dashboard/purchasing/subcon-request-form`);
+      router.push(
+        `/dashboard/saved?module=Subcon Request&id=${created.srfNo || created.id}&viewUrl=/dashboard/purchasing/subcon-request-form/${created.id}&backUrl=/dashboard/purchasing/subcon-request-form`,
+      );
     } catch (err: any) {
       hotToast.error(err.message);
       setSaving(false);
     }
   };
 
+  // ---------------- Step 1: pick a PO line ----------------
   if (!selectedItem) {
     return (
-      <div className="p-6 lg:p-8 space-y-6">
-        <div className="flex items-center justify-between pb-6 border-b border-blue-200">
-          <div>
-            <div className="flex items-center gap-2 text-xs text-blue-400 font-semibold tracking-wider uppercase mb-1">
-              <Link href="/dashboard" className="hover:text-blue-600">Dashboard</Link>
-              <span>/</span>
-              <Link href="/dashboard/purchasing/subcon-request-form" className="hover:text-blue-600">Subcon Request Form</Link>
-              <span>/</span>
-              <span className="text-blue-500">New</span>
+      <div className="relative space-y-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white shadow-sm shadow-indigo-600/20 sm:inline-flex">
+              <ClipboardList size={18} />
+            </span>
+            <div className="min-w-0">
+              <Breadcrumb current="Subcon Request Form" />
+              <h1 className="text-lg font-semibold leading-tight text-slate-900">New Subcon Request Form</h1>
+              <p className="text-xs text-slate-500">Step 1 of 2 — pick the Issued PO-Subcon line you're handing items over for.</p>
             </div>
-            <h2 className="text-2xl font-bold tracking-tight text-blue-900">Select Outstanding PO Item</h2>
           </div>
-          <Link
-            href="/dashboard/purchasing/subcon-request-form"
-            className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-blue-700 bg-white border border-blue-200 hover:bg-blue-50 rounded-lg shadow-sm"
-          >
-            <ArrowLeft size={16} /> Back
+          <Link href="/dashboard/purchasing/subcon-request-form" className={buttonClass("secondary", "md")}>
+            <ArrowLeft size={14} /> Back
           </Link>
         </div>
 
-        <div className="flex flex-col sm:flex-row sm:items-center gap-4 bg-white border border-blue-200 p-4 rounded-xl shadow-sm">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-blue-400" />
-            <input
-              type="text"
-              placeholder="Search by PO No, Supplier, or Description..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 text-sm bg-blue-50 border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
-            />
-          </div>
-        </div>
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+          <SearchBar
+            value={search}
+            onChange={setSearch}
+            placeholder="Search by PO No, Supplier or Description..."
+            refreshing={loadingItems && outstandingItems.length > 0}
+            hasFilters={search.trim() !== ""}
+            onClear={() => setSearch("")}
+          />
 
-        {loadingItems ? (
-          <div className="h-64 flex flex-col items-center justify-center gap-2">
-            <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-            <p className="text-sm text-blue-500">Loading outstanding items...</p>
-          </div>
-        ) : itemsError ? (
-          <div className="bg-rose-50 border border-rose-200 rounded-xl p-6 flex items-center gap-3 text-rose-700">
-            <AlertCircle size={18} />
-            <p className="text-sm font-medium">{itemsError}</p>
-          </div>
-        ) : outstandingItems.length === 0 ? (
-          <div className="bg-white border border-blue-200 rounded-xl p-12 text-center shadow-sm">
-            <div className="mx-auto w-12 h-12 rounded-full bg-blue-500/10 flex items-center justify-center mb-4">
-              <FileText size={22} className="text-blue-600" />
-            </div>
-            <p className="text-blue-600 font-semibold">No outstanding PO items found.</p>
-          </div>
-        ) : (
-          <div className="bg-white border border-blue-200 rounded-xl shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left whitespace-nowrap">
-                <thead className="text-xs text-blue-500 bg-blue-50/50 uppercase tracking-wider border-b border-blue-200">
-                  <tr>
-                    <th className="px-4 py-3">PO No</th>
-                    <th className="px-4 py-3">Supplier</th>
-                    <th className="px-4 py-3">Work Order No</th>
-                    <th className="px-4 py-3">Part Description</th>
-                    <th className="px-4 py-3">Available Qty</th>
-                    <th className="px-4 py-3">UOM</th>
-                    <th className="px-4 py-3 text-right">Action</th>
+          {loadingItems && outstandingItems.length === 0 ? (
+            <LoadingBlock label="Loading outstanding items..." />
+          ) : itemsError ? (
+            <ErrorBlock message={itemsError} />
+          ) : outstandingItems.length === 0 ? (
+            search.trim() ? (
+              <EmptyState
+                icon={SearchX}
+                tone="slate"
+                title="No outstanding lines match your search"
+                action={
+                  <button type="button" onClick={() => setSearch("")} className={buttonClass("secondary", "md")}>
+                    Clear search
+                  </button>
+                }
+              />
+            ) : (
+              <EmptyState
+                icon={Package}
+                tone="indigo"
+                title="No outstanding PO-Subcon lines"
+                description="Lines appear here once a PO-Subcon is Issued and they aren't fully covered by other request forms."
+              />
+            )
+          ) : (
+            <div className={`overflow-x-auto transition-opacity ${loadingItems ? "opacity-60" : ""}`}>
+              <table className="w-full text-left text-[13px]">
+                <thead>
+                  <tr className="border-b border-slate-100 bg-slate-50/70 text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                    <th className="py-2 pl-4 pr-3 font-medium">PO No</th>
+                    <th className="px-3 py-2 font-medium">Supplier</th>
+                    <th className="hidden px-3 py-2 font-medium md:table-cell">Work Order</th>
+                    <th className="px-3 py-2 font-medium">Part Description</th>
+                    <th className="hidden px-3 py-2 font-medium lg:table-cell">Delivery</th>
+                    <th className="px-3 py-2 text-right font-medium">Available</th>
+                    <th className="px-4 py-2 text-right font-medium"><span className="sr-only">Select</span></th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-blue-100">
-                  {outstandingItems.map((item) => (
-                    <tr key={item.id} className="hover:bg-blue-50/30">
-                      <td className="px-4 py-3 font-bold text-blue-900">{item.purchaseOrder.poNo}</td>
-                      <td className="px-4 py-3 text-blue-700">{item.purchaseOrder.supplier?.supplierName}</td>
-                      <td className="px-4 py-3 text-blue-700 font-mono">{item.purchaseOrder.workOrderNo || "—"}</td>
-                      <td className="px-4 py-3 text-blue-700 max-w-[200px] truncate" title={item.description}>{item.description || "—"}</td>
-                      <td className="px-4 py-3 text-emerald-600 font-bold">{item.availableQuantity}</td>
-                      <td className="px-4 py-3 text-blue-700">{item.poUom?.uomName || "—"}</td>
-                      <td className="px-4 py-3 text-right">
-                        <button
-                          onClick={() => handleSelectItem(item)}
-                          className="px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 rounded-lg shadow-sm transition-colors"
-                        >
-                          Select
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                <tbody className="divide-y divide-slate-100">
+                  {outstandingItems.map((item) => {
+                    const supplier = item.purchaseOrder.supplier?.supplierName || "";
+                    const ordered = Number(item.quantity) || 0;
+                    const pct = ordered > 0 ? Math.round((Number(item.totalRequested || 0) / ordered) * 100) : 0;
+                    return (
+                      <tr
+                        key={item.id}
+                        onClick={() => handleSelectItem(item)}
+                        className="group cursor-pointer transition-colors hover:bg-indigo-50/40"
+                      >
+                        <td className="py-2 pl-4 pr-3 font-mono text-xs font-semibold text-slate-800">{item.purchaseOrder.poNo}</td>
+                        <td className="px-3 py-2">
+                          <div className="flex min-w-0 max-w-[200px] items-center gap-2" title={supplier}>
+                            <InitialsAvatar name={supplier} />
+                            <span className="truncate font-medium text-slate-800">{supplier || "—"}</span>
+                          </div>
+                        </td>
+                        <td className="hidden px-3 py-2 font-mono text-xs text-slate-600 md:table-cell">{item.purchaseOrder.workOrderNo || "—"}</td>
+                        <td className="max-w-[260px] px-3 py-2 text-slate-700">
+                          <p className="truncate" title={item.description}>{item.description || "—"}</p>
+                          {(item.masterRoutingProcess?.routingProcess || item.woRoutingProcess?.inProcess?.description) && (
+                            <p className="truncate text-[11px] text-slate-400">
+                              {item.masterRoutingProcess?.routingProcess || item.woRoutingProcess?.inProcess?.description}
+                            </p>
+                          )}
+                        </td>
+                        <td className="hidden px-3 py-2 text-xs text-slate-500 lg:table-cell">{fmtDate(item.deliveryDate)}</td>
+                        <td className="px-3 py-2 text-right">
+                          <span className="font-semibold tabular-nums text-emerald-700">{item.availableQuantity}</span>
+                          <span className="ml-1 text-[11px] text-slate-400">{item.poUom?.uomName}</span>
+                          {pct > 0 && <p className="text-[11px] tabular-nums text-slate-400">of {ordered} · {pct}% requested</p>}
+                        </td>
+                        <td className="px-4 py-2 text-right">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSelectItem(item);
+                            }}
+                            className={buttonClass("secondary", "sm", "group-hover:border-indigo-200 group-hover:text-indigo-700")}
+                          >
+                            Select <ChevronRight size={12} />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     );
   }
 
-  // Form View
+  // ---------------- Step 2: the form ----------------
+  const po = selectedItem.purchaseOrder;
   return (
-    <div className="py-3 space-y-4 w-full">
-      <div className="flex items-center justify-between pb-6 border-b border-blue-200">
-        <div>
-          <div className="flex items-center gap-2 text-xs text-blue-400 font-semibold tracking-wider uppercase mb-1">
-            <Link href="/dashboard" className="hover:text-blue-600">Dashboard</Link>
-            <span>/</span>
-            <Link href="/dashboard/purchasing/subcon-request-form" className="hover:text-blue-600">Subcon Request Form</Link>
-            <span>/</span>
-            <span className="text-blue-500">New Form</span>
+    <div className="w-full space-y-4">
+      <div className="sticky top-0 z-20 -mx-1 overflow-hidden rounded-xl border border-slate-200 bg-white/90 shadow-[0_1px_3px_rgba(15,23,42,0.06)] backdrop-blur-md">
+        <div className="h-0.5 bg-gradient-to-r from-indigo-500 via-indigo-500 to-violet-500" />
+        <div className="flex flex-col gap-2.5 px-4 py-2.5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0 space-y-1">
+            <button
+              type="button"
+              onClick={() => setSelectedItem(null)}
+              className="inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-indigo-600"
+            >
+              <ArrowLeft size={12} /> Choose a different PO line
+            </button>
+            <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
+              <h1 className="text-lg font-semibold leading-tight text-slate-900">New Subcon Request Form</h1>
+              <StatusBadge status="Draft" tone="amber" size="md" label="New · Draft" />
+            </div>
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+              <MetaChip icon={Building2} title="Supplier">{po.supplier?.supplierName || "—"}</MetaChip>
+              <MetaChip icon={ClipboardList} label="PO" title="Purchase order">{po.poNo}</MetaChip>
+              {po.workOrderNo && <MetaChip icon={Wrench} label="WO" title="Work order">{po.workOrderNo}</MetaChip>}
+              <MetaChip icon={Package} label="Available" title="PO line quantity not yet on other forms">
+                {selectedItem.availableQuantity} {selectedItem.poUom?.uomName ?? ""}
+              </MetaChip>
+            </div>
           </div>
-          <h2 className="text-2xl font-bold tracking-tight text-blue-900">Create Subcon Request Form</h2>
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setSelectedItem(null)}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-blue-700 bg-white border border-blue-200 hover:bg-blue-50 rounded-lg shadow-sm"
-          >
-            <ArrowLeft size={16} /> Back
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 rounded-lg shadow-md disabled:opacity-50"
-          >
-            {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-            {saving ? "Saving..." : "Save Form"}
-          </button>
+          <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+            <Link href="/dashboard/purchasing/subcon-request-form" className={buttonClass("ghost", "md")}>
+              Cancel
+            </Link>
+            <button type="button" onClick={handleSave} disabled={saving} className={buttonClass("primary", "md")}>
+              {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+              {saving ? "Saving…" : "Save Draft"}
+            </button>
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Read Only Info */}
-        <div className="bg-white border border-blue-200 rounded-xl shadow-sm p-6 space-y-4">
-          <h3 className="text-sm font-bold text-blue-900 uppercase tracking-wider border-b border-blue-100 pb-2">
-            Imported PO Details
-          </h3>
-          
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <span className="text-blue-400 font-semibold block text-xs">Company</span>
-              <span className="text-blue-900 font-medium">{selectedItem.purchaseOrder.company?.companyName}</span>
-            </div>
-            <div>
-              <span className="text-blue-400 font-semibold block text-xs">Supplier</span>
-              <span className="text-blue-900 font-medium">{selectedItem.purchaseOrder.supplier?.supplierName}</span>
-            </div>
-            <div>
-              <span className="text-blue-400 font-semibold block text-xs">PO No</span>
-              <span className="text-blue-900 font-mono">{selectedItem.purchaseOrder.poNo}</span>
-            </div>
-            <div>
-              <span className="text-blue-400 font-semibold block text-xs">PO Date</span>
-              <span className="text-blue-900">{new Date(selectedItem.purchaseOrder.date).toLocaleDateString()}</span>
-            </div>
-            <div>
-              <span className="text-blue-400 font-semibold block text-xs">Work Order No</span>
-              <span className="text-blue-900 font-mono">{selectedItem.purchaseOrder.workOrderNo || "—"}</span>
-            </div>
-            <div>
-              <span className="text-blue-400 font-semibold block text-xs">In-Process Description</span>
-              <span className="text-blue-900">{selectedItem.woRoutingProcess?.inProcess?.description || "—"}</span>
-            </div>
-            <div>
-              <span className="text-blue-400 font-semibold block text-xs">Main Process</span>
-              <span className="text-blue-900">{selectedItem.masterMainProcess?.process || "—"}</span>
-            </div>
-            <div>
-              <span className="text-blue-400 font-semibold block text-xs">Routing Process</span>
-              <span className="text-blue-900">{selectedItem.masterRoutingProcess?.routingProcess || "—"}</span>
-            </div>
-            <div className="col-span-2">
-              <span className="text-blue-400 font-semibold block text-xs">Part Description</span>
-              <span className="text-blue-900">{selectedItem.description}</span>
-            </div>
-            <div>
-              <span className="text-blue-400 font-semibold block text-xs">Currency</span>
-              <span className="text-blue-900">{selectedItem.purchaseOrder.currency?.code}</span>
-            </div>
-            <div>
-              <span className="text-blue-400 font-semibold block text-xs">PO UOM</span>
-              <span className="text-blue-900">{selectedItem.poUom?.uomName || "—"}</span>
-            </div>
-            <div>
-              <span className="text-blue-400 font-semibold block text-xs">Unit Price</span>
-              <span className="text-blue-900">{selectedItem.unitPrice}</span>
-            </div>
-            <div>
-              <span className="text-blue-400 font-semibold block text-xs">Amount</span>
-              <span className="text-blue-900">{selectedItem.amount}</span>
-            </div>
-            <div>
-              <span className="text-blue-400 font-semibold block text-xs">Hardness</span>
-              <span className="text-blue-900">{selectedItem.hardness || "—"}</span>
-            </div>
-            <div>
-              <span className="text-blue-400 font-semibold block text-xs">Thickness</span>
-              <span className="text-blue-900">{selectedItem.thickness || "—"}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Editable Form */}
-        <div className="bg-white border border-blue-200 rounded-xl shadow-sm p-6 space-y-4">
-          <h3 className="text-sm font-bold text-blue-900 uppercase tracking-wider border-b border-blue-100 pb-2">
-            Subcon Request Form Data
-          </h3>
-          
-          <div className="space-y-4 text-sm">
-            <div>
-              <label className="block text-xs font-semibold text-blue-500 mb-1">SRF Date *</label>
-              <input
-                type="date"
-                value={srfDate}
-                onChange={(e) => setSrfDate(e.target.value)}
-                className="w-full px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                required
-              />
-            </div>
-            
-            <div>
-              <label className="block text-xs font-semibold text-blue-500 mb-1">Outsourced By *</label>
-              <SearchableSelect
-                value={outsourcedById}
-                onChange={(e) => setOutsourcedById(e.target.value)}
-                className="w-full px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                required
-              >
-                <option value="">-- Select Purchaser --</option>
-                {employees.map(emp => (
-                  <option key={emp.id} value={emp.id}>{emp.name}</option>
-                ))}
-              </SearchableSelect>
-            </div>
-            
-            <div>
-              <label className="block text-xs font-semibold text-blue-500 mb-1">Date Required *</label>
-              <input
-                type="date"
-                value={dateRequired}
-                onChange={(e) => setDateRequired(e.target.value)}
-                className="w-full px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                required
-              />
-            </div>
-            
-            <div>
-              <label className="block text-xs font-semibold text-blue-500 mb-1">Received By</label>
-              <SearchableSelect
-                value={receivedById}
-                onChange={(e) => setReceivedById(e.target.value)}
-                className="w-full px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-              >
-                <option value="">-- Select Contact Person --</option>
-                {selectedItem.purchaseOrder.supplier?.contactPersons?.map((cp: any) => (
-                  <option key={cp.id} value={cp.id}>{cp.contactPersonName}</option>
-                ))}
-              </SearchableSelect>
-            </div>
-            
-            <div>
-              <label className="block text-xs font-semibold text-blue-500 mb-1">Quantity * (Max: {selectedItem.availableQuantity})</label>
-              <input
-                type="number"
-                value={quantity}
-                onChange={(e) => setQuantity(Number(e.target.value))}
-                min={1}
-                max={selectedItem.availableQuantity}
-                className="w-full px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                required
-              />
-            </div>
-            
-            <div>
-              <label className="block text-xs font-semibold text-blue-500 mb-1">Remark</label>
-              <textarea
-                value={remark}
-                onChange={(e) => setRemark(e.target.value)}
-                rows={4}
-                className="w-full px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-              />
-            </div>
-          </div>
-        </div>
+      <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-2">
+        <SrfFieldsCard
+          values={values}
+          onChange={(patch) => setValues((v) => ({ ...v, ...patch }))}
+          employees={employees}
+          contactPersons={po.supplier?.contactPersons ?? []}
+          available={selectedItem.availableQuantity ?? null}
+          uom={selectedItem.poUom?.uomName}
+        />
+        <PoLineCard item={selectedItem} />
       </div>
     </div>
   );

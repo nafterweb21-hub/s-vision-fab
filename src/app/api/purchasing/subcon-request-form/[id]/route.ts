@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { assertSrfQuantity, SrfQuantityError } from "@/lib/srf-quantity";
 
 export async function GET(req: Request, context: { params: Promise<{ id: string }> }) {
   try {
@@ -25,7 +26,12 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
               include: {
                 inProcess: { select: { description: true } }
               }
-            }
+            },
+            // Other live forms on this PO line, so the client can show what is still available.
+            subconRequestForms: {
+              where: { status: { not: "Void" }, id: { not: id } },
+              select: { quantity: true },
+            },
           }
         }
       },
@@ -59,6 +65,12 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
       return NextResponse.json({ error: "Only Draft status can be edited" }, { status: 400 });
     }
 
+    // Same cap as create, leaving this form's own quantity out of the total.
+    const quantity =
+      body.quantity !== undefined
+        ? await assertSrfQuantity(prisma, existing.purchaseOrderItemId, body.quantity, id)
+        : existing.quantity;
+
     const updated = await prisma.subconRequestForm.update({
       where: { id },
       data: {
@@ -66,40 +78,18 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
         outsourcedById: body.outsourcedById !== undefined ? body.outsourcedById : existing.outsourcedById,
         dateRequired: body.dateRequired ? new Date(body.dateRequired) : existing.dateRequired,
         receivedById: body.receivedById !== undefined ? body.receivedById : existing.receivedById,
-        quantity: body.quantity !== undefined ? body.quantity : existing.quantity,
+        quantity,
         remark: body.remark !== undefined ? body.remark : existing.remark,
       },
     });
 
     return NextResponse.json(updated);
   } catch (e: any) {
+    if (e instanceof SrfQuantityError) return NextResponse.json({ error: e.message }, { status: 400 });
     console.error("PUT SRF error:", e);
     return NextResponse.json({ error: e.message }, { status: 500 });
   }
 }
 
-export async function DELETE(req: Request, context: { params: Promise<{ id: string }> }) {
-  try {
-    const { id } = await context.params;
-    const existing = await prisma.subconRequestForm.findUnique({
-      where: { id },
-    });
-
-    if (!existing) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
-    }
-
-    if (existing.status !== "Draft") {
-      return NextResponse.json({ error: "Only Draft can be deleted" }, { status: 400 });
-    }
-
-    await prisma.subconRequestForm.delete({
-      where: { id },
-    });
-
-    return NextResponse.json({ success: true });
-  } catch (e: any) {
-    console.error("DELETE SRF error:", e);
-    return NextResponse.json({ error: e.message }, { status: 500 });
-  }
-}
+// No DELETE: per docs/spec (README "No DELETE anywhere"), an SRF is voided through
+// POST ./transition { action: "void" } so SRF numbers stay contiguous.
