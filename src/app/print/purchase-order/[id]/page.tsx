@@ -182,13 +182,20 @@ export default async function PrintPurchaseOrderPage(
             {po.items.map((it, idx) => (
               <tr key={it.id} className="dyn">
                 <td style={{ textAlign: 'center' }}>{idx + 1}</td>
-                <td>{it.material}</td>
+                <td>
+                  <div>{it.material}</div>
+                  {it.supplierMaterialNo && <div style={{ fontSize: '9px', color: '#555' }}>Supplier PN: {it.supplierMaterialNo}</div>}
+                </td>
                 <td>
                   <div>{it.description}</div>
                   {it.hsnDescription && <div style={{ fontSize: '9px', color: '#555' }}>{it.hsnDescription}</div>}
+                  {it.remark && <div style={{ fontSize: '9px', color: '#555', whiteSpace: 'pre-wrap' }}>Remark: {it.remark}</div>}
                 </td>
                 <td>{it.hsnCode}</td>
-                <td style={{ textAlign: 'right' }}>{formatNumber(it.internalQuantity)}</td>
+                <td style={{ textAlign: 'right' }}>
+                  <div>{formatNumber(it.internalQuantity)}</div>
+                  <div style={{ fontSize: '9px', color: '#555' }}>Conv: {formatNumber(it.conversion, 4)}</div>
+                </td>
                 <td style={{ textAlign: 'center' }}>{it.internalUom?.uomName}</td>
                 <td>{it.shape}</td>
                 <td>{it.size}</td>
@@ -197,6 +204,7 @@ export default async function PrintPurchaseOrderPage(
                 <td style={{ textAlign: 'center' }}>{it.poUom?.uomName}</td>
                 <td style={{ textAlign: 'right' }}>{formatNumber(it.unitPrice, 4)}</td>
                 <td style={{ textAlign: 'center' }}>
+                  {it.taxType?.taxType && <div>{it.taxType.taxType}</div>}
                   <div>{formatNumber(lineTaxRate(it))}%</div>
                   {Number(it.taxAmount) > 0 && <div style={{ fontSize: '9px', color: '#555' }}>{formatNumber(it.taxAmount)}</div>}
                 </td>

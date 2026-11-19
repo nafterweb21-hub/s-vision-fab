@@ -120,6 +120,7 @@ export async function updateWorkOrderEditable(
     labelUomId?: string | null;
     uploadUrl?: string | null;
     stageQc?: boolean;
+    printAssignedEmployee?: boolean;
   },
 ) {
   try {
@@ -148,6 +149,7 @@ export async function updateWorkOrderEditable(
         ...(data.labelUomId !== undefined ? { labelUomId: data.labelUomId || null } : {}),
         ...(data.uploadUrl !== undefined ? { uploadUrl: data.uploadUrl || null } : {}),
         ...(typeof data.stageQc === "boolean" ? { stageQc: data.stageQc } : {}),
+        ...(typeof data.printAssignedEmployee === "boolean" ? { printAssignedEmployee: data.printAssignedEmployee } : {}),
       },
     });
 

@@ -54,6 +54,7 @@ export default function WorkOrderHeader({ wo, openStepsWhileCompleted }: Props) 
   const [partName, setPartName] = useState<string>(wo.partName ?? "");
   const [uploadUrl, setUploadUrl] = useState<string>(wo.uploadUrl ?? "");
   const [stageQc, setStageQc] = useState<boolean>(wo.stageQc ?? true);
+  const [printAssigned, setPrintAssigned] = useState<boolean>(wo.printAssignedEmployee ?? false);
 
   const editable = !["Void", "Cancelled", "Completed"].includes(wo.status);
   const dirty =
@@ -61,7 +62,8 @@ export default function WorkOrderHeader({ wo, openStepsWhileCompleted }: Props) 
     remark !== (wo.remark ?? "") ||
     partName !== (wo.partName ?? "") ||
     uploadUrl !== (wo.uploadUrl ?? "") ||
-    stageQc !== (wo.stageQc ?? true);
+    stageQc !== (wo.stageQc ?? true) ||
+    printAssigned !== (wo.printAssignedEmployee ?? false);
 
   function save() {
     setError("");
@@ -72,6 +74,7 @@ export default function WorkOrderHeader({ wo, openStepsWhileCompleted }: Props) 
         partName,
         uploadUrl: uploadUrl || null,
         stageQc,
+        printAssignedEmployee: printAssigned,
       });
       if (!res.success) setError(res.error || "Failed to save");
       else router.refresh();
@@ -234,6 +237,28 @@ export default function WorkOrderHeader({ wo, openStepsWhileCompleted }: Props) 
                 className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${stageQc ? "bg-emerald-600" : "bg-slate-300"}`}
               >
                 <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${stageQc ? "translate-x-4" : "translate-x-0.5"}`} />
+              </button>
+            </div>
+
+            <div className="flex items-start justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2.5">
+              <div className="min-w-0">
+                <p className="text-[13px] font-medium text-slate-800">Show assigned employee on print</p>
+                <p className="text-[11px] text-slate-500">
+                  {printAssigned
+                    ? "On: the printout lists the assigned employee next to each routing process."
+                    : "Off: the printout leaves out assigned employees."}
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={printAssigned}
+                aria-label="Show assigned employee on print"
+                onClick={() => setPrintAssigned((v) => !v)}
+                disabled={!editable}
+                className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${printAssigned ? "bg-emerald-600" : "bg-slate-300"}`}
+              >
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${printAssigned ? "translate-x-4" : "translate-x-0.5"}`} />
               </button>
             </div>
 

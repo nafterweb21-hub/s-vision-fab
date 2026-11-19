@@ -70,6 +70,7 @@ export default async function PrintWorkOrderPage(
             include: {
               mainProcess: { select: { process: true } },
               routingProcess: { select: { routingProcess: true } },
+              assignedEmployee: { select: { name: true, code: true } },
               productionTimesheets: {
                 orderBy: { createdAt: "asc" },
                 include: {
@@ -106,6 +107,10 @@ export default async function PrintWorkOrderPage(
   });
 
   if (!wo) notFound();
+
+  // "Show assigned employee on print" toggle on the WO details card.
+  const showAssigned = wo.printAssignedEmployee;
+  const routingCols = showAssigned ? 8 : 7;
 
   const processName = (rp: (typeof wo.inProcesses)[number]["routingProcesses"][number]) =>
     rp.routingProcess?.routingProcess || rp.mainProcess?.process || "—";
@@ -258,8 +263,9 @@ export default async function PrintWorkOrderPage(
               <thead>
                 <tr>
                   <th style={{ width: "8%" }}>SN</th>
-                  <th style={{ width: "22%" }}>Main Process</th>
-                  <th style={{ width: "22%" }}>Routing Process</th>
+                  <th style={{ width: showAssigned ? "17%" : "22%" }}>Main Process</th>
+                  <th style={{ width: showAssigned ? "17%" : "22%" }}>Routing Process</th>
+                  {showAssigned && <th style={{ width: "10%" }}>Assigned</th>}
                   <th style={{ width: "14%" }}>Target Date</th>
                   <th style={{ width: "10%" }}>Status</th>
                   <th style={{ width: "10%" }}>Fully Recd</th>
@@ -270,7 +276,7 @@ export default async function PrintWorkOrderPage(
                 {wo.inProcesses.map((ip) => (
                   <Fragment key={ip.id}>
                     <tr className="ip-row">
-                      <td colSpan={7}>
+                      <td colSpan={routingCols}>
                         {ip.sn ?? "—"}. {ip.description}
                         {ip.allFlag ? " (All)" : ""}
                         {" — Target: "}
@@ -285,7 +291,7 @@ export default async function PrintWorkOrderPage(
                     </tr>
                     {ip.routingProcesses.length === 0 ? (
                       <tr key={`${ip.id}-none`}>
-                        <td colSpan={7} className="empty">
+                        <td colSpan={routingCols} className="empty">
                           No routing processes.
                         </td>
                       </tr>
@@ -295,6 +301,7 @@ export default async function PrintWorkOrderPage(
                           <td>{rp.sn}</td>
                           <td>{txt(rp.mainProcess?.process)}</td>
                           <td>{txt(rp.routingProcess?.routingProcess)}</td>
+                          {showAssigned && <td>{txt(rp.assignedEmployee?.name)}</td>}
                           <td>{fmtDate(rp.targetCompletionDate)}</td>
                           <td>{rp.status}</td>
                           <td className="ctr">{rp.fullyReceived ? "Yes" : "No"}</td>

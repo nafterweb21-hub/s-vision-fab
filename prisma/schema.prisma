@@ -586,6 +586,8 @@ model WorkOrder {
   /// When true, each routing stage must pass QC (all its timesheets Approved) before the next stage unlocks.
   /// New work orders default ON; rows that existed before this column was added were set OFF.
   stageQc              Boolean                   @default(true)
+  /// When true, the Work Order printout shows each routing process's assigned employee.
+  printAssignedEmployee Boolean                  @default(false)
   createdAt            DateTime                  @default(now())
   updatedAt            DateTime                  @updatedAt
   reworks              WorkOrderRework[]
