@@ -22,8 +22,10 @@ export async function lookupWorkOrder(woNo: string) {
             include: {
               mainProcess: true,
               routingProcess: { include: { allowedRoles: { select: { id: true } } } },
-              // Stage QC gate (see isStageQcCleared)
-              productionTimesheets: { select: { timeOut: true, completedQty: true, qcStatus: true } },
+              // Stage QC gate (see isStageQcCleared); employee + timeOut show who has the step picked.
+              productionTimesheets: {
+                select: { timeOut: true, completedQty: true, qcStatus: true, employeeId: true, employee: { select: { name: true } } },
+              },
             },
           },
         },
@@ -165,7 +167,7 @@ export async function scanIn(input: { workOrderNo: string; inProcessId: string; 
     if (candidates.length === 0) {
       return { success: false, error: "No matching routing row found" };
     }
-    let target = candidates.find((c: any) => c.status !== "Completed");
+    const target = candidates.find((c: any) => c.status !== "Completed");
     if (!target) {
       return { success: false, error: "This process has already been completed." };
     }
@@ -221,17 +223,8 @@ export async function scanIn(input: { workOrderNo: string; inProcessId: string; 
         error: "Your role is not permitted to run this process.",
       };
     }
-    // Assignment gate: a step assigned to an operator can only be run by that operator.
-    if (target.assignedEmployeeId && target.assignedEmployeeId !== input.employeeId) {
-      const assignee = await prisma.employee.findUnique({
-        where: { id: target.assignedEmployeeId },
-        select: { name: true },
-      });
-      return {
-        success: false,
-        error: `This process is assigned to ${assignee?.name ?? "another operator"}. Ask the planner to reassign it in the work order.`,
-      };
-    }
+    // Assignment does not restrict who may run a step: the current step is open to every operator
+    // whose role is permitted, and the first one to pick it claims it (below).
 
     // Subcon gate
     if (!target.fullyReceived) {
@@ -251,35 +244,40 @@ export async function scanIn(input: { workOrderNo: string; inProcessId: string; 
       return { success: false, error: "Employee already has an open scan on this routing process" };
     }
 
-    // One operator per step: nobody else may start while someone is scanned in on it.
-    const sheets = await prisma.productionTimesheet.findMany({
-      where: { routingProcessId: target.id },
-      select: { completedQty: true, timeOut: true, employee: { select: { name: true } } },
-    });
-    const open = sheets.filter((t) => !t.timeOut);
-    if (open.length > 0) {
-      const names = open.map((t) => t.employee?.name).filter(Boolean).join(", ");
-      return {
-        success: false,
-        error: `${names || "Another operator"} is already working on this process.`,
-      };
-    }
-    if (wo.quantity != null) {
-      const doneQty = sheets.reduce((sum, t) => sum + (t.completedQty ? Number(t.completedQty) : 0), 0);
-      if (Number(wo.quantity) - doneQty <= 0) {
-        return { success: false, error: "The full quantity for this process has already been produced." };
+    // One operator per step: the first to pick it (scan or tap) claims it and it disappears for
+    // everyone else. The row lock serialises simultaneous scan-ins on the same step, so two
+    // operators tapping at the same moment cannot both get in.
+    const targetId = target.id;
+    const claim = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "RoutingProcess" WHERE id = ${targetId} FOR UPDATE`;
+      const sheets = await tx.productionTimesheet.findMany({
+        where: { routingProcessId: targetId },
+        select: { completedQty: true, timeOut: true, employee: { select: { name: true } } },
+      });
+      const open = sheets.filter((t) => !t.timeOut);
+      if (open.length > 0) {
+        const names = open.map((t) => t.employee?.name).filter(Boolean).join(", ");
+        return { ok: false as const, error: `${names || "Another operator"} has already picked this process.` };
       }
-    }
-
-    const ts = await prisma.productionTimesheet.create({
-      data: {
-        employeeId: input.employeeId,
-        routingProcessId: target.id,
-        timeIn: new Date(),
-        completed: false,
-        machineCodes: input.machineCodes || undefined,
-      },
+      if (wo.quantity != null) {
+        const doneQty = sheets.reduce((sum, t) => sum + (t.completedQty ? Number(t.completedQty) : 0), 0);
+        if (Number(wo.quantity) - doneQty <= 0) {
+          return { ok: false as const, error: "The full quantity for this process has already been produced." };
+        }
+      }
+      const created = await tx.productionTimesheet.create({
+        data: {
+          employeeId: input.employeeId,
+          routingProcessId: targetId,
+          timeIn: new Date(),
+          completed: false,
+          machineCodes: input.machineCodes || undefined,
+        },
+      });
+      return { ok: true as const, ts: created };
     });
+    if (!claim.ok) return { success: false, error: claim.error };
+    const ts = claim.ts;
 
     // Roll routing → WIP if currently New
     if (target.status === "New") {
@@ -430,8 +428,8 @@ export async function getCompletedSessions(query: CompletedSessionsQuery = {}) {
  * Work the signed-in operator can start right now, so they can tap it instead of scanning or typing.
  *
  * It is the current (serial front) step of every Proceed/WIP work order whose routing process allows
- * the operator's role — the same sequence + role gate `scanIn` enforces — minus steps assigned to
- * someone else and steps this operator already has running. An admin with no linked employee is not
+ * the operator's role — the same sequence + role gate `scanIn` enforces — minus steps another operator has
+ * already picked and steps this operator already has running. An admin with no linked employee is not
  * role-filtered and sees every current step.
  */
 export async function getAvailableSessions() {
@@ -507,7 +505,6 @@ export async function getAvailableSessions() {
         if (!found) continue;
         const { ip, rp } = found;
         if (!rp.mainProcessId || !rp.routingProcessId) continue;
-        if (emp && rp.assignedEmployeeId && rp.assignedEmployeeId !== emp.id) continue;
         if (runningIds.has(rp.id)) continue;
         // Full quantity already produced (the step is only waiting on parameter confirmation): nothing left to start.
         const doneQty = rp.productionTimesheets.reduce((sum, t) => sum + (t.completedQty ? Number(t.completedQty) : 0), 0);

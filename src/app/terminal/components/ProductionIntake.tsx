@@ -41,7 +41,7 @@ export default function ProductionIntake({ isOpen, onClose, support, onSuccess, 
     machineCodes: "",
   });
 
-  const allInProcesses = wo?.inProcesses ?? [];
+  const allInProcesses = useMemo<any[]>(() => wo?.inProcesses ?? [], [wo]);
 
   // A signed-in operator who is linked to an employee always works as themselves.
   // Accounts with no linked employee (e.g. admin) keep the manual picker.
@@ -55,15 +55,25 @@ export default function ProductionIntake({ isOpen, onClose, support, onSuccess, 
   }, [support.employees, inForm.employeeId]);
   const operatorRoleId = selectedEmployee?.roleProfileId ?? null;
 
-  // Sequence + role gate over the whole work order. Only the current step that the
-  // operator's role may run is "visible". A signed-in operator additionally never
-  // sees a step assigned to someone else (same rule as the Available list and scanIn).
-  const visibleRowIds = useMemo(() => {
-    const rows: GateRow[] = [];
-    const assignee = new Map<string, string | null>();
+  // Who is currently scanned in on each routing row of this work order.
+  const pickedBy = useMemo(() => {
+    const m = new Map<string, string[]>();
     for (const ip of allInProcesses) {
       for (const rp of ip.routingProcesses ?? []) {
-        assignee.set(rp.id, rp.assignedEmployeeId ?? null);
+        const open = (rp.productionTimesheets ?? []).filter((t: any) => !t.timeOut).map((t: any) => t.employeeId);
+        if (open.length) m.set(rp.id, open);
+      }
+    }
+    return m;
+  }, [allInProcesses]);
+
+  // Sequence + role gate over the whole work order: only the current step that the operator's
+  // role may run is "visible", minus steps another operator has already picked (same rules as
+  // the Available list and scanIn). Assignment does not restrict visibility.
+  const visibleRowIds = useMemo(() => {
+    const rows: GateRow[] = [];
+    for (const ip of allInProcesses) {
+      for (const rp of ip.routingProcesses ?? []) {
         rows.push({
           id: rp.id,
           inProcessSn: ip.sn ?? 0,
@@ -79,14 +89,12 @@ export default function ProductionIntake({ isOpen, onClose, support, onSuccess, 
     return new Set(
       computeGating(rows, operatorRoleId)
         .filter((g) => g.visible)
-        .filter((g) => {
-          if (!lockedEmployee) return true; // manual picker: auto-selects the assignee below
-          const a = assignee.get(g.id);
-          return !a || a === lockedEmployee.id;
-        })
+        // Picked by someone else (they are scanned in on it): hidden from everyone else.
+        // The operator's own open step stays, so they can scan out from here.
+        .filter((g) => !(pickedBy.get(g.id) ?? []).some((empId) => empId !== inForm.employeeId))
         .map((g) => g.id),
     );
-  }, [allInProcesses, operatorRoleId, lockedEmployee, wo?.stageQc]);
+  }, [allInProcesses, operatorRoleId, wo?.stageQc, pickedBy, inForm.employeeId]);
 
   // Stage QC: the completed step that is holding the line until QC approves it (if any).
   const qcWaitingStage = useMemo(() => {
@@ -504,7 +512,7 @@ export default function ProductionIntake({ isOpen, onClose, support, onSuccess, 
             <div className="mb-6 text-sm text-amber-700 bg-amber-50 border border-amber-200 p-4 rounded-xl font-medium">
               {qcWaitingStage
                 ? `Waiting for QC: ${qcWaitingStage} must be approved by QC before the next stage can start.`
-                : "No process is available to start right now. Earlier routing processes must be completed first, or the current step is assigned to another operator or not permitted for your role."}
+                : "No process is available to start right now. Earlier routing processes must be completed first, or the current step is already picked by another operator, or not permitted for your role."}
             </div>
           )}
 

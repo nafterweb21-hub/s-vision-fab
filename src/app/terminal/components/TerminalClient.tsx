@@ -13,6 +13,7 @@ import {
   scanIn,
   scanOut,
   togglePauseSession,
+  getAvailableSessions,
   type ScanOutPayload,
 } from "../actions";
 import { getWorkOrderFiles } from "../../dashboard/production/work-order/actions";
@@ -53,6 +54,27 @@ export default function TerminalClient({ support, loggedInEmployee, initialSessi
     setAvailableSessions(initialAvailable);
   }
   
+  // Keep the Available list live: once another operator picks a step it drops off this screen
+  // within a few seconds, without a reload. Polls only while the tab is visible.
+  useEffect(() => {
+    let cancelled = false;
+    const pull = async () => {
+      if (document.visibilityState !== "visible") return;
+      const rows = await getAvailableSessions();
+      if (!cancelled) setAvailableSessions(rows);
+    };
+    const t = setInterval(pull, 10000);
+    const onVisible = () => { if (document.visibilityState === "visible") pull(); };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      cancelled = true;
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, []);
+
   const [now, setNow] = useState(new Date());
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000);
@@ -142,22 +164,11 @@ export default function TerminalClient({ support, loggedInEmployee, initialSessi
       ? { id: loggedInEmployee.id, name: loggedInEmployee.name, code: loggedInEmployee.code }
       : null;
 
-  function handleScanOutCompleted(session: any) {
-    setIsScanOutOpen(false);
-    setRecentCompletes((prev) => [session, ...prev]);
-    setActiveSessions((prev) => prev.filter((s) => s.id !== session.id));
-    if (selectedSessionId === session.id) setSelectedSessionId("");
-    router.refresh();
-  }
-
-  // Welding / painting / machining: carry the quantity into the full panel so the parameters get filled.
-  function handleScanOutNeedParameters(session: any, good: number, rejected: number, reason: string) {
+  // The work order's session opens in the Active Session panel, where the quantity is entered and scanned out.
+  function handleScanOutPick(session: any) {
     setIsScanOutOpen(false);
     handleSelectSession(session);
-    setProducedCount(good);
-    setDefectCount(rejected);
-    setDefectReason(reason);
-    // On phones the Complete Job panel sits below the sidebar; bring it into view.
+    // On phones the Active Session panel sits below the sidebar; bring it into view.
     setTimeout(() => document.getElementById("session-panel")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
   }
 
@@ -326,6 +337,10 @@ export default function TerminalClient({ support, loggedInEmployee, initialSessi
   }
 
   function handleCompleteSession() {
+    if ((Number(producedCount) || 0) <= 0 && (Number(defectCount) || 0) <= 0) {
+      hotToast.error("Enter the produced (or defect) quantity before scanning out.");
+      return;
+    }
     setPendingAction("complete");
   }
 
@@ -961,10 +976,10 @@ export default function TerminalClient({ support, loggedInEmployee, initialSessi
                 <div className="mt-8 flex justify-end relative z-10 border-t border-slate-100 pt-8">
                   <button 
                     onClick={handleCompleteSession}
-                    disabled={isPending || ((Number(producedCount) || 0) === 0 && (Number(defectCount) || 0) === 0)}
-                    className="bg-slate-100 hover:bg-slate-200 disabled:opacity-50 disabled:hover:bg-slate-100 border border-slate-200 text-slate-900 text-sm font-bold px-8 py-4 rounded-2xl flex items-center gap-3 transition-colors shadow-sm"
+                    disabled={isPending}
+                    className="bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white text-sm font-bold px-8 py-4 rounded-2xl flex items-center gap-3 transition-colors shadow-sm"
                   >
-                    <LogOut size={18} className="text-slate-500" />
+                    <LogOut size={18} />
                     SCAN OUT JOB
                   </button>
                 </div>
@@ -1032,15 +1047,14 @@ export default function TerminalClient({ support, loggedInEmployee, initialSessi
         loggedInEmployeeId={loggedInEmployee?.id}
         onScanOutRequest={handleIntakeScanOutRequest}
       />
-      <ScanOutDialog
-        isOpen={isScanOutOpen}
-        onClose={() => setIsScanOutOpen(false)}
-        sessions={activeSessions}
-        employees={support.employees}
-        lockedEmployee={scanOutLockedEmployee}
-        onCompleted={handleScanOutCompleted}
-        onNeedParameters={handleScanOutNeedParameters}
-      />
+      {isScanOutOpen && (
+        <ScanOutDialog
+          onClose={() => setIsScanOutOpen(false)}
+          sessions={activeSessions}
+          lockedEmployee={scanOutLockedEmployee}
+          onSessionPicked={handleScanOutPick}
+        />
+      )}
       {isFilesModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsFilesModalOpen(false)} />
