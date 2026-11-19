@@ -10,9 +10,10 @@ export async function GET(
     const goodsReceive = await prisma.goodsReceive.findUnique({
       where: { id },
       include: {
+        purchaseOrder: { select: { poNo: true, revision: true, workOrderNo: true, receiveStatus: true } },
         items: {
           include: {
-            purchaseOrderItem: true,
+            purchaseOrderItem: { include: { poUom: true } },
           },
         },
       },

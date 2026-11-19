@@ -6,15 +6,49 @@ import { toast as hotToast } from "react-hot-toast";
 import React, { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
-import { PackageCheck, Save, ArrowLeft, Loader2, Send, Ban, AlertCircle } from "lucide-react";
 import {
-getGoodsReceiveFormData,
-getPoLineBalances,
+  PackageCheck,
+  Save,
+  ArrowLeft,
+  Loader2,
+  Send,
+  AlertCircle,
+  Lock,
+  FileText,
+  Receipt,
+  ClipboardList,
+  StickyNote,
+  Building2,
+  CalendarDays,
+  Wrench,
+  Coins,
+  Package,
+} from "lucide-react";
+import {
+  Badge,
+  Card,
+  EmptyState,
+  Field,
+  MetaChip,
+  StatusBadge,
+  buttonClass,
+  inputClass,
+  inputSmClass,
+  selectTriggerClass,
+  textareaClass,
+  type Tone,
+} from "@/components/form-ui";
+import { poReceiveLabel, poReceiveTone } from "../../purchase-order/po-status";
+import {
+  getGoodsReceiveFormData,
+  getPoLineBalances,
   createGoodsReceive,
   updateGoodsReceive,
   submitGoodsReceive,
-  voidGoodsReceive,
 } from "../actions";
+
+/** Submitted is the final state of a GR, so it reads as done (green). */
+const GR_TONE: Record<string, Tone> = { Draft: "amber", Submitted: "emerald", Void: "rose" };
 
 function cleanErrorMessage(msg: any): string {
   const text = typeof msg === "string" ? msg : msg?.message || "";
@@ -242,318 +276,448 @@ export default function GoodsReceiveFormPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-[60vh]">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+      <div className="flex flex-col items-center justify-center gap-2 p-12">
+        <Loader2 size={20} className="animate-spin text-indigo-600" />
+        <p className="text-xs text-slate-500">Loading…</p>
       </div>
     );
   }
 
-  return (
-    <div className="py-3 space-y-4 w-full">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Link
-            href="/dashboard/purchasing/goods-receive"
-            className="p-2 rounded-full hover:bg-slate-100 transition-colors"
-          >
-            <ArrowLeft className="w-5 h-5 text-slate-500" />
-          </Link>
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">
-              {isNew ? "New Goods Receive" : `Edit ${existing?.grNo}`}
-            </h1>
-            <p className="text-sm text-slate-500 mt-1">
-              {!isNew && `Status: ${existing?.status}`}
-            </p>
-          </div>
-        </div>
+  // ---- Display-only derived values ----
+  const status = isNew ? "Draft" : existing?.status || "Draft";
+  const supplierName = prereq?.suppliers?.find((s: any) => s.id === supplierId)?.supplierName || "";
+  const poNo = selectedPO?.poNo || existing?.purchaseOrder?.poNo || "";
+  const workOrderNo = selectedPO?.workOrderNo || existing?.purchaseOrder?.workOrderNo || "";
+  const poReceiveStatus = selectedPO?.receiveStatus || existing?.purchaseOrder?.receiveStatus || "";
+  const currencyCode = prereq?.currencies?.find((c: any) => c.id === currencyId)?.code || "";
+  const taxName = prereq?.taxes?.find((t: any) => t.id === taxTypeId)?.taxType || "";
+  const totalReceiving = items.reduce((sum, i) => sum + (Number(i.receiveQty) || 0), 0);
+  const linesReceiving = items.filter((i) => Number(i.receiveQty) > 0).length;
+  const overLines = items.filter((i) => {
+    const bal = balances[i.purchaseOrderItemId];
+    return bal && Number(i.receiveQty) > bal.open;
+  }).length;
 
-        <div className="flex items-center gap-3">
-          {!isReadonly && (
-            <button
-              onClick={handleSaveDraft}
-              disabled={saving}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-blue-200 text-blue-700 text-sm font-medium rounded-lg hover:bg-blue-50 transition-colors disabled:opacity-50"
-            >
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              Save Draft
+  function setReceiveQty(index: number, value: string) {
+    setItems((cur) => cur.map((it, i) => (i === index ? { ...it, receiveQty: Number(value) } : it)));
+  }
+
+  function receiveAllOpen() {
+    setItems((cur) =>
+      cur.map((it) => {
+        const bal = balances[it.purchaseOrderItemId];
+        return bal ? { ...it, receiveQty: bal.open } : it;
+      }),
+    );
+  }
+
+  return (
+    <div className="w-full space-y-4">
+      {/* Document header / action bar */}
+      <div className="sticky top-0 z-20 -mx-1 overflow-hidden rounded-xl border border-slate-200 bg-white/90 shadow-[0_1px_3px_rgba(15,23,42,0.06)] backdrop-blur-md">
+        <div className="h-0.5 bg-gradient-to-r from-indigo-500 via-indigo-500 to-violet-500" />
+        <div className="flex flex-col gap-2.5 px-4 py-2.5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0 space-y-1">
+            <Link href="/dashboard/purchasing/goods-receive" className="inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-indigo-600">
+              <ArrowLeft size={12} /> Goods Receive
+            </Link>
+            <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
+              {isNew || !existing?.grNo ? (
+                <h1 className="text-lg font-semibold leading-tight text-slate-900">New Goods Receive</h1>
+              ) : (
+                <h1 className="flex min-w-0 items-baseline gap-2 leading-tight">
+                  <span className="text-[11px] font-medium uppercase tracking-wide text-slate-400">GR</span>
+                  <span className="truncate font-mono text-lg font-semibold text-slate-900">{existing.grNo}</span>
+                </h1>
+              )}
+              <StatusBadge status={status} tone={GR_TONE[status] ?? "slate"} size="md" label={isNew ? "New · Draft" : status} />
+              {poReceiveStatus && (
+                <Badge tone={poReceiveTone(poReceiveStatus)} icon={PackageCheck} size="md">
+                  PO {poReceiveLabel(poReceiveStatus).toLowerCase()}
+                </Badge>
+              )}
+            </div>
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+              <MetaChip icon={Building2} title="Supplier">{supplierName || "No supplier yet"}</MetaChip>
+              <MetaChip icon={CalendarDays} label="GR" title="GR date">{fmtDate(date)}</MetaChip>
+              <MetaChip icon={ClipboardList} label="PO" title="Purchase order">{poNo || "Not selected"}</MetaChip>
+              {workOrderNo && <MetaChip icon={Wrench} label="WO" title="Work order">{workOrderNo}</MetaChip>}
+              {currencyCode && (
+                <MetaChip icon={Coins} title="Currency and exchange rate">
+                  {currencyCode} @ {exchangeRate}
+                </MetaChip>
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-start gap-2 lg:justify-end">
+            <button type="button" onClick={() => router.push("/dashboard/purchasing/goods-receive")} className={buttonClass("ghost", "md")}>
+              Back
             </button>
-          )}
-          {!isNew && existing?.status === "Draft" && (
-            <button
-              onClick={handleSubmit}
-              disabled={saving}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50"
-            >
-              <Send className="w-4 h-4" />
-              Submit
-            </button>
-          )}
+            {isReadonly && (
+              <span className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 text-xs font-medium text-slate-500">
+                <Lock size={13} /> View only
+              </span>
+            )}
+            {!isReadonly && (
+              <button
+                type="button"
+                onClick={handleSaveDraft}
+                disabled={saving}
+                className={buttonClass(isNew ? "primary" : "secondary", "md")}
+              >
+                {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                Save Draft
+              </button>
+            )}
+            {!isNew && existing?.status === "Draft" && (
+              <button type="button" onClick={handleSubmit} disabled={saving} className={buttonClass("primary", "md")}>
+                <Send size={14} /> Submit
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
       {errorMsg && (
-        <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 flex items-center gap-3 text-rose-700">
-          <AlertCircle size={18} />
-          <p className="text-sm font-medium">{errorMsg}</p>
+        <div className="flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[13px] text-rose-700">
+          <AlertCircle size={14} className="shrink-0" />
+          {errorMsg}
+        </div>
+      )}
+      {isReadonly && (
+        <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[13px] text-slate-600">
+          <Lock size={14} className="shrink-0 text-slate-400" />
+          <span>
+            This goods receive is <strong className="font-semibold text-slate-800">{existing?.status}</strong> — read-only.
+          </span>
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
-          {/* Main Details */}
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
-            <div className="px-5 py-4 border-b border-slate-200 bg-slate-50 rounded-t-xl">
-              <h3 className="font-semibold text-slate-800">Basic Information</h3>
-            </div>
-            <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-5">
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wider">Company <span className="text-red-500">*</span></label>
-                <SearchableSelect
-                  value={companyId}
-                  onChange={(e) => setCompanyId(e.target.value)}
-                  disabled={isReadonly}
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100"
-                >
-                  <option value="">Select Company</option>
-                  {prereq?.companies?.map((c: any) => (
-                    <option key={c.id} value={c.id}>{c.companyName}</option>
-                  ))}
-                </SearchableSelect>
-              </div>
+      <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-2">
+        <Card icon={FileText} tone="indigo" title="Receipt details" description="Pick the supplier and an Issued purchase order" className="h-full">
+          <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
+            <Field label="Company" required className="sm:col-span-2">
+              <SearchableSelect
+                value={companyId}
+                onChange={(e) => setCompanyId(e.target.value)}
+                disabled={isReadonly}
+                className={selectTriggerClass}
+              >
+                <option value="">Select Company</option>
+                {prereq?.companies?.map((c: any) => (
+                  <option key={c.id} value={c.id}>{c.companyName}</option>
+                ))}
+              </SearchableSelect>
+            </Field>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wider">GR Date <span className="text-red-500">*</span></label>
-                <input
-                  type="date"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  disabled={isReadonly}
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100"
-                />
-              </div>
+            <Field label="Supplier" required>
+              <SearchableSelect
+                value={supplierId}
+                onChange={(e) => {
+                  setSupplierId(e.target.value);
+                  setPurchaseOrderId("");
+                }}
+                disabled={isReadonly}
+                className={selectTriggerClass}
+              >
+                <option value="">Select Supplier</option>
+                {prereq?.suppliers?.map((s: any) => (
+                  <option key={s.id} value={s.id}>{s.supplierName}</option>
+                ))}
+              </SearchableSelect>
+            </Field>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wider">Supplier <span className="text-red-500">*</span></label>
-                <SearchableSelect
-                  value={supplierId}
-                  onChange={(e) => {
-                    setSupplierId(e.target.value);
-                    setPurchaseOrderId("");
-                  }}
-                  disabled={isReadonly}
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100"
-                >
-                  <option value="">Select Supplier</option>
-                  {prereq?.suppliers?.map((s: any) => (
-                    <option key={s.id} value={s.id}>{s.supplierName}</option>
-                  ))}
-                </SearchableSelect>
-              </div>
+            <Field label="GR Date" required>
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                disabled={isReadonly}
+                className={inputClass}
+              />
+            </Field>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wider">PO No <span className="text-red-500">*</span></label>
+            <Field
+              label="PO No"
+              required
+              className="sm:col-span-2"
+              help={isNew ? "Only Issued purchase orders are listed; the lines fill from the PO." : undefined}
+            >
+              {!isNew && !selectedPO && poNo ? (
+                <div className="flex h-8 items-center rounded-md border border-slate-200 bg-slate-50 px-2.5 font-mono text-[13px] text-slate-600">
+                  {poNo}
+                </div>
+              ) : (
                 <SearchableSelect
                   value={purchaseOrderId}
                   onChange={(e) => setPurchaseOrderId(e.target.value)}
                   disabled={isReadonly || !isNew}
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100"
+                  className={selectTriggerClass}
                 >
                   <option value="">Select PO</option>
                   {filteredPOs.map((p: any) => (
                     <option key={p.id} value={p.id}>{p.poNo}</option>
                   ))}
                 </SearchableSelect>
-              </div>
-            </div>
+              )}
+            </Field>
           </div>
+        </Card>
 
-          {/* Reference Documents */}
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
-            <div className="px-5 py-4 border-b border-slate-200 bg-slate-50 rounded-t-xl">
-              <h3 className="font-semibold text-slate-800">Reference Documents</h3>
-            </div>
-            <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-5">
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wider">DO No</label>
-                <input
-                  type="text"
-                  value={doNo}
-                  onChange={(e) => setDoNo(e.target.value)}
-                  disabled={isReadonly}
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wider">DO Date</label>
-                <input
-                  type="date"
-                  value={doDate}
-                  onChange={(e) => setDoDate(e.target.value)}
-                  disabled={isReadonly}
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wider">Invoice No</label>
-                <input
-                  type="text"
-                  value={invoiceNo}
-                  onChange={(e) => setInvoiceNo(e.target.value)}
-                  disabled={isReadonly}
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wider">Invoice Date</label>
-                <input
-                  type="date"
-                  value={invoiceDate}
-                  onChange={(e) => setInvoiceDate(e.target.value)}
-                  disabled={isReadonly}
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100"
-                />
-              </div>
-            </div>
+        <Card icon={Receipt} tone="sky" title="Supplier documents" description="Delivery order and invoice that came with the goods" className="h-full">
+          <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
+            <Field label="DO No">
+              <input
+                type="text"
+                value={doNo}
+                onChange={(e) => setDoNo(e.target.value)}
+                disabled={isReadonly}
+                className={`${inputClass} font-mono`}
+              />
+            </Field>
+            <Field label="DO Date">
+              <input
+                type="date"
+                value={doDate}
+                onChange={(e) => setDoDate(e.target.value)}
+                disabled={isReadonly}
+                className={inputClass}
+              />
+            </Field>
+            <Field label="Invoice No">
+              <input
+                type="text"
+                value={invoiceNo}
+                onChange={(e) => setInvoiceNo(e.target.value)}
+                disabled={isReadonly}
+                className={`${inputClass} font-mono`}
+              />
+            </Field>
+            <Field label="Invoice Date">
+              <input
+                type="date"
+                value={invoiceDate}
+                onChange={(e) => setInvoiceDate(e.target.value)}
+                disabled={isReadonly}
+                className={inputClass}
+              />
+            </Field>
           </div>
+        </Card>
+      </div>
 
-          {/* Items */}
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
-            <div className="px-5 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between rounded-t-xl">
-              <h3 className="font-semibold text-slate-800">Received Items</h3>
-            </div>
-            {items.length === 0 ? (
-              <div className="p-8 text-center text-slate-500 text-sm">
-                Select a PO to populate items.
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left">
-                  <thead className="bg-slate-50 text-xs text-slate-500 uppercase tracking-wider border-b border-slate-200">
-                    <tr>
-                      <th className="px-4 py-3">Description</th>
-                      <th className="px-4 py-3 text-right">Purchased Qty</th>
-                      <th className="px-4 py-3 text-right">Prev. Received</th>
-                      <th className="px-4 py-3 text-right">Balance</th>
-                      <th className="px-4 py-3 text-right">Received Qty</th>
+      {/* Items */}
+      <Card
+        icon={Package}
+        tone="amber"
+        title={
+          <span className="inline-flex items-center gap-1.5">
+            Received Items
+            {items.length > 0 && (
+              <span className="rounded-full bg-amber-50 px-1.5 text-[11px] font-semibold tabular-nums text-amber-700 ring-1 ring-inset ring-amber-600/15">
+                {items.length}
+              </span>
+            )}
+          </span>
+        }
+        description="Receive quantity per PO line; it can't exceed the open balance"
+        actions={
+          !isReadonly && items.length > 0 && Object.keys(balances).length > 0 ? (
+            <button type="button" onClick={receiveAllOpen} className={buttonClass("link", "sm")}>
+              <PackageCheck size={14} /> Receive all open
+            </button>
+          ) : undefined
+        }
+        bodyClassName={items.length === 0 ? "p-4" : "p-0"}
+      >
+        {items.length === 0 ? (
+          <EmptyState
+            boxed
+            icon={Package}
+            tone="amber"
+            title="No lines yet"
+            description="Select an Issued purchase order to load its lines."
+          />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[760px] text-left text-[13px]">
+              <thead className="border-b border-slate-100 bg-slate-50/70 text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="w-8 py-2 pl-3 pr-1 font-medium">#</th>
+                  <th className="px-2 py-2 font-medium">Item</th>
+                  <th className="px-2 py-2 font-medium">UOM</th>
+                  <th className="px-2 py-2 text-right font-medium">Ordered</th>
+                  <th className="px-2 py-2 text-right font-medium">Prev. Received</th>
+                  <th className="w-32 px-2 py-2 text-right font-medium">Receive Qty</th>
+                  <th className="px-3 py-2 text-right font-medium">Balance after</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {items.map((item, index) => {
+                  const bal = balances[item.purchaseOrderItemId];
+                  // Balance left after this GR's quantity is received.
+                  const remaining = bal ? Math.round((bal.open - (Number(item.receiveQty) || 0)) * 100) / 100 : 0;
+                  const over = !!bal && remaining < 0;
+                  const material = item.poItem?.material;
+                  const description = item.poItem?.description;
+                  return (
+                    <tr key={index} className="align-top transition-colors hover:bg-slate-50/60 focus-within:bg-indigo-50/30">
+                      <td className="py-2 pl-3 pr-1">
+                        <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-amber-500 text-[11px] font-semibold tabular-nums text-white">
+                          {index + 1}
+                        </span>
+                      </td>
+                      <td className="px-2 py-2">
+                        <p className="font-medium text-slate-800">{material || description || `Item ${index + 1}`}</p>
+                        {material && description && <p className="text-xs text-slate-500">{description}</p>}
+                      </td>
+                      <td className="px-2 py-2 text-slate-600">{item.poItem?.poUom?.uomName || "—"}</td>
+                      <td className="px-2 py-2 text-right tabular-nums text-slate-600">{Number(item.poItem?.quantity || 0)}</td>
+                      <td className="px-2 py-2 text-right tabular-nums text-slate-600">
+                        {bal ? bal.received : "—"}
+                        {bal && bal.inDraft > 0 && (
+                          <span className="block text-[11px] font-medium text-amber-600" title="Held by other Draft GRs on this PO">
+                            +{bal.inDraft} in draft
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-2 py-1.5">
+                        <input
+                          type="number"
+                          min="0"
+                          max={bal ? bal.open : Number(item.poItem?.quantity || 0)}
+                          value={item.receiveQty}
+                          onChange={(e) => setReceiveQty(index, e.target.value)}
+                          disabled={isReadonly}
+                          aria-invalid={over}
+                          className={`${inputSmClass} text-right tabular-nums ${over ? "border-rose-400 bg-rose-50" : ""}`}
+                        />
+                      </td>
+                      <td
+                        className={`px-3 py-2 text-right font-semibold tabular-nums ${
+                          !bal ? "text-slate-400" : over ? "text-rose-600" : remaining === 0 ? "text-emerald-600" : "text-slate-800"
+                        }`}
+                      >
+                        {bal ? remaining : "—"}
+                        {over && <span className="block text-[11px] font-medium">Over open balance</span>}
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {items.map((item, index) => {
-                      const bal = balances[item.purchaseOrderItemId];
-                      // Balance left after this GR's quantity is received.
-                      const remaining = bal ? Math.round((bal.open - (Number(item.receiveQty) || 0)) * 100) / 100 : 0;
-                      return (
-                      <tr key={index}>
-                        <td className="px-4 py-3 font-medium text-slate-800">
-                          {item.poItem?.description || item.poItem?.material || `Item ${index + 1}`}
-                        </td>
-                        <td className="px-4 py-3 text-right tabular-nums text-slate-600">
-                          {Number(item.poItem?.quantity || 0)}
-                        </td>
-                        <td className="px-4 py-3 text-right tabular-nums text-slate-600">
-                          {bal ? bal.received : "—"}
-                          {bal && bal.inDraft > 0 && (
-                            <span className="block text-[11px] font-medium text-amber-600" title="Held by other Draft GRs on this PO">
-                              +{bal.inDraft} in draft
-                            </span>
-                          )}
-                        </td>
-                        <td className={`px-4 py-3 text-right tabular-nums font-semibold ${
-                          !bal ? "text-slate-400" : remaining < 0 ? "text-rose-600" : remaining === 0 ? "text-emerald-600" : "text-blue-700"
-                        }`}>
-                          {bal ? remaining : "—"}
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex justify-end">
-                            <input
-                              type="number"
-                              min="0"
-                              max={bal ? bal.open : Number(item.poItem?.quantity || 0)}
-                              value={item.receiveQty}
-                              onChange={(e) => {
-                                const newItems = [...items];
-                                newItems[index].receiveQty = Number(e.target.value);
-                                setItems(newItems);
-                              }}
-                              disabled={isReadonly}
-                              className="w-24 px-2 py-1 text-right text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100"
-                            />
-                          </div>
-                        </td>
-                      </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                  );
+                })}
+              </tbody>
+              <tfoot className="border-t border-slate-200 bg-slate-50/70 text-[13px]">
+                <tr>
+                  <td colSpan={5} className="py-2 pl-3 pr-2 text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                    {linesReceiving} of {items.length} line{items.length === 1 ? "" : "s"} receiving
+                  </td>
+                  <td className="px-3.5 py-2 text-right font-semibold tabular-nums text-slate-900">{fmtQty(totalReceiving)}</td>
+                  <td />
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      <div className="grid min-w-0 grid-cols-1 items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <Card icon={ClipboardList} tone="violet" title="Purchase order" description="Taken from the selected PO">
+          <dl className="space-y-2 text-[13px]">
+            <SummaryRow label="PO No" value={poNo} mono />
+            <SummaryRow label="Work Order" value={workOrderNo} mono />
+            <SummaryRow label="Currency" value={currencyCode ? `${currencyCode} @ ${exchangeRate}` : ""} />
+            <SummaryRow label="Tax" value={taxName ? `${taxName} (${taxRate}%)` : taxRate ? `${taxRate}%` : ""} />
+            {poReceiveStatus && (
+              <div className="flex items-center justify-between gap-3">
+                <dt className="text-slate-500">Receive status</dt>
+                <dd>
+                  <Badge tone={poReceiveTone(poReceiveStatus)} dot>{poReceiveLabel(poReceiveStatus)}</Badge>
+                </dd>
               </div>
             )}
-          </div>
-        </div>
+          </dl>
+        </Card>
 
-        <div className="space-y-6">
-          {/* PO Details Pane */}
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
-            <div className="px-5 py-4 border-b border-slate-200 bg-slate-50 rounded-t-xl">
-              <h3 className="font-semibold text-slate-800">PO Summary</h3>
-            </div>
-            <div className="p-5 space-y-4">
-              <div>
-                <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">WO No</p>
-                <p className="text-sm font-medium text-slate-900">{selectedPO?.workOrderNo || "—"}</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Currency</p>
-                <p className="text-sm font-medium text-slate-900">
-                  {prereq?.currencies?.find((c: any) => c.id === currencyId)?.code || "—"}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Exchange Rate</p>
-                <p className="text-sm font-medium text-slate-900">{exchangeRate}</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Tax Type</p>
-                <p className="text-sm font-medium text-slate-900">
-                  {prereq?.taxes?.find((t: any) => t.id === taxTypeId)?.taxType || "—"} ({taxRate}%)
-                </p>
-              </div>
-            </div>
+        <Card icon={StickyNote} tone="slate" title="Other details" description="Who received it, and any notes">
+          <div className="space-y-3">
+            <Field label="Creator">
+              <SearchableSelect
+                value={creatorId}
+                onChange={(e) => setCreatorId(e.target.value)}
+                disabled={isReadonly}
+                className={selectTriggerClass}
+              >
+                <option value="">Select Creator</option>
+                {prereq?.employees?.map((e: any) => (
+                  <option key={e.id} value={e.id}>{e.name}</option>
+                ))}
+              </SearchableSelect>
+            </Field>
+            <Field label="Remark">
+              <textarea
+                value={remark}
+                onChange={(e) => setRemark(e.target.value)}
+                rows={3}
+                disabled={isReadonly}
+                className={textareaClass}
+              />
+            </Field>
           </div>
+        </Card>
 
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
-            <div className="px-5 py-4 border-b border-slate-200 bg-slate-50 rounded-t-xl">
-              <h3 className="font-semibold text-slate-800">Other Details</h3>
+        {/* Receipt summary — dark anchor, same as the PO form */}
+        <section className="overflow-hidden rounded-xl bg-[#111827] text-slate-300 shadow-lg shadow-slate-900/10 ring-1 ring-white/5">
+          <header className="flex items-center gap-2.5 border-b border-white/10 px-4 py-2.5">
+            <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-500/15 text-indigo-300 ring-1 ring-inset ring-indigo-400/20">
+              <PackageCheck size={15} />
+            </span>
+            <div>
+              <h2 className="text-[13px] font-semibold leading-tight text-white">Summary</h2>
+              <p className="text-[11px] leading-tight text-slate-400">Live totals for this receipt</p>
             </div>
-            <div className="p-5 space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wider">Creator</label>
-                <SearchableSelect
-                  value={creatorId}
-                  onChange={(e) => setCreatorId(e.target.value)}
-                  disabled={isReadonly}
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100"
-                >
-                  <option value="">Select Creator</option>
-                  {prereq?.employees?.map((e: any) => (
-                    <option key={e.id} value={e.id}>{e.name}</option>
-                  ))}
-                </SearchableSelect>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wider">Remark</label>
-                <textarea
-                  value={remark}
-                  onChange={(e) => setRemark(e.target.value)}
-                  rows={3}
-                  disabled={isReadonly}
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100 resize-none"
-                ></textarea>
-              </div>
+          </header>
+          <dl className="space-y-2 px-4 py-3 text-[13px]">
+            <div className="flex items-center justify-between gap-3">
+              <dt className="text-slate-400">PO lines</dt>
+              <dd className="tabular-nums text-slate-200">{items.length}</dd>
             </div>
+            <div className="flex items-center justify-between gap-3">
+              <dt className="text-slate-400">Lines receiving</dt>
+              <dd className="tabular-nums text-slate-200">{linesReceiving}</dd>
+            </div>
+            {overLines > 0 && (
+              <div className="flex items-center justify-between gap-3">
+                <dt className="text-rose-300">Over open balance</dt>
+                <dd className="tabular-nums text-rose-300">{overLines}</dd>
+              </div>
+            )}
+          </dl>
+          <div className="relative border-t border-white/10 bg-white/[0.03] px-4 py-3">
+            <span className="absolute inset-y-3 left-0 w-[3px] rounded-r bg-gradient-to-b from-indigo-400 to-violet-500" />
+            <p className="text-[11px] font-medium uppercase tracking-wide text-indigo-300">Total Receive Qty</p>
+            <p className="mt-0.5 text-2xl font-semibold tabular-nums tracking-tight text-white">{fmtQty(totalReceiving)}</p>
           </div>
-        </div>
+        </section>
       </div>
     </div>
   );
 }
+
+function SummaryRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <dt className="text-slate-500">{label}</dt>
+      <dd className={`truncate text-right font-medium text-slate-800 ${mono ? "font-mono text-xs" : ""}`}>{value || "—"}</dd>
+    </div>
+  );
+}
+
+function fmtDate(value: string | null | undefined): string {
+  if (!value) return "—";
+  const ymd = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  const d = ymd ? new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3])) : new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
+}
+
+const fmtQty = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 4 });

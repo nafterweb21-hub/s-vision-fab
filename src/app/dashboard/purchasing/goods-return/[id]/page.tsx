@@ -8,13 +8,34 @@ import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import {
   PackageX,
+  PackageCheck,
   Save,
   ArrowLeft,
   Loader2,
   Send,
   Ban,
   AlertCircle,
+  Lock,
+  FileText,
+  ClipboardList,
+  StickyNote,
+  Building2,
+  CalendarDays,
+  Coins,
 } from "lucide-react";
+import {
+  Card,
+  EmptyState,
+  Field,
+  MetaChip,
+  StatusBadge,
+  buttonClass,
+  inputClass,
+  inputSmClass,
+  selectTriggerClass,
+  textareaClass,
+  type Tone,
+} from "@/components/form-ui";
 import { getGoodsReturnFormData, submitGoodsReturn, voidGoodsReturn } from "../actions";
 export default function GoodsReturnFormPage() {
   const params = useParams();
@@ -151,6 +172,27 @@ export default function GoodsReturnFormPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [goodsReceiveId, isNew]);
 
+  // Per GR line: what other Submitted returns have already sent back. This
+  // return's own qty is excluded so editing a draft doesn't count against itself.
+  const returnedElsewhere = React.useMemo(() => {
+    const map = new Map<string, number>();
+    for (const gr of prereq?.goodsReceives || []) {
+      for (const gi of gr.items || []) {
+        const qty = (gi.goodsReturnItems || [])
+          .filter((r: any) => r.goodsReturnId !== id)
+          .reduce((s: number, r: any) => s + Number(r.returnQty || 0), 0);
+        map.set(gi.id, qty);
+      }
+    }
+    return map;
+  }, [prereq, id]);
+
+  /** Received on this GR line minus what other submitted returns already took back. */
+  function leftToReturn(item: any): number {
+    const receiveQty = Number(item.grItem?.receiveQty || 0);
+    return Math.max(0, receiveQty - (returnedElsewhere.get(item.goodsReceiveItemId) ?? 0));
+  }
+
   function updateItemReturnQty(index: number, qty: number) {
     const newItems = [...items];
     const item = newItems[index];
@@ -158,7 +200,7 @@ export default function GoodsReturnFormPage() {
     const poItem = grItem?.purchaseOrderItem;
     const unitPrice = Number(poItem?.unitPrice || 0);
     const conversion = Number(poItem?.conversion || 1);
-    const maxQty = Number(grItem?.receiveQty || 0);
+    const maxQty = leftToReturn(item);
     const safeQty = Math.min(Math.max(0, qty), maxQty);
 
     newItems[index] = {
@@ -180,6 +222,14 @@ export default function GoodsReturnFormPage() {
       if (!goodsReceiveId) throw new Error("GR No is mandatory");
       if (!rtnDate) throw new Error("RTN Date is mandatory");
       if (!creatorId) throw new Error("Creator is mandatory");
+      // A draft saved earlier can go over if another return was submitted since.
+      const overLine = items.find((i) => Number(i.returnQty) > leftToReturn(i) + 0.005);
+      if (overLine) {
+        const po = overLine.grItem?.purchaseOrderItem;
+        throw new Error(
+          `${po?.material || po?.description || "A line"}: returning ${Number(overLine.returnQty)} but only ${leftToReturn(overLine)} is left to return.`,
+        );
+      }
 
       const payload = {
         rtnDate,
@@ -263,129 +313,163 @@ export default function GoodsReturnFormPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-[60vh]">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+      <div className="flex flex-col items-center justify-center gap-2 p-12">
+        <Loader2 size={20} className="animate-spin text-indigo-600" />
+        <p className="text-xs text-slate-500">Loading…</p>
       </div>
     );
   }
 
+  // ---- Display-only derived values ----
+  const status = isNew ? "Draft" : existing?.status || "Draft";
+  const supplierName = prereq?.suppliers?.find((s: any) => s.id === supplierId)?.supplierName || existing?.supplier?.supplierName || "";
+  const grNo = selectedGR?.grNo || existing?.goodsReceive?.grNo || "";
+  const poNo =
+    filteredPOs.find((p: any) => p.id === purchaseOrderId)?.poNo || selectedGR?.purchaseOrder?.poNo || existing?.purchaseOrder?.poNo || "";
+  const currencyCode = prereq?.currencies?.find((c: any) => c.id === currencyId)?.code || "";
+  const taxName = prereq?.taxes?.find((t: any) => t.id === taxTypeId)?.taxType || "";
+  const totalReturnQty = items.reduce((sum, i) => sum + (Number(i.returnQty) || 0), 0);
+  const linesReturning = items.filter((i) => Number(i.returnQty) > 0).length;
+
+  function setLineRemark(index: number, value: string) {
+    setItems((cur) => cur.map((it, i) => (i === index ? { ...it, remark: value } : it)));
+  }
+
   return (
-    <div className="py-3 space-y-4 w-full">
-      {/* Page Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Link
-            href="/dashboard/purchasing/goods-return"
-            className="p-2 rounded-full hover:bg-slate-100 transition-colors"
-          >
-            <ArrowLeft className="w-5 h-5 text-slate-500" />
-          </Link>
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-rose-500/10 text-rose-600">
-              <PackageX size={20} />
+    <div className="w-full space-y-4">
+      {/* Document header / action bar */}
+      <div className="sticky top-0 z-20 -mx-1 overflow-hidden rounded-xl border border-slate-200 bg-white/90 shadow-[0_1px_3px_rgba(15,23,42,0.06)] backdrop-blur-md">
+        <div className="h-0.5 bg-gradient-to-r from-rose-500 via-rose-500 to-pink-500" />
+        <div className="flex flex-col gap-2.5 px-4 py-2.5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0 space-y-1">
+            <Link href="/dashboard/purchasing/goods-return" className="inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-indigo-600">
+              <ArrowLeft size={12} /> Goods Return
+            </Link>
+            <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
+              {isNew || !existing?.rtnNo ? (
+                <h1 className="text-lg font-semibold leading-tight text-slate-900">New Goods Return</h1>
+              ) : (
+                <h1 className="flex min-w-0 items-baseline gap-2 leading-tight">
+                  <span className="text-[11px] font-medium uppercase tracking-wide text-slate-400">RTN</span>
+                  <span className="truncate font-mono text-lg font-semibold text-slate-900">{existing.rtnNo}</span>
+                </h1>
+              )}
+              <StatusBadge status={status} tone={RTN_TONE[status] ?? "slate"} size="md" label={isNew ? "New · Draft" : status} />
             </div>
-            <div>
-              <h1 className="text-2xl font-bold text-slate-900">
-                {isNew ? "New Goods Return" : `Goods Return – ${existing?.rtnNo}`}
-              </h1>
-              {!isNew && (
-                <p className="text-sm text-slate-500 mt-0.5">
-                  Status: <StatusPill status={existing?.status} />
-                </p>
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+              <MetaChip icon={Building2} title="Supplier">{supplierName || "No supplier yet"}</MetaChip>
+              <MetaChip icon={CalendarDays} label="RTN" title="Return date">{fmtDate(rtnDate)}</MetaChip>
+              <MetaChip icon={ClipboardList} label="PO" title="Purchase order">{poNo || "Not selected"}</MetaChip>
+              <MetaChip icon={PackageCheck} label="GR" title="Goods receive">{grNo || "Not selected"}</MetaChip>
+              {currencyCode && (
+                <MetaChip icon={Coins} title="Currency and exchange rate">
+                  {currencyCode} @ {exchangeRate}
+                </MetaChip>
               )}
             </div>
           </div>
-        </div>
 
-        <div className="flex items-center gap-3">
-          {!isReadonly && (
-            <button
-              onClick={handleSaveDraft}
-              disabled={saving}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-blue-200 text-blue-700 text-sm font-medium rounded-lg hover:bg-blue-50 transition-colors disabled:opacity-50"
-            >
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              Save Draft
+          <div className="flex flex-wrap items-center justify-start gap-2 lg:justify-end">
+            <button type="button" onClick={() => router.push("/dashboard/purchasing/goods-return")} className={buttonClass("ghost", "md")}>
+              Back
             </button>
-          )}
-          {!isNew && existing?.status === "Draft" && (
-            <>
-              <button
-                onClick={handleSubmit}
-                disabled={saving}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50"
-              >
-                <Send className="w-4 h-4" /> Submit
+            {isReadonly && (
+              <span className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 text-xs font-medium text-slate-500">
+                <Lock size={13} /> View only
+              </span>
+            )}
+            {!isNew && existing?.status === "Draft" && (
+              <button type="button" onClick={handleVoid} disabled={saving} className={buttonClass("danger", "md")}>
+                <Ban size={14} /> Void
               </button>
+            )}
+            {!isReadonly && (
               <button
-                onClick={handleVoid}
+                type="button"
+                onClick={handleSaveDraft}
                 disabled={saving}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-rose-600 text-white text-sm font-medium rounded-lg hover:bg-rose-700 transition-colors disabled:opacity-50"
+                className={buttonClass(isNew ? "primary" : "secondary", "md")}
               >
-                <Ban className="w-4 h-4" /> Void
+                {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                Save Draft
               </button>
-            </>
-          )}
+            )}
+            {!isNew && existing?.status === "Draft" && (
+              <button type="button" onClick={handleSubmit} disabled={saving} className={buttonClass("primary", "md")}>
+                <Send size={14} /> Submit
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
       {errorMsg && (
-        <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 flex items-center gap-3 text-rose-700">
-          <AlertCircle size={18} />
-          <p className="text-sm font-medium">{errorMsg}</p>
+        <div className="flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[13px] text-rose-700">
+          <AlertCircle size={14} className="shrink-0" />
+          {errorMsg}
+        </div>
+      )}
+      {isReadonly && (
+        <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[13px] text-slate-600">
+          <Lock size={14} className="shrink-0 text-slate-400" />
+          <span>
+            This goods return is <strong className="font-semibold text-slate-800">{existing?.status}</strong> — read-only.
+          </span>
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left: Main form */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Basic Information */}
-          <FormCard title="Basic Information">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <FieldGroup label="Company *">
-                <SearchableSelect
-                  value={companyId}
-                  onChange={(e) => setCompanyId(e.target.value)}
-                  disabled={isReadonly}
-                  className={selectCls(isReadonly)}
-                >
-                  <option value="">Select Company</option>
-                  {prereq?.companies?.map((c: any) => (
-                    <option key={c.id} value={c.id}>{c.companyName}</option>
-                  ))}
-                </SearchableSelect>
-              </FieldGroup>
+      <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <Card icon={FileText} tone="rose" title="Return details" description="Supplier, then the PO and the submitted GR to return against" className="h-full">
+          <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
+            <Field label="Company" required className="sm:col-span-2">
+              <SearchableSelect
+                value={companyId}
+                onChange={(e) => setCompanyId(e.target.value)}
+                disabled={isReadonly}
+                className={selectTriggerClass}
+              >
+                <option value="">Select Company</option>
+                {prereq?.companies?.map((c: any) => (
+                  <option key={c.id} value={c.id}>{c.companyName}</option>
+                ))}
+              </SearchableSelect>
+            </Field>
 
-              <FieldGroup label="RTN Date *">
-                <input
-                  type="date"
-                  value={rtnDate}
-                  onChange={(e) => setRtnDate(e.target.value)}
-                  disabled={isReadonly}
-                  className={inputCls(isReadonly)}
-                />
-              </FieldGroup>
+            <Field label="RTN Date" required>
+              <input
+                type="date"
+                value={rtnDate}
+                onChange={(e) => setRtnDate(e.target.value)}
+                disabled={isReadonly}
+                className={inputClass}
+              />
+            </Field>
 
-              <FieldGroup label="Supplier *">
-                <SearchableSelect
-                  value={supplierId}
-                  onChange={(e) => {
-                    setSupplierId(e.target.value);
-                    setPurchaseOrderId("");
-                    setGoodsReceiveId("");
-                    setItems([]);
-                  }}
-                  disabled={isReadonly}
-                  className={selectCls(isReadonly)}
-                >
-                  <option value="">Select Supplier</option>
-                  {prereq?.suppliers?.map((s: any) => (
-                    <option key={s.id} value={s.id}>{s.supplierName}</option>
-                  ))}
-                </SearchableSelect>
-              </FieldGroup>
+            <Field label="Supplier" required>
+              <SearchableSelect
+                value={supplierId}
+                onChange={(e) => {
+                  setSupplierId(e.target.value);
+                  setPurchaseOrderId("");
+                  setGoodsReceiveId("");
+                  setItems([]);
+                }}
+                disabled={isReadonly}
+                className={selectTriggerClass}
+              >
+                <option value="">Select Supplier</option>
+                {prereq?.suppliers?.map((s: any) => (
+                  <option key={s.id} value={s.id}>{s.supplierName}</option>
+                ))}
+              </SearchableSelect>
+            </Field>
 
-              <FieldGroup label="PO No *">
+            <Field label="PO No" required>
+              {!isNew ? (
+                <div className="flex h-8 items-center rounded-md border border-slate-200 bg-slate-50 px-2.5 font-mono text-[13px] text-slate-600">
+                  {poNo || "—"}
+                </div>
+              ) : (
                 <SearchableSelect
                   value={purchaseOrderId}
                   onChange={(e) => {
@@ -393,169 +477,244 @@ export default function GoodsReturnFormPage() {
                     setGoodsReceiveId("");
                     setItems([]);
                   }}
-                  disabled={isReadonly || !supplierId || !isNew}
-                  className={selectCls(isReadonly || !supplierId || !isNew)}
+                  disabled={isReadonly || !supplierId}
+                  className={selectTriggerClass}
                 >
                   <option value="">Select PO</option>
                   {filteredPOs.map((p: any) => (
                     <option key={p.id} value={p.id}>{p.poNo}</option>
                   ))}
                 </SearchableSelect>
-              </FieldGroup>
+              )}
+            </Field>
 
-              <FieldGroup label="GR No *">
+            <Field label="GR No" required>
+              {!isNew ? (
+                <div className="flex h-8 items-center rounded-md border border-slate-200 bg-slate-50 px-2.5 font-mono text-[13px] text-slate-600">
+                  {grNo || "—"}
+                </div>
+              ) : (
                 <SearchableSelect
                   value={goodsReceiveId}
                   onChange={(e) => {
                     setGoodsReceiveId(e.target.value);
                     setItems([]);
                   }}
-                  disabled={isReadonly || !purchaseOrderId || !isNew}
-                  className={selectCls(isReadonly || !purchaseOrderId || !isNew)}
+                  disabled={isReadonly || !purchaseOrderId}
+                  className={selectTriggerClass}
                 >
                   <option value="">Select GR</option>
                   {filteredGRsByPO.map((gr: any) => (
                     <option key={gr.id} value={gr.id}>{gr.grNo}</option>
                   ))}
                 </SearchableSelect>
-              </FieldGroup>
-            </div>
-          </FormCard>
+              )}
+            </Field>
+          </div>
+        </Card>
 
-          {/* Return Items */}
-          <FormCard title="Return Items">
-            {items.length === 0 ? (
-              <div className="p-8 text-center text-slate-500 text-sm">
-                Select a GR No to populate items.
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left">
-                  <thead className="bg-slate-50 text-xs text-slate-500 uppercase tracking-wider border-b border-slate-200">
-                    <tr>
-                      <th className="px-3 py-3">Material</th>
-                      <th className="px-3 py-3">Description</th>
-                      <th className="px-3 py-3 text-right">Recv Qty</th>
-                      <th className="px-3 py-3">UOM</th>
-                      <th className="px-3 py-3 text-right">Unit Price</th>
-                      <th className="px-3 py-3 text-right w-32">Return Qty</th>
-                      <th className="px-3 py-3 text-right">Amount</th>
-                      <th className="px-3 py-3 text-right">Internal Qty</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {items.map((item, index) => {
-                      const grItem = item.grItem;
-                      const poItem = grItem?.purchaseOrderItem;
-                      const receiveQty = Number(grItem?.receiveQty || 0);
-                      const unitPrice = Number(poItem?.unitPrice || 0);
-                      const uom = poItem?.poUom?.uomName || "—";
-                      const material = poItem?.material || "—";
-                      const description = poItem?.description || `Item ${index + 1}`;
+        <Card icon={StickyNote} tone="slate" title="Other details" description="Who raised the return, and why" className="h-full">
+          <div className="space-y-3">
+            <Field label="Creator" required>
+              <SearchableSelect
+                value={creatorId}
+                onChange={(e) => setCreatorId(e.target.value)}
+                disabled={isReadonly}
+                className={selectTriggerClass}
+              >
+                <option value="">Select Creator</option>
+                {prereq?.employees?.map((e: any) => (
+                  <option key={e.id} value={e.id}>{e.name}</option>
+                ))}
+              </SearchableSelect>
+            </Field>
+            <Field label="Remark">
+              <textarea
+                value={remark}
+                onChange={(e) => setRemark(e.target.value)}
+                rows={2}
+                disabled={isReadonly}
+                className={textareaClass}
+                placeholder="Reason for the return…"
+              />
+            </Field>
+          </div>
+        </Card>
+      </div>
 
-                      return (
-                        <tr key={index} className="hover:bg-slate-50/50">
-                          <td className="px-3 py-3 text-slate-700 font-medium">{material}</td>
-                          <td className="px-3 py-3 text-slate-600 max-w-[180px] truncate" title={description}>{description}</td>
-                          <td className="px-3 py-3 text-right tabular-nums text-slate-600">{receiveQty}</td>
-                          <td className="px-3 py-3 text-slate-500">{uom}</td>
-                          <td className="px-3 py-3 text-right tabular-nums text-slate-600">{unitPrice.toFixed(4)}</td>
-                          <td className="px-3 py-3">
-                            <input
-                              type="number"
-                              min={0}
-                              max={receiveQty}
-                              step="any"
-                              value={item.returnQty}
-                              onChange={(e) => updateItemReturnQty(index, Number(e.target.value))}
-                              disabled={isReadonly}
-                              className={`w-28 px-2 py-1 text-right text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                                isReadonly ? "bg-slate-100 border-slate-200" : "border-slate-300"
-                              } ${
-                                Number(item.returnQty) > receiveQty
-                                  ? "border-rose-400 bg-rose-50"
-                                  : ""
-                              }`}
-                            />
-                            {Number(item.returnQty) > receiveQty && (
-                              <p className="text-xs text-rose-600 mt-1">Exceeds received qty</p>
-                            )}
-                          </td>
-                          <td className="px-3 py-3 text-right tabular-nums text-slate-700 font-medium">
-                            {Number(item.amount).toFixed(2)}
-                          </td>
-                          <td className="px-3 py-3 text-right tabular-nums text-slate-600">
-                            {Number(item.internalQty).toFixed(4)}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                  <tfoot className="border-t-2 border-slate-200 bg-slate-50">
-                    <tr>
-                      <td colSpan={6} className="px-3 py-3 text-right text-sm font-semibold text-slate-700">
-                        Total Amount:
-                      </td>
-                      <td className="px-3 py-3 text-right tabular-nums font-bold text-slate-900">
-                        {totalAmount.toFixed(2)}
-                      </td>
-                      <td></td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
+      {/* Items */}
+      <Card
+        icon={PackageX}
+        tone="rose"
+        title={
+          <span className="inline-flex items-center gap-1.5">
+            Return Items
+            {items.length > 0 && (
+              <span className="rounded-full bg-rose-50 px-1.5 text-[11px] font-semibold tabular-nums text-rose-700 ring-1 ring-inset ring-rose-600/15">
+                {items.length}
+              </span>
             )}
-          </FormCard>
-        </div>
+          </span>
+        }
+        description="Return quantity per received line; it can't exceed what is left after earlier returns"
+        bodyClassName={items.length === 0 ? "p-4" : "p-0"}
+      >
+        {items.length === 0 ? (
+          <EmptyState
+            boxed
+            icon={PackageX}
+            tone="rose"
+            title="No lines yet"
+            description="Select a submitted GR to load the lines that were received."
+          />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1000px] text-left text-[13px]">
+              <thead className="border-b border-slate-100 bg-slate-50/70 text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="w-8 py-2 pl-3 pr-1 font-medium">#</th>
+                  <th className="px-2 py-2 font-medium">Item</th>
+                  <th className="px-2 py-2 font-medium">UOM</th>
+                  <th className="px-2 py-2 text-right font-medium">Received</th>
+                  <th className="px-2 py-2 text-right font-medium">Left to Return</th>
+                  <th className="px-2 py-2 text-right font-medium">Unit Price</th>
+                  <th className="w-28 px-2 py-2 text-right font-medium">Return Qty</th>
+                  <th className="px-2 py-2 text-right font-medium">Amount</th>
+                  <th className="px-2 py-2 text-right font-medium">Internal Qty</th>
+                  <th className="w-48 px-3 py-2 font-medium">Remark</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {items.map((item, index) => {
+                  const grItem = item.grItem;
+                  const poItem = grItem?.purchaseOrderItem;
+                  const receiveQty = Number(grItem?.receiveQty || 0);
+                  const unitPrice = Number(poItem?.unitPrice || 0);
+                  const material = poItem?.material;
+                  const description = poItem?.description;
+                  const left = leftToReturn(item);
+                  const over = Number(item.returnQty) > left + 0.005;
+                  const returning = Number(item.returnQty) > 0;
+                  return (
+                    <tr key={index} className="align-top transition-colors hover:bg-slate-50/60 focus-within:bg-indigo-50/30">
+                      <td className="py-2 pl-3 pr-1">
+                        <span
+                          className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-semibold tabular-nums ${
+                            returning ? "bg-rose-500 text-white" : "bg-slate-200 text-slate-600"
+                          }`}
+                        >
+                          {index + 1}
+                        </span>
+                      </td>
+                      <td className="max-w-[260px] px-2 py-2">
+                        <p className="truncate font-medium text-slate-800" title={material || description}>
+                          {material || description || `Item ${index + 1}`}
+                        </p>
+                        {material && description && (
+                          <p className="truncate text-xs text-slate-500" title={description}>{description}</p>
+                        )}
+                      </td>
+                      <td className="px-2 py-2 text-slate-600">{poItem?.poUom?.uomName || "—"}</td>
+                      <td className="px-2 py-2 text-right tabular-nums text-slate-600">{receiveQty}</td>
+                      <td className={`px-2 py-2 text-right tabular-nums ${left < receiveQty ? "font-medium text-amber-600" : "text-slate-600"}`}>
+                        {left}
+                        {left < receiveQty && (
+                          <p className="text-[11px] font-normal text-slate-400">{+(receiveQty - left).toFixed(4)} already returned</p>
+                        )}
+                      </td>
+                      <td className="px-2 py-2 text-right tabular-nums text-slate-600">{unitPrice.toFixed(4)}</td>
+                      <td className="px-2 py-1.5">
+                        <input
+                          type="number"
+                          min={0}
+                          max={left}
+                          step="any"
+                          value={item.returnQty}
+                          onChange={(e) => updateItemReturnQty(index, Number(e.target.value))}
+                          disabled={isReadonly || (left <= 0 && !Number(item.returnQty))}
+                          aria-invalid={over}
+                          className={`${inputSmClass} text-right tabular-nums ${over ? "border-rose-400 bg-rose-50" : ""}`}
+                        />
+                        {over && <p className="mt-0.5 text-[11px] text-rose-600">Only {left} left to return</p>}
+                      </td>
+                      <td className={`px-2 py-2 text-right font-semibold tabular-nums ${returning ? "text-slate-900" : "text-slate-300"}`}>
+                        {Number(item.amount).toFixed(2)}
+                      </td>
+                      <td className="px-2 py-2 text-right tabular-nums text-slate-600">
+                        {Number(item.internalQty).toFixed(4)}
+                        {poItem?.internalUom?.uomName && (
+                          <span className="ml-1 text-[11px] text-slate-400">{poItem.internalUom.uomName}</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-1.5">
+                        <input
+                          type="text"
+                          value={item.remark || ""}
+                          onChange={(e) => setLineRemark(index, e.target.value)}
+                          disabled={isReadonly}
+                          className={inputSmClass}
+                          placeholder="Reason"
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot className="border-t border-slate-200 bg-slate-50/70 text-[13px]">
+                <tr>
+                  <td colSpan={6} className="py-2 pl-3 pr-2 text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                    {linesReturning} of {items.length} line{items.length === 1 ? "" : "s"} returning
+                  </td>
+                  <td className="px-3.5 py-2 text-right font-semibold tabular-nums text-slate-900">{fmtQty(totalReturnQty)}</td>
+                  <td className="px-2 py-2 text-right font-semibold tabular-nums text-slate-900">{totalAmount.toFixed(2)}</td>
+                  <td colSpan={2} />
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+      </Card>
 
-        {/* Right: Sidebar */}
-        <div className="space-y-6">
-          {/* GR Summary */}
-          <FormCard title="GR Summary">
-            <div className="space-y-4 text-sm">
-              <SummaryRow label="GR No" value={selectedGR?.grNo || existing?.goodsReceive?.grNo || "—"} />
-              <SummaryRow
-                label="Currency"
-                value={prereq?.currencies?.find((c: any) => c.id === currencyId)?.code || "—"}
-              />
-              <SummaryRow label="Exchange Rate" value={exchangeRate.toString()} />
-              <SummaryRow
-                label="Tax Type"
-                value={`${prereq?.taxes?.find((t: any) => t.id === taxTypeId)?.taxType || "—"} (${taxRate}%)`}
-              />
-            </div>
-          </FormCard>
+      <div className="grid min-w-0 grid-cols-1 items-start gap-4 md:grid-cols-2">
+        <Card icon={ClipboardList} tone="violet" title="Goods receive" description="Currency and tax are taken from the GR">
+          <dl className="space-y-2 text-[13px]">
+            <SummaryRow label="GR No" value={grNo} mono />
+            <SummaryRow label="PO No" value={poNo} mono />
+            <SummaryRow label="Currency" value={currencyCode ? `${currencyCode} @ ${exchangeRate}` : ""} />
+            <SummaryRow label="Tax" value={taxName ? `${taxName} (${taxRate}%)` : taxRate ? `${taxRate}%` : ""} />
+          </dl>
+        </Card>
 
-          {/* Other Details */}
-          <FormCard title="Other Details">
-            <div className="space-y-4">
-              <FieldGroup label="Creator *">
-                <SearchableSelect
-                  value={creatorId}
-                  onChange={(e) => setCreatorId(e.target.value)}
-                  disabled={isReadonly}
-                  className={selectCls(isReadonly)}
-                >
-                  <option value="">Select Creator</option>
-                  {prereq?.employees?.map((e: any) => (
-                    <option key={e.id} value={e.id}>{e.name}</option>
-                  ))}
-                </SearchableSelect>
-              </FieldGroup>
-              <FieldGroup label="Remark">
-                <textarea
-                  value={remark}
-                  onChange={(e) => setRemark(e.target.value)}
-                  rows={3}
-                  disabled={isReadonly}
-                  className={`w-full px-3 py-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none ${
-                    isReadonly ? "bg-slate-100 border-slate-200" : "border-slate-300"
-                  }`}
-                />
-              </FieldGroup>
+        {/* Return summary — dark anchor, same as the PO form */}
+        <section className="overflow-hidden rounded-xl bg-[#111827] text-slate-300 shadow-lg shadow-slate-900/10 ring-1 ring-white/5">
+          <header className="flex items-center gap-2.5 border-b border-white/10 px-4 py-2.5">
+            <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-rose-500/15 text-rose-300 ring-1 ring-inset ring-rose-400/20">
+              <PackageX size={15} />
+            </span>
+            <div>
+              <h2 className="text-[13px] font-semibold leading-tight text-white">Summary</h2>
+              <p className="text-[11px] leading-tight text-slate-400">Live totals for this return</p>
             </div>
-          </FormCard>
-        </div>
+          </header>
+          <dl className="space-y-2 px-4 py-3 text-[13px]">
+            <div className="flex items-center justify-between gap-3">
+              <dt className="text-slate-400">Lines returning</dt>
+              <dd className="tabular-nums text-slate-200">{linesReturning}</dd>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <dt className="text-slate-400">Total return qty</dt>
+              <dd className="tabular-nums text-slate-200">{fmtQty(totalReturnQty)}</dd>
+            </div>
+          </dl>
+          <div className="relative border-t border-white/10 bg-white/[0.03] px-4 py-3">
+            <span className="absolute inset-y-3 left-0 w-[3px] rounded-r bg-gradient-to-b from-rose-400 to-pink-500" />
+            <p className="text-[11px] font-medium uppercase tracking-wide text-rose-300">Return Amount (before tax)</p>
+            <p className="mt-0.5 flex items-baseline gap-1.5">
+              {currencyCode && <span className="text-xs font-medium text-rose-300">{currencyCode}</span>}
+              <span className="text-2xl font-semibold tabular-nums tracking-tight text-white">{totalAmount.toFixed(2)}</span>
+            </p>
+          </div>
+        </section>
       </div>
     </div>
   );
@@ -563,59 +722,24 @@ export default function GoodsReturnFormPage() {
 
 // ─── small helpers ────────────────────────────────────────────────────────────
 
-const inputCls = (disabled: boolean) =>
-  `w-full px-3 py-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${
-    disabled ? "bg-slate-100 border-slate-200 cursor-not-allowed" : "border-slate-300"
-  }`;
+/** Submitted is the final state of a return, so it reads as done (green). */
+const RTN_TONE: Record<string, Tone> = { Draft: "amber", Submitted: "emerald", Void: "rose" };
 
-const selectCls = (disabled: boolean) =>
-  `w-full px-3 py-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${
-    disabled ? "bg-slate-100 border-slate-200 cursor-not-allowed" : "border-slate-300"
-  }`;
-
-function FormCard({ title, children }: { title: string; children: React.ReactNode }) {
+function SummaryRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
-      <div className="px-5 py-4 border-b border-slate-200 bg-slate-50 rounded-t-xl">
-        <h3 className="font-semibold text-slate-800">{title}</h3>
-      </div>
-      <div className="p-5">{children}</div>
+    <div className="flex items-center justify-between gap-3">
+      <dt className="text-slate-500">{label}</dt>
+      <dd className={`truncate text-right font-medium text-slate-800 ${mono ? "font-mono text-xs" : ""}`}>{value || "—"}</dd>
     </div>
   );
 }
 
-function FieldGroup({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <label className="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wider">
-        {label}
-      </label>
-      {children}
-    </div>
-  );
+function fmtDate(value: string | null | undefined): string {
+  if (!value) return "—";
+  const ymd = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  const d = ymd ? new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3])) : new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
 }
 
-function SummaryRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <p className="text-xs text-slate-500 uppercase tracking-wider mb-0.5">{label}</p>
-      <p className="font-medium text-slate-900">{value}</p>
-    </div>
-  );
-}
-
-function StatusPill({ status }: { status: string }) {
-  const cls =
-    status === "Submitted"
-      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-      : status === "Draft"
-      ? "bg-amber-50 text-amber-700 border-amber-200"
-      : status === "Void"
-      ? "bg-rose-50 text-rose-700 border-rose-200"
-      : "bg-slate-100 text-slate-600 border-slate-200";
-  return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${cls}`}>
-      {status}
-    </span>
-  );
-}
+const fmtQty = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 4 });

@@ -50,7 +50,7 @@ export async function getGoodsReceiveFormData() {
       prisma.supplierProfile.findMany({ where: { status: "Active" } }),
       prisma.purchaseOrder.findMany({
         where: { status: "Issued" },
-        include: { items: true },
+        include: { items: { include: { poUom: true }, orderBy: { sortOrder: "asc" } } },
       }),
       prisma.employee.findMany({ where: { status: RecordStatus.Active } }),
       prisma.currency.findMany({ where: { status: "Active" } }),
