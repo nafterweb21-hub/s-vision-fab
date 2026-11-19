@@ -325,6 +325,11 @@ function ReceiveProgress({ row }: { row: GoodsReceiveRow }) {
       >
         {p.overReceived ? "Over" : `${p.receivedPct}%`}
       </span>
+      {isDraft && p.thisGrPct > 0 && !p.overReceived && (
+        <span className="whitespace-nowrap text-[11px] font-medium tabular-nums text-amber-600">
+          +{p.thisGrPct}% draft
+        </span>
+      )}
     </div>
   );
 }

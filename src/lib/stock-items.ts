@@ -276,3 +276,64 @@ export async function deleteStockItem(id: string) {
   await prisma.stockItem.delete({ where: { id } });
   return true;
 }
+
+/** The subset of the Prisma client `ensureStockItemsForReceipt` needs, so a `$transaction` handle fits. */
+type ReceiptDb = Pick<typeof prisma, "goodsReceive" | "stockItem">;
+
+/**
+ * Stock is derived from submitted GRs, but the Raw Materials and Consumables
+ * pages only list materials that have a StockItem. Submitting a GR for a
+ * profile material with no stock record would raise its balance invisibly, so
+ * this creates the missing records (as raw materials, opening stock 0) in the
+ * same transaction as the submit. Free-text PO lines have no material profile
+ * and are skipped. Existing records are left untouched.
+ */
+export async function ensureStockItemsForReceipt(db: ReceiptDb, goodsReceiveId: string): Promise<number> {
+  const gr = await db.goodsReceive.findUnique({
+    where: { id: goodsReceiveId },
+    select: {
+      purchaseOrder: { select: { supplierId: true } },
+      items: {
+        select: {
+          purchaseOrderItem: {
+            select: {
+              materialProfileId: true,
+              internalUomId: true,
+              poUomId: true,
+              unitPrice: true,
+              conversion: true,
+              materialProfile: { select: { stockItem: { select: { id: true } } } },
+            },
+          },
+        },
+      },
+    },
+  });
+  if (!gr) return 0;
+
+  const missing = new Map<string, { uomId: string; unitCost: number }>();
+  for (const { purchaseOrderItem: line } of gr.items) {
+    if (!line.materialProfileId || line.materialProfile?.stockItem) continue;
+    if (missing.has(line.materialProfileId)) continue;
+    const conversion = Number(line.conversion) || 1;
+    missing.set(line.materialProfileId, {
+      // Balances are kept in the PO line's internal UOM.
+      uomId: line.internalUomId || line.poUomId,
+      unitCost: Math.round((Number(line.unitPrice) / conversion) * 100) / 100,
+    });
+  }
+
+  for (const [materialProfileId, m] of missing) {
+    await db.stockItem.create({
+      data: {
+        materialProfileId,
+        itemType: "RAW_MATERIAL",
+        uomId: m.uomId,
+        unitCost: m.unitCost,
+        supplierId: gr.purchaseOrder?.supplierId || null,
+        status: "Active",
+      },
+    });
+  }
+  return missing.size;
+}

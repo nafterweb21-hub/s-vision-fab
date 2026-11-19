@@ -84,6 +84,41 @@ async function lineReceipts(
   return out;
 }
 
+export interface PoLineBalance {
+  ordered: number;
+  /** Nett received on submitted GRs (received − returned). */
+  received: number;
+  /** Quantity sitting on other Draft GRs for this line. */
+  inDraft: number;
+  /** What a new GR may still take: ordered − received − inDraft. */
+  open: number;
+}
+
+/** Per-line balances for one PO, keyed by PO item id. `excludeGrId` leaves out the GR being edited. */
+export async function poLineBalances(
+  tx: Tx,
+  purchaseOrderId: string,
+  excludeGrId?: string,
+): Promise<Record<string, PoLineBalance>> {
+  const [submitted, all] = await Promise.all([
+    lineReceipts(tx, purchaseOrderId, ["Submitted"], excludeGrId),
+    lineReceipts(tx, purchaseOrderId, ["Draft", "Submitted"], excludeGrId),
+  ]);
+  const out: Record<string, PoLineBalance> = {};
+  for (const [id, line] of all) {
+    const sub = submitted.get(id);
+    const received = sub ? sub.received - sub.returned : 0;
+    const inDraft = Math.max(0, line.received - (sub?.received || 0));
+    out[id] = {
+      ordered: line.ordered,
+      received,
+      inDraft,
+      open: Math.max(0, line.ordered - received - inDraft),
+    };
+  }
+  return out;
+}
+
 /**
  * Throws if receiving `items` would take any PO line past its ordered quantity.
  * Counts every other non-void GR on the PO (Draft included).

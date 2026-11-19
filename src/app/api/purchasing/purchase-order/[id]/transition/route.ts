@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { copyPoShipTo } from "@/lib/po-ship-to";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/authz";
-import { determineApprovalRequirement } from "@/lib/po-approval-logic";
+import { PoApprovalError, decidePoApproval, poApprovalRequirement } from "@/lib/po-approval-logic";
+import { PO_EDITABLE_STATUSES } from "@/lib/po-approval-rules";
 import { recomputePrPoStatus } from "@/lib/pr-po-status";
 
 const REVISABLE_STATUSES = [
@@ -19,7 +20,28 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   try {
     const { id } = await params;
-    const { action, userId } = await req.json();
+    const { action, remark, expectedUpdatedAt } = await req.json();
+
+    // Approve / reject share the PO Approval module's code path and permission,
+    // so PURCHASE_ORDER edit rights alone can't approve.
+    if (action === "approve1" || action === "reject") {
+      const { session, error: approvalError } = await requirePermission("PO_APPROVAL", "a");
+      if (approvalError) return approvalError;
+      try {
+        const updated = await decidePoApproval({
+          poId: id,
+          action: action === "approve1" ? "approve" : "reject",
+          remark,
+          userId: session.user.id,
+          role: session.user.role,
+          expectedUpdatedAt,
+        });
+        return NextResponse.json({ success: true, status: updated.status });
+      } catch (e) {
+        if (e instanceof PoApprovalError) return NextResponse.json({ error: e.message }, { status: e.status });
+        throw e;
+      }
+    }
 
     return await prisma.$transaction(async (tx) => {
       const po = await tx.purchaseOrder.findUnique({
@@ -35,11 +57,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         }
         // Supplier email is optional for every PO type.
         
-        const moduleName = po.type === "SUBCON" ? "Purchase Order - Subcon" : "Purchase Order - Material";
-        const approvalReq = await determineApprovalRequirement(moduleName, Number(po.amountAfterTax || 0), tx);
+        // Tier is decided on the base-currency amount (amount after tax × the PO's exchange rate).
+        const approvalReq = await poApprovalRequirement(po, tx);
 
-        await tx.purchaseOrder.update({
-          where: { id: po.id },
+        // Conditional, so a concurrent submit / void can't be overwritten.
+        const submitted = await tx.purchaseOrder.updateMany({
+          where: { id: po.id, status: { in: [...PO_EDITABLE_STATUSES] } },
           data: {
             status: approvalReq.initialStatus,
             approvalTier: approvalReq.requiredTiers,
@@ -51,6 +74,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             secondApprovedAt: null,
           },
         });
+        if (submitted.count !== 1) throw new Error("This purchase order was changed by someone else. Reload it and try again.");
         return NextResponse.json({ success: true, status: approvalReq.initialStatus });
       }
 
@@ -58,10 +82,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         if (po.status === "Void" || po.status === "Issued") {
           throw new Error("Cannot void in this status.");
         }
-        await tx.purchaseOrder.update({
-          where: { id: po.id },
+        // Conditional, so a PO an approver issued meanwhile isn't voided.
+        const voided = await tx.purchaseOrder.updateMany({
+          where: { id: po.id, status: { notIn: ["Void", "Issued"] } },
           data: { status: "Void" },
         });
+        if (voided.count !== 1) throw new Error("This purchase order was changed by someone else. Reload it and try again.");
         await recomputePrPoStatus(tx, po.purchaseRequisitionId);
         return NextResponse.json({ success: true, status: "Void" });
       }
@@ -176,27 +202,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         await recomputePrPoStatus(tx, po.purchaseRequisitionId);
 
         return NextResponse.json(newPo);
-      }
-
-      if (action === "approve1") {
-        if (po.status !== "Pending For Approval") throw new Error("Invalid status");
-        // For simplicity, we just move to Approved directly if we don't have robust tier 2 logic here yet.
-        await tx.purchaseOrder.update({
-          where: { id: po.id },
-          data: { 
-            status: "Approved",
-          },
-        });
-        return NextResponse.json({ success: true, status: "Approved" });
-      }
-
-      if (action === "reject") {
-        if (po.status !== "Pending For Approval") throw new Error("Invalid status");
-        await tx.purchaseOrder.update({
-          where: { id: po.id },
-          data: { status: "Rejected" },
-        });
-        return NextResponse.json({ success: true, status: "Rejected" });
       }
 
       if (action === "issue") {

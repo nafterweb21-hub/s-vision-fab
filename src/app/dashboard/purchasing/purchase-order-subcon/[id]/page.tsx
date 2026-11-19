@@ -4,7 +4,46 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import PoBillShipTo, { emptyPoShipTo, poShipToFromRecord, applyPoCustomer, type PoCustomer, type PoShipTo } from "@/components/purchasing/PoBillShipTo";
-import { Loader2, ArrowLeft, Plus, Trash2, Save, FileText } from "lucide-react";
+import {
+  Loader2,
+  ArrowLeft,
+  Plus,
+  Trash2,
+  Save,
+  FileText,
+  AlertCircle,
+  Lock,
+  Truck,
+  Factory,
+  StickyNote,
+  ShieldCheck,
+  PackageCheck,
+  Receipt,
+  Building2,
+  CalendarDays,
+  CalendarClock,
+  Wrench,
+  Coins,
+  Wallet,
+} from "lucide-react";
+import {
+  Badge,
+  Card,
+  EmptyState,
+  Field,
+  MetaChip,
+  StatusBadge,
+  buttonClass,
+  iconButtonDangerClass,
+  inputClass,
+  inputSmClass,
+  readOnlyClass,
+  selectTriggerClass,
+  selectTriggerSmClass,
+  textareaClass,
+} from "@/components/form-ui";
+import { ApprovalStep, ReceiveTrack } from "@/components/purchasing/PoStatusPanels";
+import { poApprovalStage, poReceiveLabel, poReceiveTone, poStatusTone } from "../../purchase-order/po-status";
 type FormData = {
   companies: { id: string; companyName: string; allowPoForWo: boolean }[];
   customers: PoCustomer[];
@@ -45,6 +84,19 @@ type Item = {
   remark: string;
 };
 
+type Meta = {
+  poNo?: string;
+  revision?: number;
+  status?: string;
+  receiveStatus?: string;
+  // Display only: the approval trail.
+  approvalTier?: number | null;
+  firstApproverName?: string | null;
+  firstApprovedAt?: string | null;
+  secondApproverName?: string | null;
+  secondApprovedAt?: string | null;
+};
+
 export default function PurchaseOrderSubconEditPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -55,7 +107,7 @@ export default function PurchaseOrderSubconEditPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [readOnly, setReadOnly] = useState(false);
-  const [meta, setMeta] = useState<{ poNo?: string; revision?: number; status?: string; receiveStatus?: string }>({});
+  const [meta, setMeta] = useState<Meta>({});
 
   const [companyId, setCompanyId] = useState("");
   const [date, setDate] = useState<string>(new Date().toISOString().slice(0, 10));
@@ -94,7 +146,17 @@ export default function PurchaseOrderSubconEditPage() {
         if (!isNew) {
           const po = await fetch(`/api/purchasing/purchase-order/${id}`).then((r) => r.json());
           if (po.error) throw new Error(po.error);
-          setMeta({ poNo: po.poNo, revision: po.revision, status: po.status, receiveStatus: po.receiveStatus });
+          setMeta({
+            poNo: po.poNo,
+            revision: po.revision,
+            status: po.status,
+            receiveStatus: po.receiveStatus,
+            approvalTier: po.approvalTier,
+            firstApproverName: po.firstApproverName,
+            firstApprovedAt: po.firstApprovedAt,
+            secondApproverName: po.secondApproverName,
+            secondApprovedAt: po.secondApprovedAt,
+          });
           setReadOnly(po.status !== "Draft" && po.status !== "Rejected");
           setCompanyId(po.companyId);
           setDate(new Date(po.date).toISOString().slice(0, 10));
@@ -122,6 +184,8 @@ export default function PurchaseOrderSubconEditPage() {
               masterMainProcessId: it.masterMainProcessId || "",
               masterRoutingProcessId: it.masterRoutingProcessId || "",
               description: it.description || "",
+              hardness: it.hardness || "",
+              thickness: it.thickness || "",
               poUomId: it.poUomId || "",
               quantity: Number(it.quantity).toFixed(2),
               unitPrice: Number(it.unitPrice).toFixed(4),
@@ -387,490 +451,683 @@ export default function PurchaseOrderSubconEditPage() {
 
   if (loading) {
     return (
-      <div className="p-12 flex flex-col items-center justify-center gap-3">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-        <p className="text-sm text-blue-500">Loading…</p>
+      <div className="flex flex-col items-center justify-center gap-2 p-12">
+        <Loader2 size={20} className="animate-spin text-indigo-600" />
+        <p className="text-xs text-slate-500">Loading…</p>
       </div>
     );
   }
 
+  // ---- Display-only derived values (no effect on the payload) ----
+  const status = isNew ? "Draft" : meta.status || "Draft";
+  const stage = poApprovalStage(isNew ? null : meta);
+  const receiveStatus = meta.receiveStatus || "NA";
+  const currency = data?.currencies?.find((c) => c.id === currencyId);
+  const baseCurrency = data?.currencies?.find((c) => (c as { isDefault?: boolean }).isDefault);
+  const showBase = !!currency && !!baseCurrency && baseCurrency.id !== currency.id;
+  const totalNum = Number(amountAfterTax) || 0;
+  const baseTotal = totalNum * (Number(exchangeRate) || 0);
+  const curCode = currency?.code || "";
+  const tax = data?.taxes?.find((t) => t.id === taxTypeId);
+  const taxLabel = tax ? `${tax.taxType} (${Number(taxRate)}%)` : `Tax ${Number(taxRate)}%`;
+  const deliveryBy = items
+    .map((it) => it.deliveryDate)
+    .filter(Boolean)
+    .sort()[0];
+
   return (
-    <div className="p-6 lg:p-8 space-y-6 max-w-[90rem] mx-auto">
-      <div className="flex items-center justify-between pb-6 border-b border-blue-200">
-        <div>
-          <div className="flex items-center gap-2 text-xs text-blue-400 font-semibold uppercase mb-1">
-            <Link href="/dashboard/purchasing/purchase-order-subcon" className="hover:text-blue-600 inline-flex items-center gap-1">
+    <div className="w-full space-y-4">
+      {/* Document header / action bar */}
+      <div className="sticky top-0 z-20 -mx-1 overflow-hidden rounded-xl border border-slate-200 bg-white/90 shadow-[0_1px_3px_rgba(15,23,42,0.06)] backdrop-blur-md">
+        <div className="h-0.5 bg-gradient-to-r from-indigo-500 via-indigo-500 to-violet-500" />
+        <div className="flex flex-col gap-2.5 px-4 py-2.5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0 space-y-1">
+            <Link href="/dashboard/purchasing/purchase-order-subcon" className="inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-indigo-600">
               <ArrowLeft size={12} /> Purchase Order Subcon
             </Link>
-            {!isNew && meta.poNo && (
-              <>
-                <span>/</span>
-                <span className="text-blue-500">
-                  {meta.poNo}-R{meta.revision}
-                </span>
-                <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] border bg-blue-50 text-blue-700 border-blue-200">
-                  {meta.status}
-                </span>
-              </>
-            )}
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-blue-500/10 text-blue-600">
-              <FileText size={20} />
+            <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
+              {isNew || !meta.poNo ? (
+                <h1 className="text-lg font-semibold leading-tight text-slate-900">
+                  {isNew ? "New Subcon Purchase Order" : "Edit Subcon Purchase Order"}
+                </h1>
+              ) : (
+                <h1 className="flex min-w-0 items-baseline gap-2 leading-tight">
+                  <span className="text-[11px] font-medium uppercase tracking-wide text-slate-400">Subcon PO</span>
+                  <span className="truncate font-mono text-lg font-semibold text-slate-900">{meta.poNo}</span>
+                  <span className="rounded bg-slate-100 px-1.5 py-px font-mono text-[11px] font-medium text-slate-500">
+                    R{meta.revision}
+                  </span>
+                </h1>
+              )}
+              <StatusBadge status={status} tone={poStatusTone(status)} size="md" label={isNew ? "New · Draft" : status} />
+              <Badge tone={stage.tone} icon={ShieldCheck} size="md">
+                {stage.label}
+              </Badge>
+              {!isNew && (
+                <Badge tone={poReceiveTone(receiveStatus)} icon={PackageCheck} size="md">
+                  {poReceiveLabel(receiveStatus)}
+                </Badge>
+              )}
             </div>
-            <h2 className="text-2xl font-bold tracking-tight text-blue-900">
-              {isNew ? "New Subcon Purchase Order" : "Edit Subcon Purchase Order"}
-            </h2>
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+              <MetaChip icon={Building2} title="Subcontractor">{selectedSupplier?.supplierName || "No supplier yet"}</MetaChip>
+              <MetaChip icon={CalendarDays} label="PO" title="PO date">{fmtDate(date)}</MetaChip>
+              {deliveryBy && (
+                <MetaChip icon={CalendarClock} label="Delivery" title="Earliest line delivery date">{fmtDate(deliveryBy)}</MetaChip>
+              )}
+              <MetaChip icon={Wrench} label="WO" title={selectedWorkOrder?.jobDescription || "Work order"}>
+                {workOrderNo || "Non Work Order"}
+              </MetaChip>
+              {currency && (
+                <MetaChip icon={Coins} title="Currency and exchange rate">
+                  {currency.code} @ {exchangeRate}
+                </MetaChip>
+              )}
+              <MetaChip icon={Wallet} label="Total" title="Amount after tax">
+                <span className="tabular-nums">{curCode} {fmtMoney(totalNum)}</span>
+              </MetaChip>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-start gap-2 lg:justify-end">
+            <button type="button" onClick={() => router.push("/dashboard/purchasing/purchase-order-subcon")} className={buttonClass("ghost", "md")}>
+              Back
+            </button>
+            {readOnly && (
+              <span className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 text-xs font-medium text-slate-500">
+                <Lock size={13} /> View only
+              </span>
+            )}
+            <button type="button" onClick={onSave} disabled={saving || readOnly} className={buttonClass("primary", "md")}>
+              {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+              {saving ? "Saving…" : "Save"}
+            </button>
           </div>
         </div>
-
-        <button
-          onClick={onSave}
-          disabled={saving || readOnly}
-          className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-sky-600 hover:from-blue-500 hover:to-sky-500 rounded-lg shadow-md active:scale-95 disabled:opacity-50 cursor-pointer"
-        >
-          {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-          {saving ? "Saving…" : "Save"}
-        </button>
       </div>
 
       {error && (
-        <div className="bg-rose-50 border border-rose-200 rounded-lg p-3 text-sm text-rose-700">{error}</div>
+        <div className="flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[13px] text-rose-700">
+          <AlertCircle size={14} className="shrink-0" />
+          {error}
+        </div>
       )}
       {readOnly && (
-        <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm text-slate-700">
-          This purchase order is <strong>{meta.status}</strong> — read-only.
+        <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[13px] text-slate-600">
+          <Lock size={14} className="shrink-0 text-slate-400" />
+          <span>
+            This purchase order is <strong className="font-semibold text-slate-800">{meta.status}</strong> — read-only.
+          </span>
         </div>
       )}
 
-      {/* Header Fields */}
-      <div className="bg-white border border-blue-200 rounded-xl shadow-sm p-6 grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
-        <Field label="Company" required>
-          <SearchableSelect
-            value={companyId}
-            disabled={readOnly || !isNew}
-            onChange={(e) => setCompanyId(e.target.value)}
-            className={inputCls}
+      <div className="grid min-w-0 grid-cols-1 gap-4">
+        {/* Main column */}
+        <div className="min-w-0 space-y-4">
+          {/* Order details */}
+          <Card icon={FileText} tone="indigo" title="Order details" description="Company, purchaser, work order, currency and tax">
+            <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
+              <Field label="Company" required className="sm:col-span-2">
+                <SearchableSelect
+                  value={companyId}
+                  disabled={readOnly || !isNew}
+                  onChange={(e) => setCompanyId(e.target.value)}
+                  className={selectTriggerClass}
+                >
+                  <option value="">— Select —</option>
+                  {data?.companies?.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.companyName}
+                    </option>
+                  ))}
+                </SearchableSelect>
+              </Field>
+
+              <Field label="PO Date" required>
+                <input
+                  type="date"
+                  value={date}
+                  disabled={readOnly}
+                  onChange={(e) => setDate(e.target.value)}
+                  className={inputClass}
+                />
+              </Field>
+
+              <Field label="Purchaser" required>
+                <SearchableSelect
+                  value={purchaserId}
+                  disabled={readOnly}
+                  onChange={(e) => setPurchaserId(e.target.value)}
+                  className={selectTriggerClass}
+                >
+                  <option value="">— Select —</option>
+                  {data?.employees?.map((e) => (
+                    <option key={e.id} value={e.id}>
+                      {e.name} ({e.code})
+                    </option>
+                  ))}
+                </SearchableSelect>
+              </Field>
+
+              <Field
+                label="Work Order"
+                required={!allowPoForWo}
+                className="sm:col-span-2"
+                error={!allowPoForWo && !workOrderNo ? "Required based on company settings." : undefined}
+                help={allowPoForWo ? "Lines pick a process from the work order's routing; without one, pick from the master processes." : undefined}
+              >
+                <SearchableSelect
+                  value={workOrderNo}
+                  disabled={readOnly || !isNew}
+                  onChange={(e) => handleWorkOrderChange(e.target.value)}
+                  className={selectTriggerClass}
+                >
+                  <option value="">{allowPoForWo ? "— None (Non Work Order) —" : "— Select Work Order —"}</option>
+                  {data?.workOrders?.map((w) => (
+                    <option key={w.workOrderNo} value={w.workOrderNo}>
+                      {w.workOrderNo} - {w.jobDescription?.substring(0,20)}...
+                    </option>
+                  ))}
+                </SearchableSelect>
+              </Field>
+
+              <Field label="Currency" required>
+                <SearchableSelect
+                  value={currencyId}
+                  disabled={readOnly}
+                  onChange={(e) => handleCurrencyChange(e.target.value)}
+                  className={selectTriggerClass}
+                >
+                  <option value="">— Select —</option>
+                  {data?.currencies?.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.code}
+                    </option>
+                  ))}
+                </SearchableSelect>
+              </Field>
+
+              <Field label="Exchange Rate" required help="Latest rate from the currency profile">
+                <input
+                  type="number"
+                  step="0.0001"
+                  value={exchangeRate}
+                  disabled={true}
+                  readOnly
+                  className={`${readOnlyClass} text-right tabular-nums`}
+                />
+              </Field>
+
+              <Field label="Tax Code" required className="sm:col-span-2 lg:col-span-1">
+                <SearchableSelect
+                  value={taxTypeId}
+                  disabled={readOnly}
+                  onChange={(e) => handleTaxTypeChange(e.target.value)}
+                  className={selectTriggerClass}
+                >
+                  <option value="">— Select —</option>
+                  {data?.taxes?.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.taxType}
+                    </option>
+                  ))}
+                </SearchableSelect>
+              </Field>
+
+              <Field label="Tax Rate %">
+                <input
+                  type="number"
+                  step="0.01"
+                  value={taxRate}
+                  disabled={true}
+                  readOnly
+                  className={`${readOnlyClass} text-right tabular-nums`}
+                />
+              </Field>
+            </div>
+          </Card>
+
+          {/* Supplier + Consignee side by side */}
+          <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-2">
+            <Card icon={Truck} tone="sky" title="Subcontractor" description="Contact details are taken from the supplier's contact person" className="h-full">
+              <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
+                <Field label="Supplier" required className="sm:col-span-2">
+                  <SearchableSelect
+                    value={supplierId}
+                    disabled={readOnly || !isNew}
+                    onChange={(e) => setSupplierId(e.target.value)}
+                    className={selectTriggerClass}
+                  >
+                    <option value="">— Select Supplier —</option>
+                    {data?.suppliers?.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.supplierName}
+                      </option>
+                    ))}
+                  </SearchableSelect>
+                </Field>
+
+                <Field label="Supplier Contact Person">
+                  <SearchableSelect
+                    value={contactPersonId}
+                    disabled={readOnly || !supplierId}
+                    onChange={(e) => handleContactPersonChange(e.target.value)}
+                    className={selectTriggerClass}
+                  >
+                    <option value="">— Select —</option>
+                    {contactPersons.map((cp) => (
+                      <option key={cp.id} value={cp.id}>
+                        {cp.contactPersonName}
+                      </option>
+                    ))}
+                  </SearchableSelect>
+                </Field>
+
+                <Field label="Supplier Email">
+                  <input
+                    type="email"
+                    value={supplierEmail}
+                    disabled={readOnly}
+                    onChange={(e) => setSupplierEmail(e.target.value)}
+                    className={inputClass}
+                  />
+                </Field>
+
+                <Field label="Supplier Tel No">
+                  <input
+                    type="text"
+                    value={supplierTel}
+                    disabled={readOnly}
+                    onChange={(e) => setSupplierTel(e.target.value)}
+                    className={`${inputClass} tabular-nums`}
+                  />
+                </Field>
+
+                <Field label="Supplier Fax No">
+                  <input
+                    type="text"
+                    value={supplierFax}
+                    disabled={readOnly}
+                    onChange={(e) => setSupplierFax(e.target.value)}
+                    className={`${inputClass} tabular-nums`}
+                  />
+                </Field>
+
+                <Field label="Supplier Mobile No" className="sm:col-span-2">
+                  <input
+                    type="text"
+                    value={supplierMobile}
+                    disabled={readOnly}
+                    onChange={(e) => setSupplierMobile(e.target.value)}
+                    className={`${inputClass} tabular-nums`}
+                  />
+                </Field>
+              </div>
+            </Card>
+
+            <PoBillShipTo
+              customers={data?.customers}
+              value={shipTo}
+              onChange={setShipTo}
+              readOnly={readOnly}
+            />
+          </div>
+
+          {/* Items */}
+          <Card
+            icon={Factory}
+            tone="amber"
+            title={
+              <span className="inline-flex items-center gap-1.5">
+                Purchase Order Subcon Items
+                {items.length > 0 && (
+                  <span className="rounded-full bg-amber-50 px-1.5 text-[11px] font-semibold tabular-nums text-amber-700 ring-1 ring-inset ring-amber-600/15">
+                    {items.length}
+                  </span>
+                )}
+              </span>
+            }
+            description={workOrderNo ? `Processes from work order ${workOrderNo}` : "Processes from the master process profiles"}
+            actions={
+              !readOnly && items.length > 0 ? (
+                <button type="button" onClick={addItem} className={buttonClass("link", "sm")}>
+                  <Plus size={14} /> Add Item
+                </button>
+              ) : undefined
+            }
+            bodyClassName={items.length === 0 ? "p-4" : "p-0"}
           >
-            <option value="">— Select —</option>
-            {data?.companies?.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.companyName}
-              </option>
-            ))}
-          </SearchableSelect>
-        </Field>
+            {items.length === 0 ? (
+              <EmptyState
+                boxed
+                icon={Factory}
+                tone="amber"
+                title="No items yet"
+                description="Add the subcon processes to order. With a work order, pick a process from its routing; otherwise pick a main and routing process."
+                action={
+                  !readOnly && (
+                    <button type="button" onClick={addItem} className={buttonClass("primary", "md")}>
+                      <Plus size={14} /> Add first item
+                    </button>
+                  )
+                }
+              />
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[860px] table-fixed text-left text-[13px]">
+                  <colgroup>
+                    <col className="w-8" />
+                    <col />
+                    <col className="w-32" />
+                    <col className="w-28" />
+                    <col className="w-32" />
+                    <col className="w-36" />
+                    {!readOnly && <col className="w-9" />}
+                  </colgroup>
+                  <thead className="border-b border-slate-100 bg-slate-50/70 align-bottom text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                    <tr>
+                      <th className="py-2 pl-3 pr-1 font-medium">#</th>
+                      <th className="px-1.5 py-2 font-medium">
+                        {workOrderNo ? "WO Process" : "Main · Routing Process"}
+                        <span className="block normal-case text-slate-400">Description</span>
+                      </th>
+                      <th className="px-1.5 py-2 font-medium">Hardness<span className="block normal-case text-slate-400">Thickness</span></th>
+                      <th className="px-1.5 py-2 text-right font-medium">Qty<span className="block normal-case text-slate-400">PO UOM</span></th>
+                      <th className="px-1.5 py-2 text-right font-medium">Unit Price<span className="block normal-case text-slate-400">Amount</span></th>
+                      <th className="px-1.5 py-2 font-medium">Delivery Date<span className="block normal-case text-slate-400">Remark</span></th>
+                      {!readOnly && <th className="px-1.5 py-2"><span className="sr-only">Remove</span></th>}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {items.map((it, idx) => (
+                      <tr key={idx} className="align-top transition-colors hover:bg-slate-50/60 focus-within:bg-indigo-50/30">
+                        <td className="py-2 pl-3 pr-1">
+                          <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-amber-500 text-[11px] font-semibold tabular-nums text-white">
+                            {idx + 1}
+                          </span>
+                        </td>
 
-        <Field label="PO Date" required>
-          <input
-            type="date"
-            value={date}
-            disabled={readOnly}
-            onChange={(e) => setDate(e.target.value)}
-            className={inputCls}
-          />
-        </Field>
-
-        <Field label="Purchaser" required>
-          <SearchableSelect
-            value={purchaserId}
-            disabled={readOnly}
-            onChange={(e) => setPurchaserId(e.target.value)}
-            className={inputCls}
-          >
-            <option value="">— Select —</option>
-            {data?.employees?.map((e) => (
-              <option key={e.id} value={e.id}>
-                {e.name} ({e.code})
-              </option>
-            ))}
-          </SearchableSelect>
-        </Field>
-
-        <Field label="Work Order">
-          <SearchableSelect
-            value={workOrderNo}
-            disabled={readOnly || !isNew}
-            onChange={(e) => handleWorkOrderChange(e.target.value)}
-            className={inputCls}
-          >
-            <option value="">{allowPoForWo ? "— None (Non Work Order) —" : "— Select Work Order —"}</option>
-            {data?.workOrders?.map((w) => (
-              <option key={w.workOrderNo} value={w.workOrderNo}>
-                {w.workOrderNo} - {w.jobDescription?.substring(0,20)}...
-              </option>
-            ))}
-          </SearchableSelect>
-          {!allowPoForWo && !workOrderNo && (
-            <p className="text-[10px] text-rose-500 mt-1">Required based on company settings.</p>
-          )}
-        </Field>
-
-        <Field label="Supplier" required>
-          <SearchableSelect
-            value={supplierId}
-            disabled={readOnly || !isNew}
-            onChange={(e) => setSupplierId(e.target.value)}
-            className={inputCls}
-          >
-            <option value="">— Select Supplier —</option>
-            {data?.suppliers?.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.supplierName}
-              </option>
-            ))}
-          </SearchableSelect>
-        </Field>
-
-        <Field label="Supplier Contact Person">
-          <SearchableSelect
-            value={contactPersonId}
-            disabled={readOnly || !supplierId}
-            onChange={(e) => handleContactPersonChange(e.target.value)}
-            className={inputCls}
-          >
-            <option value="">— Select —</option>
-            {contactPersons.map((cp) => (
-              <option key={cp.id} value={cp.id}>
-                {cp.contactPersonName}
-              </option>
-            ))}
-          </SearchableSelect>
-        </Field>
-
-        <Field label="Supplier Email">
-          <input
-            type="email"
-            value={supplierEmail}
-            disabled={readOnly}
-            onChange={(e) => setSupplierEmail(e.target.value)}
-            className={inputCls}
-          />
-        </Field>
-
-        <Field label="Supplier Tel No">
-          <input
-            type="text"
-            value={supplierTel}
-            disabled={readOnly}
-            onChange={(e) => setSupplierTel(e.target.value)}
-            className={inputCls}
-          />
-        </Field>
-
-        <Field label="Supplier Fax No">
-          <input
-            type="text"
-            value={supplierFax}
-            disabled={readOnly}
-            onChange={(e) => setSupplierFax(e.target.value)}
-            className={inputCls}
-          />
-        </Field>
-
-        <Field label="Supplier Mobile No">
-          <input
-            type="text"
-            value={supplierMobile}
-            disabled={readOnly}
-            onChange={(e) => setSupplierMobile(e.target.value)}
-            className={inputCls}
-          />
-        </Field>
-
-        <Field label="Currency" required>
-          <SearchableSelect
-            value={currencyId}
-            disabled={readOnly}
-            onChange={(e) => handleCurrencyChange(e.target.value)}
-            className={inputCls}
-          >
-            <option value="">— Select —</option>
-            {data?.currencies?.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.code}
-              </option>
-            ))}
-          </SearchableSelect>
-        </Field>
-        <Field label="Exchange Rate" required>
-          <input
-            type="number"
-            step="0.0001"
-            value={exchangeRate}
-            disabled={true}
-            readOnly
-            className={inputCls}
-          />
-        </Field>
-
-        <Field label="Tax Code" required>
-          <SearchableSelect
-            value={taxTypeId}
-            disabled={readOnly}
-            onChange={(e) => handleTaxTypeChange(e.target.value)}
-            className={inputCls}
-          >
-            <option value="">— Select —</option>
-            {data?.taxes?.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.taxType}
-              </option>
-            ))}
-          </SearchableSelect>
-        </Field>
-        <Field label="Tax Rate %">
-          <input
-            type="number"
-            step="0.01"
-            value={taxRate}
-            disabled={true}
-            readOnly
-            className={inputCls}
-          />
-        </Field>
-        <Field label="Remark">
-          <textarea
-            rows={1}
-            value={remark}
-            disabled={readOnly}
-            onChange={(e) => setRemark(e.target.value)}
-            className={inputCls}
-          />
-        </Field>
-
-      </div>
-
-      <PoBillShipTo
-        customers={data?.customers}
-        value={shipTo}
-        onChange={setShipTo}
-        readOnly={readOnly}
-      />
-
-      {/* Items Section */}
-      <div className="bg-white border border-blue-200 rounded-xl shadow-sm p-4 space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-base font-bold text-blue-900">Purchase Order Subcon Items</h3>
-          {!readOnly && (
-            <button
-              onClick={addItem}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 rounded-md active:scale-95 cursor-pointer"
-            >
-              <Plus size={14} /> Add Item
-            </button>
-          )}
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full table-fixed text-[13px] text-left min-w-[720px]">
-            <colgroup>
-              <col />
-              <col className="w-24" />
-              <col className="w-24" />
-              <col className="w-28" />
-              <col className="w-32" />
-              {!readOnly && <col className="w-8" />}
-            </colgroup>
-            <thead className="text-[11px] text-blue-500 bg-blue-50/50 uppercase tracking-wide border-b border-blue-200 align-bottom">
-              <tr>
-                <th className="px-1.5 py-2 text-left">
-                  {workOrderNo ? "WO Process" : "Main · Routing Process"}
-                  <span className="block">Description</span>
-                </th>
-                <th className="px-1.5 py-2 text-left">Hardness<span className="block">Thickness</span></th>
-                <th className="px-1.5 py-2 text-left">Qty<span className="block">PO UOM</span></th>
-                <th className="px-1.5 py-2 text-right">Unit Price<span className="block">Amount</span></th>
-                <th className="px-1.5 py-2 text-left">Delivery Date<span className="block">Remark</span></th>
-                {!readOnly && <th className="px-1.5 py-2"></th>}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-blue-100">
-              {items.map((it, idx) => {
-                return (
-                  <tr key={idx} className="hover:bg-blue-50/10 align-top">
-                    <td className="px-1.5 py-1.5">
-                      <div className="flex flex-col gap-1">
-                        {workOrderNo ? (
-                          <SearchableSelect compact
-                            value={it.woRoutingProcessId}
-                            disabled={readOnly}
-                            onChange={(e) => updateItem(idx, { woRoutingProcessId: e.target.value })}
-                            className={cellCls}
-                          >
-                            <option value="">— Select WO Process —</option>
-                            {woRoutingProcesses.map(rp => (
-                              <option key={rp.id} value={rp.id}>
-                                {rp.mainProcess?.process} - {rp.routingProcess?.routingProcess}
-                              </option>
-                            ))}
-                          </SearchableSelect>
-                        ) : (
-                          <div className="flex gap-1">
-                            <div className="flex-1 min-w-0">
+                        <td className="px-1.5 py-1.5">
+                          <div className="flex flex-col gap-1">
+                            {workOrderNo ? (
                               <SearchableSelect compact
-                                value={it.masterMainProcessId}
+                                value={it.woRoutingProcessId}
                                 disabled={readOnly}
-                                onChange={(e) => updateItem(idx, { masterMainProcessId: e.target.value, masterRoutingProcessId: "" })}
-                                className={cellCls}
+                                onChange={(e) => updateItem(idx, { woRoutingProcessId: e.target.value })}
+                                className={selectTriggerSmClass}
                               >
-                                <option value="">— Select Main —</option>
-                                {data?.mainProcesses?.map((m) => (
-                                  <option key={m.id} value={m.id}>
-                                    {m.process}
+                                <option value="">— Select WO Process —</option>
+                                {woRoutingProcesses.map(rp => (
+                                  <option key={rp.id} value={rp.id}>
+                                    {rp.mainProcess?.process} - {rp.routingProcess?.routingProcess}
                                   </option>
                                 ))}
                               </SearchableSelect>
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <SearchableSelect compact
-                                value={it.masterRoutingProcessId}
-                                disabled={readOnly || !it.masterMainProcessId}
-                                onChange={(e) => updateItem(idx, { masterRoutingProcessId: e.target.value })}
-                                className={cellCls}
-                              >
-                                <option value="">— Select Routing —</option>
-                                {data?.processProfiles?.filter(p => p.mainProcessId === it.masterMainProcessId).map((p) => (
-                                  <option key={p.id} value={p.id}>
-                                    {p.routingProcess}
-                                  </option>
-                                ))}
-                              </SearchableSelect>
+                            ) : (
+                              <div className="flex gap-1">
+                                <div className="min-w-0 flex-1">
+                                  <SearchableSelect compact
+                                    value={it.masterMainProcessId}
+                                    disabled={readOnly}
+                                    onChange={(e) => updateItem(idx, { masterMainProcessId: e.target.value, masterRoutingProcessId: "" })}
+                                    className={selectTriggerSmClass}
+                                  >
+                                    <option value="">— Select Main —</option>
+                                    {data?.mainProcesses?.map((m) => (
+                                      <option key={m.id} value={m.id}>
+                                        {m.process}
+                                      </option>
+                                    ))}
+                                  </SearchableSelect>
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <SearchableSelect compact
+                                    value={it.masterRoutingProcessId}
+                                    disabled={readOnly || !it.masterMainProcessId}
+                                    onChange={(e) => updateItem(idx, { masterRoutingProcessId: e.target.value })}
+                                    className={selectTriggerSmClass}
+                                  >
+                                    <option value="">— Select Routing —</option>
+                                    {data?.processProfiles?.filter(p => p.mainProcessId === it.masterMainProcessId).map((p) => (
+                                      <option key={p.id} value={p.id}>
+                                        {p.routingProcess}
+                                      </option>
+                                    ))}
+                                  </SearchableSelect>
+                                </div>
+                              </div>
+                            )}
+                            <textarea
+                              rows={1}
+                              value={it.description}
+                              disabled={readOnly}
+                              onChange={(e) => updateItem(idx, { description: e.target.value })}
+                              className={lineTextareaClass}
+                              placeholder="Description"
+                            />
+                          </div>
+                        </td>
+
+                        <td className="px-1.5 py-1.5">
+                          <div className="flex flex-col gap-1">
+                            <input
+                              type="text"
+                              value={it.hardness || ""}
+                              disabled={readOnly}
+                              onChange={(e) => updateItem(idx, { hardness: e.target.value })}
+                              className={inputSmClass}
+                              placeholder="Hardness"
+                            />
+                            <input
+                              type="text"
+                              value={it.thickness || ""}
+                              disabled={readOnly}
+                              onChange={(e) => updateItem(idx, { thickness: e.target.value })}
+                              className={inputSmClass}
+                              placeholder="Thickness"
+                            />
+                          </div>
+                        </td>
+
+                        <td className="px-1.5 py-1.5">
+                          <div className="flex flex-col gap-1">
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={it.quantity}
+                              disabled={readOnly}
+                              onChange={(e) => updateItem(idx, { quantity: e.target.value })}
+                              className={`${inputSmClass} text-right tabular-nums`}
+                              placeholder="Qty"
+                            />
+                            <SearchableSelect compact
+                              value={it.poUomId}
+                              disabled={readOnly}
+                              onChange={(e) => updateItem(idx, { poUomId: e.target.value })}
+                              className={selectTriggerSmClass}
+                            >
+                              <option value="">— UOM —</option>
+                              {data?.uoms?.map((u) => (
+                                <option key={u.id} value={u.id}>
+                                  {u.uomName}
+                                </option>
+                              ))}
+                            </SearchableSelect>
+                          </div>
+                        </td>
+
+                        <td className="px-1.5 py-1.5">
+                          <div className="flex flex-col gap-1">
+                            <input
+                              type="number"
+                              step="0.0001"
+                              min="0"
+                              value={it.unitPrice}
+                              disabled={readOnly}
+                              onChange={(e) => updateItem(idx, { unitPrice: e.target.value })}
+                              className={`${inputSmClass} text-right tabular-nums`}
+                              placeholder="Unit Price"
+                            />
+                            <div className="flex h-7 items-center justify-end px-2 text-right font-semibold tabular-nums text-slate-900" title="Amount">
+                              {it.amount}
                             </div>
                           </div>
+                        </td>
+
+                        <td className="px-1.5 py-1.5">
+                          <div className="flex flex-col gap-1">
+                            <input
+                              type="date"
+                              value={it.deliveryDate}
+                              disabled={readOnly}
+                              onChange={(e) => updateItem(idx, { deliveryDate: e.target.value })}
+                              className={`${inputSmClass} px-1`}
+                            />
+                            <textarea
+                              rows={1}
+                              value={it.remark}
+                              disabled={readOnly}
+                              onChange={(e) => updateItem(idx, { remark: e.target.value })}
+                              className={lineRemarkClass}
+                              placeholder="Remark"
+                            />
+                          </div>
+                        </td>
+
+                        {!readOnly && (
+                          <td className="px-0.5 py-1.5 text-center">
+                            <button
+                              type="button"
+                              onClick={() => removeItem(idx)}
+                              className={iconButtonDangerClass}
+                              title="Remove"
+                              aria-label={`Remove line ${idx + 1}`}
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </td>
                         )}
-                        <textarea
-                          rows={1}
-                          value={it.description}
-                          disabled={readOnly}
-                          onChange={(e) => updateItem(idx, { description: e.target.value })}
-                          className={cellCls + " block leading-snug break-words resize-none field-sizing-content"}
-                          placeholder="Description"
-                        />
-                      </div>
-                    </td>
-
-                    <td className="px-1.5 py-1.5">
-                      <div className="flex flex-col gap-1">
-                        <input
-                          type="text"
-                          value={it.hardness || ""}
-                          disabled={readOnly}
-                          onChange={(e) => updateItem(idx, { hardness: e.target.value })}
-                          className={cellCls}
-                          placeholder="Hardness"
-                        />
-                        <input
-                          type="text"
-                          value={it.thickness || ""}
-                          disabled={readOnly}
-                          onChange={(e) => updateItem(idx, { thickness: e.target.value })}
-                          className={cellCls}
-                          placeholder="Thickness"
-                        />
-                      </div>
-                    </td>
-
-                    <td className="px-1.5 py-1.5">
-                      <div className="flex flex-col gap-1">
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={it.quantity}
-                          disabled={readOnly}
-                          onChange={(e) => updateItem(idx, { quantity: e.target.value })}
-                          className={cellCls + " text-right tabular-nums"}
-                          placeholder="Qty"
-                        />
-                        <SearchableSelect compact
-                          value={it.poUomId}
-                          disabled={readOnly}
-                          onChange={(e) => updateItem(idx, { poUomId: e.target.value })}
-                          className={cellCls}
-                        >
-                          <option value="">— UOM —</option>
-                          {data?.uoms?.map((u) => (
-                            <option key={u.id} value={u.id}>
-                              {u.uomName}
-                            </option>
-                          ))}
-                        </SearchableSelect>
-                      </div>
-                    </td>
-
-                    <td className="px-1.5 py-1.5">
-                      <div className="flex flex-col gap-1">
-                        <input
-                          type="number"
-                          step="0.0001"
-                          value={it.unitPrice}
-                          disabled={readOnly}
-                          onChange={(e) => updateItem(idx, { unitPrice: e.target.value })}
-                          className={cellCls + " text-right tabular-nums"}
-                          placeholder="Unit Price"
-                        />
-                        <div className="px-2 py-1 text-right tabular-nums text-blue-900 font-semibold" title="Amount">
-                          {it.amount}
-                        </div>
-                      </div>
-                    </td>
-
-                    <td className="px-1.5 py-1.5">
-                      <div className="flex flex-col gap-1">
-                        <input
-                          type="date"
-                          value={it.deliveryDate}
-                          disabled={readOnly}
-                          onChange={(e) => updateItem(idx, { deliveryDate: e.target.value })}
-                          className={cellCls + " px-1"}
-                        />
-                        <textarea
-                          rows={1}
-                          value={it.remark}
-                          disabled={readOnly}
-                          onChange={(e) => updateItem(idx, { remark: e.target.value })}
-                          className={remarkCls}
-                          placeholder="Remark"
-                        />
-                      </div>
-                    </td>
-
-                    {!readOnly && (
-                      <td className="px-0.5 py-1.5 text-center">
-                        <button
-                          onClick={() => removeItem(idx)}
-                          className="p-1 text-rose-500 hover:bg-rose-50 rounded-md cursor-pointer"
-                          title="Remove item"
-                        >
-                          <Trash2 size={15} />
-                        </button>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot className="border-t border-slate-200 bg-slate-50/70 text-[13px]">
+                    <tr>
+                      <td colSpan={4} className="py-2 pl-3 pr-1.5 text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                        {items.length} line{items.length === 1 ? "" : "s"}
                       </td>
-                    )}
-                  </tr>
-                );
-              })}
-            </tbody>
-            <tfoot className="bg-blue-50/30 border-t border-blue-200 text-blue-900 text-xs font-bold">
-              <tr>
-                <td colSpan={3} className="px-1.5 py-2 text-right tabular-nums">Amount Before Tax</td>
-                <td className="px-1.5 py-2 text-right tabular-nums">{amountBeforeTax}</td>
-                <td colSpan={readOnly ? 1 : 2}></td>
-              </tr>
-              <tr>
-                <td colSpan={3} className="px-1.5 py-2 text-right tabular-nums">Tax Amount</td>
-                <td className="px-1.5 py-2 text-right tabular-nums">{taxAmount}</td>
-                <td colSpan={readOnly ? 1 : 2}></td>
-              </tr>
-              <tr className="text-sm">
-                <td colSpan={3} className="px-1.5 py-2 text-right tabular-nums text-blue-950 font-extrabold">Amount After Tax</td>
-                <td className="px-1.5 py-2 text-right tabular-nums text-blue-950 font-extrabold">{amountAfterTax}</td>
-                <td colSpan={readOnly ? 1 : 2}></td>
-              </tr>
-            </tfoot>
-          </table>
-          {items.length === 0 && !readOnly && (
-            <div className="p-8 text-center text-sm text-blue-500">
-              No items added. Click &quot;Add Item&quot; to begin.
+                      <td className="px-3.5 py-2 text-right font-semibold tabular-nums text-slate-900">{amountBeforeTax}</td>
+                      <td colSpan={readOnly ? 1 : 2} />
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
+          </Card>
+
+          {/* Remarks */}
+          <Card icon={StickyNote} tone="violet" title="Remarks" description="Special instructions for the subcontractor">
+            <Field label="Remark / Special Instructions">
+              <textarea
+                rows={3}
+                value={remark}
+                disabled={readOnly}
+                onChange={(e) => setRemark(e.target.value)}
+                className={textareaClass}
+                placeholder="Input any additional details for this purchase order..."
+              />
+            </Field>
+          </Card>
+        </div>
+
+        {/* Status + totals */}
+        <div className="grid min-w-0 grid-cols-1 items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {/* Approval progress */}
+          <Card
+            icon={ShieldCheck}
+            tone={stage.tone === "slate" ? "indigo" : stage.tone}
+            title="Approval"
+            description={stage.tiers === 2 ? "Two-tier, value banded" : stage.tiers === 1 ? "Single tier" : "Decided on submit"}
+            actions={<Badge tone={stage.tone}>{stage.label}</Badge>}
+          >
+            {stage.tiers === null ? (
+              <div className="space-y-2 text-xs text-slate-600">
+                <ApprovalStep n={1} title="Tier 1 approval" state="none" />
+                <ApprovalStep n={2} title="Tier 2 approval" state="none" last />
+                <p className="pt-1 text-[11px] text-slate-500">
+                  On submit, the Amount After Tax in base currency (× exchange rate) picks the band in the Approval Level Profile: one Tier 1 approver, or Tier 1 then Tier 2.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <ApprovalStep
+                  n={1}
+                  title="Tier 1 approval"
+                  state={stage.tier1}
+                  who={meta.firstApproverName}
+                  when={meta.firstApprovedAt}
+                  last={stage.tiers === 1}
+                />
+                {stage.tiers === 2 ? (
+                  <ApprovalStep n={2} title="Tier 2 approval" state={stage.tier2} who={meta.secondApproverName} when={meta.secondApprovedAt} last />
+                ) : (
+                  <p className="pl-8 text-[11px] text-slate-400">Tier 2 not required for this amount.</p>
+                )}
+              </div>
+            )}
+          </Card>
+
+          {/* Summary — dark anchor echoing the sidebar */}
+          <section className="overflow-hidden rounded-xl bg-[#111827] text-slate-300 shadow-lg shadow-slate-900/10 ring-1 ring-white/5">
+            <header className="flex items-center gap-2.5 border-b border-white/10 px-4 py-2.5">
+              <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-500/15 text-indigo-300 ring-1 ring-inset ring-indigo-400/20">
+                <Receipt size={15} />
+              </span>
+              <div>
+                <h2 className="text-[13px] font-semibold leading-tight text-white">Summary</h2>
+                <p className="text-[11px] leading-tight text-slate-400">Live totals for this purchase order</p>
+              </div>
+            </header>
+            <dl className="space-y-2 px-4 py-3 text-[13px]">
+              <div className="flex items-center justify-between gap-3">
+                <dt className="text-slate-400">Lines</dt>
+                <dd className="tabular-nums text-slate-200">{items.length}</dd>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <dt className="text-slate-400">Amount Before Tax</dt>
+                <dd className="tabular-nums text-slate-200">{amountBeforeTax}</dd>
+              </div>
+              <div className="flex items-center justify-between gap-3 border-t border-white/10 pt-2">
+                <dt className="truncate text-slate-400">{taxLabel}</dt>
+                <dd className="tabular-nums text-slate-200">{taxAmount}</dd>
+              </div>
+            </dl>
+            <div className="relative border-t border-white/10 bg-white/[0.03] px-4 py-3">
+              <span className="absolute inset-y-3 left-0 w-[3px] rounded-r bg-gradient-to-b from-indigo-400 to-violet-500" />
+              <p className="text-[11px] font-medium uppercase tracking-wide text-indigo-300">Amount After Tax</p>
+              <p className="mt-0.5 flex items-baseline gap-1.5">
+                {curCode && <span className="text-xs font-medium text-indigo-300">{curCode}</span>}
+                <span className="text-2xl font-semibold tabular-nums tracking-tight text-white">{amountAfterTax}</span>
+              </p>
+              {showBase && (
+                <p className="mt-1 text-[11px] tabular-nums text-slate-400">
+                  ≈ {baseCurrency?.code} {fmtMoney(baseTotal)} <span className="text-slate-500">at {exchangeRate}</span>
+                </p>
+              )}
             </div>
+          </section>
+
+          {/* Receiving */}
+          {!isNew && (
+            <Card
+              icon={PackageCheck}
+              tone={poReceiveTone(receiveStatus)}
+              title="Receiving"
+              description="Updated when Goods Receives and Returns are submitted"
+              actions={<Badge tone={poReceiveTone(receiveStatus)} dot>{poReceiveLabel(receiveStatus)}</Badge>}
+            >
+              <ReceiveTrack status={receiveStatus} />
+            </Card>
           )}
         </div>
       </div>
@@ -878,22 +1135,18 @@ export default function PurchaseOrderSubconEditPage() {
   );
 }
 
-function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
-  return (
-    <div>
-      <label className="block text-xs font-bold text-blue-900 mb-1.5 uppercase tracking-wider">
-        {label} {required && <span className="text-rose-500">*</span>}
-      </label>
-      {children}
-    </div>
-  );
+function fmtDate(value: string | null | undefined): string {
+  if (!value) return "—";
+  const ymd = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  const d = ymd ? new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3])) : new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
 }
 
-const inputCls =
-  "w-full px-3 py-2 text-sm bg-blue-50/50 border border-blue-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors disabled:opacity-60 disabled:cursor-not-allowed";
+const fmtMoney = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-const cellCls =
-  "w-full px-2 py-1 text-[13px] bg-blue-50/50 border border-blue-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors disabled:opacity-60 disabled:cursor-not-allowed";
+const lineTextareaClass =
+  "block min-h-7 w-full resize-none break-words rounded-md border border-slate-300 bg-white px-2 py-1 text-[13px] leading-snug text-slate-900 placeholder:text-slate-400 transition-colors field-sizing-content focus:border-indigo-500 focus:bg-indigo-50/30 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500";
 
-const remarkCls =
-  "block w-full px-2 py-1 text-xs leading-snug bg-blue-50/50 border border-blue-200 rounded-md break-words resize-y field-sizing-content focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors disabled:opacity-60 disabled:cursor-not-allowed";
+const lineRemarkClass =
+  "block min-h-7 w-full resize-y break-words rounded-md border border-slate-300 bg-white px-2 py-1 text-xs leading-snug text-slate-900 placeholder:text-slate-400 transition-colors field-sizing-content focus:border-indigo-500 focus:bg-indigo-50/30 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500";

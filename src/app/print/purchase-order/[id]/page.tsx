@@ -36,7 +36,7 @@ export default async function PrintPurchaseOrderPage(
       contactPerson: true,
       purchaser: true,
       items: {
-        include: { poUom: true, taxType: true }
+        include: { poUom: true, internalUom: true, taxType: true }
       }
     }
   });
@@ -163,12 +163,14 @@ export default async function PrintPurchaseOrderPage(
           <thead>
             <tr>
               <th style={{ width: '4%' }}>Item</th>
-              <th style={{ width: '11%' }}>Material</th>
-              <th style={{ width: '12%' }}>Description</th>
+              <th style={{ width: '9%' }}>Material</th>
+              <th style={{ width: '9%' }}>Description</th>
               <th style={{ width: '7%' }}>HSN Code</th>
-              <th style={{ width: '8%' }}>Shape</th>
-              <th style={{ width: '8%' }}>Size</th>
-              <th style={{ width: '11%' }}>Delivery Date</th>
+              <th style={{ width: '7%', textAlign: 'center' }}>Int Qty</th>
+              <th style={{ width: '5%', textAlign: 'center' }}>Int UOM</th>
+              <th style={{ width: '6%' }}>Shape</th>
+              <th style={{ width: '6%' }}>Size</th>
+              <th style={{ width: '8%' }}>Delivery Date</th>
               <th style={{ width: '7%', textAlign: 'center' }}>Qty</th>
               <th style={{ width: '6%', textAlign: 'center' }}>UOM</th>
               <th style={{ width: '9%', textAlign: 'center' }}>Unit<br/>Price</th>
@@ -186,6 +188,8 @@ export default async function PrintPurchaseOrderPage(
                   {it.hsnDescription && <div style={{ fontSize: '9px', color: '#555' }}>{it.hsnDescription}</div>}
                 </td>
                 <td>{it.hsnCode}</td>
+                <td style={{ textAlign: 'right' }}>{formatNumber(it.internalQuantity)}</td>
+                <td style={{ textAlign: 'center' }}>{it.internalUom?.uomName}</td>
                 <td>{it.shape}</td>
                 <td>{it.size}</td>
                 <td style={{ textAlign: 'center' }}>{fmtDate(it.deliveryDate)}</td>
@@ -202,7 +206,7 @@ export default async function PrintPurchaseOrderPage(
           </tbody>
           <tfoot>
             <tr>
-              <td colSpan={8} rowSpan={3 + taxRows.length + (Number(po.roundOff) !== 0 ? 1 : 0)} style={{ border: 'none', padding: '15px 10px 0 0', verticalAlign: 'top' }}>
+              <td colSpan={10} rowSpan={3 + taxRows.length + (Number(po.roundOff) !== 0 ? 1 : 0)} style={{ border: 'none', padding: '15px 10px 0 0', verticalAlign: 'top' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', color: '#111' }}>
                   <tbody>
                     <tr>

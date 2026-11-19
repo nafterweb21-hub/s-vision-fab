@@ -1229,7 +1229,7 @@ model GoodsReturn {
   goodsReceiveId  String
   currencyId      String
   exchangeRate    Decimal
-  taxTypeId       String
+  taxTypeId       String?
   taxRate         Decimal
   remark          String?
   status          String            @default("Draft")
@@ -1242,7 +1242,7 @@ model GoodsReturn {
   goodsReceive    GoodsReceive      @relation(fields: [goodsReceiveId], references: [id])
   purchaseOrder   PurchaseOrder     @relation(fields: [purchaseOrderId], references: [id])
   supplier        SupplierProfile   @relation(fields: [supplierId], references: [id])
-  taxType         TaxProfile        @relation(fields: [taxTypeId], references: [id])
+  taxType         TaxProfile?       @relation(fields: [taxTypeId], references: [id])
   items           GoodsReturnItem[]
 }
 

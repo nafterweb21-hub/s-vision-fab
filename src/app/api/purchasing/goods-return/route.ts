@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { toUserMessage } from "@/lib/api-error";
 import { nextDocumentNo } from "@/lib/document-numbering";
 
 export async function GET(req: Request) {
@@ -64,6 +65,8 @@ export async function POST(req: Request) {
       return tx.goodsReturn.create({
         data: {
           ...rtnData,
+          // The GR may carry no tax type; store none rather than an invalid "".
+          taxTypeId: rtnData.taxTypeId || null,
           rtnNo,
           rtnDate: new Date(rtnData.rtnDate),
           status: "Draft",
@@ -83,6 +86,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: true, id: newRtn.id }, { status: 201 });
   } catch (e: any) {
     console.error("POST GoodsReturn error:", e);
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    return NextResponse.json(
+      { error: toUserMessage(e, "Failed to save Goods Return. Please check the form and try again.") },
+      { status: 500 },
+    );
   }
 }

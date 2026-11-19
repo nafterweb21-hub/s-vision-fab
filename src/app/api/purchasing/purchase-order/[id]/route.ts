@@ -1,8 +1,14 @@
 import { NextResponse } from "next/server";
 import { poShipToData } from "@/lib/po-ship-to";
 import { prisma } from "@/lib/prisma";
-import { recomputePrPoStatus, recomputePrPoStatusForPo } from "@/lib/pr-po-status";
+import { recomputePrPoStatusForPo } from "@/lib/pr-po-status";
+import { requirePermission } from "@/lib/authz";
+import { PO_EDITABLE_STATUSES } from "@/lib/po-approval-rules";
+
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { error: authError } = await requirePermission("PURCHASE_ORDER", "v");
+  if (authError) return authError;
+
   try {
     const { id } = await params;
     const po = await prisma.purchaseOrder.findUnique({
@@ -40,6 +46,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 }
 
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { error: authError } = await requirePermission("PURCHASE_ORDER", "e");
+  if (authError) return authError;
+
   try {
     const { id } = await params;
     const body = await req.json();
@@ -47,7 +56,14 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     return await prisma.$transaction(async (tx) => {
       const exist = await tx.purchaseOrder.findUnique({ where: { id } });
       if (!exist) throw new Error("Not found");
-      if (exist.status !== "Draft" && exist.status !== "Rejected") {
+      // Claim the row while it is still editable: the conditional update takes the
+      // row lock, so a submit / approval racing this edit either lands first (and
+      // this edit is refused) or waits until the edit commits.
+      const claimed = await tx.purchaseOrder.updateMany({
+        where: { id, status: { in: [...PO_EDITABLE_STATUSES] } },
+        data: { status: exist.status },
+      });
+      if (claimed.count !== 1) {
         throw new Error("Only Draft or Rejected PO can be edited.");
       }
 
@@ -156,22 +172,10 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   }
 }
 
-export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  try {
-    const { id } = await params;
-    const exist = await prisma.purchaseOrder.findUnique({ where: { id } });
-    if (!exist) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    if (exist.status !== "Draft") {
-      return NextResponse.json({ error: "Only Draft can be deleted" }, { status: 400 });
-    }
-
-    await prisma.$transaction(async (tx) => {
-      await tx.purchaseOrder.delete({ where: { id } });
-      await recomputePrPoStatus(tx, exist.purchaseRequisitionId);
-    });
-    return NextResponse.json({ success: true });
-  } catch (e: any) {
-    console.error("DELETE PO error:", e);
-    return NextResponse.json({ error: e.message }, { status: 500 });
-  }
+// Spec (docs/spec/README.md): no DELETE anywhere, void only — running numbers stay contiguous.
+export async function DELETE() {
+  return NextResponse.json(
+    { error: "Purchase orders can't be deleted; void them instead" },
+    { status: 405, headers: { Allow: "GET, PUT" } }
+  );
 }

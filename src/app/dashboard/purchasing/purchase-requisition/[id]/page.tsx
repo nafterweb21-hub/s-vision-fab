@@ -437,7 +437,7 @@ export default function PurchaseRequisitionEditPage() {
         </div>
       )}
 
-      <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="grid min-w-0 grid-cols-1 gap-4">
         {/* Main column */}
         <div className="min-w-0 space-y-4">
           {/* Header fields */}
@@ -775,7 +775,7 @@ export default function PurchaseRequisitionEditPage() {
         </div>
 
         {/* Right rail */}
-        <div className="min-w-0 space-y-4 xl:sticky xl:top-28 xl:self-start">
+        <div className="grid min-w-0 grid-cols-1 items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
           {/* Summary — dark anchor echoing the sidebar */}
           <section className="overflow-hidden rounded-xl bg-[#111827] text-slate-300 shadow-lg shadow-slate-900/10 ring-1 ring-white/5">
             <header className="flex items-center gap-2.5 border-b border-white/10 px-4 py-2.5">

@@ -26,8 +26,6 @@ import {
   Wrench,
   Coins,
   Wallet,
-  Check,
-  X,
 } from "lucide-react";
 import {
   Badge,
@@ -46,7 +44,8 @@ import {
   selectTriggerSmClass,
   textareaClass,
 } from "@/components/form-ui";
-import { poApprovalStage, poReceiveLabel, poReceiveTone, poStatusTone, type TierState } from "../po-status";
+import { poApprovalStage, poReceiveLabel, poReceiveTone, poStatusTone } from "../po-status";
+import { ApprovalStep, ReceiveTrack } from "@/components/purchasing/PoStatusPanels";
 type FormData = {
   companies: { id: string; companyName: string; allowPoForWo: boolean }[];
   customers: PoCustomer[];
@@ -705,7 +704,7 @@ export default function PurchaseOrderEditPage() {
         </div>
       )}
 
-      <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="grid min-w-0 grid-cols-1 gap-4">
         {/* Main column */}
         <div className="min-w-0 space-y-4">
           {/* Order details */}
@@ -953,15 +952,15 @@ export default function PurchaseOrderEditPage() {
               />
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[980px] table-fixed text-left text-[13px]">
+                <table className="w-full min-w-[1244px] table-fixed text-left text-[13px]">
                   <colgroup>
                     <col className="w-8" />
                     <col />
-                    <col className="w-28" />
-                    <col className="w-24" />
-                    <col className="w-24" />
-                    <col className="w-28" />
+                    <col className="w-44" />
                     <col className="w-32" />
+                    <col className="w-24" />
+                    <col className="w-24" />
+                    <col className="w-28" />
                     <col className="w-32" />
                     <col className="w-32" />
                     {!readOnly && <col className="w-9" />}
@@ -970,12 +969,17 @@ export default function PurchaseOrderEditPage() {
                     <tr>
                       <th className="py-2 pl-3 pr-1 font-medium">#</th>
                       <th className="px-1.5 py-2 font-medium">Type · Material / Description</th>
-                      <th className="px-1.5 py-2 font-medium">HSN<span className="block normal-case text-slate-400">Supplier PN</span></th>
+                      <th className="px-1.5 py-2 font-medium">
+                        <span className="flex items-end gap-1">
+                          <span className="min-w-0 flex-1">HSN<span className="block normal-case text-slate-400">Supplier PN</span></span>
+                          <span className="w-16 shrink-0 text-right">Int Qty<span className="block normal-case text-transparent" aria-hidden>.</span></span>
+                        </span>
+                      </th>
+                      <th className="px-1.5 py-2 text-right font-medium">Conv · Int UOM</th>
                       <th className="px-1.5 py-2 font-medium">Shape<span className="block normal-case text-slate-400">Size</span></th>
                       <th className="px-1.5 py-2 text-right font-medium">Qty<span className="block normal-case text-slate-400">PO UOM</span></th>
                       <th className="px-1.5 py-2 text-right font-medium">Unit Price<span className="block normal-case text-slate-400">Amount</span></th>
                       <th className="px-1.5 py-2 text-right font-medium">Tax<span className="block normal-case text-slate-400">Tax amount</span></th>
-                      <th className="px-1.5 py-2 text-right font-medium">Conv · Int UOM<span className="block normal-case text-slate-400">Int Qty</span></th>
                       <th className="px-1.5 py-2 font-medium">Delivery Date<span className="block normal-case text-slate-400">Remark</span></th>
                       {!readOnly && <th className="px-1.5 py-2"><span className="sr-only">Remove</span></th>}
                     </tr>
@@ -1053,14 +1057,22 @@ export default function PurchaseOrderEditPage() {
 
                           <td className="px-1.5 py-1.5">
                             <div className="flex flex-col gap-1">
-                              <input
-                                type="text"
-                                value={it.hsnCode}
-                                disabled={readOnly}
-                                onChange={(e) => updateItem(idx, { hsnCode: e.target.value })}
-                                className={`${inputSmClass} font-mono`}
-                                placeholder="HSN Code"
-                              />
+                              <div className="flex gap-1">
+                                <input
+                                  type="text"
+                                  value={it.hsnCode}
+                                  disabled={readOnly}
+                                  onChange={(e) => updateItem(idx, { hsnCode: e.target.value })}
+                                  className={`${inputSmClass} min-w-0 font-mono`}
+                                  placeholder="HSN Code"
+                                />
+                                <div
+                                  className="flex h-7 w-16 shrink-0 items-center justify-end rounded-md bg-slate-50 px-2 text-right tabular-nums text-slate-700 ring-1 ring-inset ring-slate-200"
+                                  title="Internal quantity (Qty × Conversion)"
+                                >
+                                  {it.internalQuantity}
+                                </div>
+                              </div>
                               <input
                                 type="text"
                                 value={it.supplierMaterialNo}
@@ -1070,6 +1082,39 @@ export default function PurchaseOrderEditPage() {
                                 placeholder="Supplier PN"
                                 title={it.supplierMaterialNo}
                               />
+                            </div>
+                          </td>
+
+                          <td className="px-1.5 py-1.5">
+                            <div className="flex flex-col gap-1">
+                              <div className="flex gap-1">
+                                <input
+                                  type="number"
+                                  step="0.0001"
+                                  min="0"
+                                  value={it.conversion}
+                                  disabled={readOnly}
+                                  onChange={(e) => updateItem(idx, { conversion: e.target.value })}
+                                  className={`${inputSmClass} min-w-0 text-right tabular-nums`}
+                                  placeholder="Conv"
+                                  title="Conversion"
+                                />
+                                <div className="w-14 shrink-0">
+                                  <SearchableSelect compact
+                                    value={it.internalUomId}
+                                    disabled={readOnly || !!it.purchaseRequisitionItemId}
+                                    onChange={(e) => updateItem(idx, { internalUomId: e.target.value })}
+                                    className={selectTriggerSmClass}
+                                  >
+                                    <option value="">—</option>
+                                    {data?.uoms?.map((u) => (
+                                      <option key={u.id} value={u.id}>
+                                        {u.uomName}
+                                      </option>
+                                    ))}
+                                  </SearchableSelect>
+                                </div>
+                              </div>
                             </div>
                           </td>
 
@@ -1157,42 +1202,6 @@ export default function PurchaseOrderEditPage() {
                               </SearchableSelect>
                               <div className={`flex h-7 items-center justify-end px-2 text-right tabular-nums ${Number(it.taxAmount) > 0 ? "text-slate-700" : "text-slate-300"}`}>
                                 {it.taxAmount}
-                              </div>
-                            </div>
-                          </td>
-
-                          <td className="px-1.5 py-1.5">
-                            <div className="flex flex-col gap-1">
-                              <div className="flex gap-1">
-                                <input
-                                  type="number"
-                                  step="0.0001"
-                                  min="0"
-                                  value={it.conversion}
-                                  disabled={readOnly}
-                                  onChange={(e) => updateItem(idx, { conversion: e.target.value })}
-                                  className={`${inputSmClass} min-w-0 text-right tabular-nums`}
-                                  placeholder="Conv"
-                                  title="Conversion"
-                                />
-                                <div className="w-14 shrink-0">
-                                  <SearchableSelect compact
-                                    value={it.internalUomId}
-                                    disabled={readOnly || !!it.purchaseRequisitionItemId}
-                                    onChange={(e) => updateItem(idx, { internalUomId: e.target.value })}
-                                    className={selectTriggerSmClass}
-                                  >
-                                    <option value="">—</option>
-                                    {data?.uoms?.map((u) => (
-                                      <option key={u.id} value={u.id}>
-                                        {u.uomName}
-                                      </option>
-                                    ))}
-                                  </SearchableSelect>
-                                </div>
-                              </div>
-                              <div className="flex h-7 items-center justify-end px-2 text-right tabular-nums text-slate-700">
-                                {it.internalQuantity}
                               </div>
                             </div>
                           </td>
@@ -1289,7 +1298,7 @@ export default function PurchaseOrderEditPage() {
         </div>
 
         {/* Right rail */}
-        <div className="min-w-0 space-y-4 xl:sticky xl:top-28 xl:self-start">
+        <div className="grid min-w-0 grid-cols-1 items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
           {/* Approval progress */}
           <Card
             icon={ShieldCheck}
@@ -1303,7 +1312,7 @@ export default function PurchaseOrderEditPage() {
                 <ApprovalStep n={1} title="Tier 1 approval" state="none" />
                 <ApprovalStep n={2} title="Tier 2 approval" state="none" last />
                 <p className="pt-1 text-[11px] text-slate-500">
-                  On submit, the Amount After Tax picks the band in the Approval Level Profile: one Tier 1 approver, or Tier 1 then Tier 2.
+                  On submit, the Amount After Tax in base currency (× exchange rate) picks the band in the Approval Level Profile: one Tier 1 approver, or Tier 1 then Tier 2.
                 </p>
               </div>
             ) : (
@@ -1413,105 +1422,7 @@ function fmtDate(value: string | null | undefined): string {
   return d.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
 }
 
-function fmtDateTime(value: string | null | undefined): string {
-  if (!value) return "";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleString(undefined, { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
-}
-
 const fmtMoney = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-const STEP_DOT: Record<TierState, string> = {
-  done: "bg-emerald-500 text-white",
-  current: "bg-amber-500 text-white ring-4 ring-amber-100",
-  waiting: "bg-slate-200 text-slate-500",
-  rejected: "bg-rose-500 text-white",
-  skipped: "bg-slate-100 text-slate-400",
-  none: "bg-slate-100 text-slate-400",
-};
-
-const STEP_TEXT: Record<TierState, string> = {
-  done: "Approved",
-  current: "Awaiting approval",
-  waiting: "Waiting",
-  rejected: "Rejected",
-  skipped: "Skipped",
-  none: "Not started",
-};
-
-const STEP_TEXT_CLS: Record<TierState, string> = {
-  done: "text-emerald-700",
-  current: "text-amber-700",
-  waiting: "text-slate-500",
-  rejected: "text-rose-700",
-  skipped: "text-slate-400",
-  none: "text-slate-400",
-};
-
-function ApprovalStep({
-  n,
-  title,
-  state,
-  who,
-  when,
-  last,
-}: {
-  n: number;
-  title: string;
-  state: TierState;
-  who?: string | null;
-  when?: string | null;
-  last?: boolean;
-}) {
-  const stamp = fmtDateTime(when);
-  return (
-    <div className="relative flex gap-2.5">
-      {!last && <span className="absolute left-[11px] top-6 h-[calc(100%-12px)] w-px bg-slate-200" />}
-      <span className={`relative z-10 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ${STEP_DOT[state]}`}>
-        {state === "done" ? <Check size={13} /> : state === "rejected" ? <X size={13} /> : n}
-      </span>
-      <div className="min-w-0 pb-2">
-        <p className="text-[13px] font-medium leading-tight text-slate-800">{title}</p>
-        <p className={`text-[11px] leading-tight ${STEP_TEXT_CLS[state]}`}>{STEP_TEXT[state]}</p>
-        {who && (
-          <p className="mt-0.5 truncate text-[11px] text-slate-500" title={who}>
-            by <span className="font-medium text-slate-700">{who}</span>
-            {stamp && <span className="text-slate-400"> · {stamp}</span>}
-          </p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-const RECEIVE_STEPS = ["Not Received", "Partially Received", "Fully Received"] as const;
-
-function ReceiveTrack({ status }: { status: string }) {
-  const reached = RECEIVE_STEPS.indexOf(status as (typeof RECEIVE_STEPS)[number]);
-  if (reached < 0) {
-    return <p className="text-xs text-slate-500">Nothing to receive yet. Receiving opens once the PO is Issued.</p>;
-  }
-  return (
-    <div className="space-y-2">
-      <div className="grid grid-cols-3 gap-1">
-        {RECEIVE_STEPS.map((s, i) => (
-          <span
-            key={s}
-            className={`h-1.5 rounded-full ${
-              i <= reached ? (reached === 2 ? "bg-emerald-500" : reached === 1 ? "bg-sky-500" : "bg-rose-400") : "bg-slate-200"
-            }`}
-          />
-        ))}
-      </div>
-      <div className="grid grid-cols-3 gap-1 text-[10px] text-slate-500">
-        <span>Not received</span>
-        <span className="text-center">Partial</span>
-        <span className="text-right">Full</span>
-      </div>
-    </div>
-  );
-}
 
 const lineTextareaClass =
   "block min-h-7 w-full resize-none break-words rounded-md border border-slate-300 bg-white px-2 py-1 text-[13px] leading-snug text-slate-900 placeholder:text-slate-400 transition-colors field-sizing-content focus:border-indigo-500 focus:bg-indigo-50/30 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500";

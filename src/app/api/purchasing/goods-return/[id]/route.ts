@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { toUserMessage } from "@/lib/api-error";
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -84,6 +85,8 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
         where: { id },
         data: {
           ...rtnData,
+          // The GR may carry no tax type; store none rather than an invalid "".
+          taxTypeId: rtnData.taxTypeId || null,
           rtnDate: new Date(rtnData.rtnDate),
           status: exist.status,
           items: {
@@ -102,7 +105,10 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     });
   } catch (e: any) {
     console.error("PUT GoodsReturn error:", e);
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    return NextResponse.json(
+      { error: toUserMessage(e, "Failed to save Goods Return. Please check the form and try again.") },
+      { status: 500 },
+    );
   }
 }
 

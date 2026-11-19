@@ -3,8 +3,12 @@ import { poShipToData } from "@/lib/po-ship-to";
 import { prisma } from "@/lib/prisma";
 import { nextDocumentNo } from "@/lib/document-numbering";
 import { recomputePrPoStatus } from "@/lib/pr-po-status";
+import { requirePermission } from "@/lib/authz";
 
 export async function GET(req: Request) {
+  const { error: authError } = await requirePermission("PURCHASE_ORDER", "v");
+  if (authError) return authError;
+
   try {
     const url = new URL(req.url);
     const search = url.searchParams.get("search") || "";
@@ -54,6 +58,9 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const { error: authError } = await requirePermission("PURCHASE_ORDER", "c");
+  if (authError) return authError;
+
   try {
     const body = await req.json();
 

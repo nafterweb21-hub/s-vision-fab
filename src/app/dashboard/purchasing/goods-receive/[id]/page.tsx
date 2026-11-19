@@ -9,6 +9,7 @@ import Link from "next/link";
 import { PackageCheck, Save, ArrowLeft, Loader2, Send, Ban, AlertCircle } from "lucide-react";
 import {
 getGoodsReceiveFormData,
+getPoLineBalances,
   createGoodsReceive,
   updateGoodsReceive,
   submitGoodsReceive,
@@ -66,6 +67,19 @@ export default function GoodsReceiveFormPage() {
   const [taxRate, setTaxRate] = useState<number>(0);
 
   const [items, setItems] = useState<any[]>([]);
+  const [balances, setBalances] = useState<Record<string, { ordered: number; received: number; inDraft: number; open: number }>>({});
+
+  useEffect(() => {
+    if (!purchaseOrderId) {
+      setBalances({});
+      return;
+    }
+    let cancelled = false;
+    getPoLineBalances(purchaseOrderId, isNew ? undefined : id)
+      .then((b) => { if (!cancelled) setBalances(b); })
+      .catch(() => { if (!cancelled) setBalances({}); });
+    return () => { cancelled = true; };
+  }, [purchaseOrderId, isNew, id]);
 
   useEffect(() => {
     if (!id) return;
@@ -419,11 +433,17 @@ export default function GoodsReceiveFormPage() {
                     <tr>
                       <th className="px-4 py-3">Description</th>
                       <th className="px-4 py-3 text-right">Purchased Qty</th>
+                      <th className="px-4 py-3 text-right">Prev. Received</th>
+                      <th className="px-4 py-3 text-right">Balance</th>
                       <th className="px-4 py-3 text-right">Received Qty</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {items.map((item, index) => (
+                    {items.map((item, index) => {
+                      const bal = balances[item.purchaseOrderItemId];
+                      // Balance left after this GR's quantity is received.
+                      const remaining = bal ? Math.round((bal.open - (Number(item.receiveQty) || 0)) * 100) / 100 : 0;
+                      return (
                       <tr key={index}>
                         <td className="px-4 py-3 font-medium text-slate-800">
                           {item.poItem?.description || item.poItem?.material || `Item ${index + 1}`}
@@ -431,12 +451,25 @@ export default function GoodsReceiveFormPage() {
                         <td className="px-4 py-3 text-right tabular-nums text-slate-600">
                           {Number(item.poItem?.quantity || 0)}
                         </td>
+                        <td className="px-4 py-3 text-right tabular-nums text-slate-600">
+                          {bal ? bal.received : "—"}
+                          {bal && bal.inDraft > 0 && (
+                            <span className="block text-[11px] font-medium text-amber-600" title="Held by other Draft GRs on this PO">
+                              +{bal.inDraft} in draft
+                            </span>
+                          )}
+                        </td>
+                        <td className={`px-4 py-3 text-right tabular-nums font-semibold ${
+                          !bal ? "text-slate-400" : remaining < 0 ? "text-rose-600" : remaining === 0 ? "text-emerald-600" : "text-blue-700"
+                        }`}>
+                          {bal ? remaining : "—"}
+                        </td>
                         <td className="px-4 py-3">
                           <div className="flex justify-end">
                             <input
                               type="number"
                               min="0"
-                              max={Number(item.poItem?.quantity || 0)}
+                              max={bal ? bal.open : Number(item.poItem?.quantity || 0)}
                               value={item.receiveQty}
                               onChange={(e) => {
                                 const newItems = [...items];
@@ -449,7 +482,8 @@ export default function GoodsReceiveFormPage() {
                           </div>
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

@@ -4,7 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { nextDocumentNo } from "@/lib/document-numbering";
 import { RecordStatus } from "@/lib/status";
-import { assertWithinOpenQty, recomputePoReceiveStatus } from "@/lib/po-receive-status";
+import { assertWithinOpenQty, poLineBalances, recomputePoReceiveStatus } from "@/lib/po-receive-status";
+import { ensureStockItemsForReceipt } from "@/lib/stock-items";
 
 /** Pages whose numbers are derived from submitted GRs. */
 function revalidateReceiptViews(id?: string) {
@@ -62,6 +63,12 @@ export async function getGoodsReceiveFormData() {
     console.error("Error fetching GR form data:", error);
     throw new Error("Failed to load GR form data");
   }
+}
+
+/** Previously received / open quantity per PO line, excluding the GR being edited. */
+export async function getPoLineBalances(purchaseOrderId: string, excludeGrId?: string) {
+  if (!purchaseOrderId) return {};
+  return poLineBalances(prisma, purchaseOrderId, excludeGrId || undefined);
 }
 
 export async function createGoodsReceive(data: any) {
@@ -227,6 +234,9 @@ export async function submitGoodsReceive(id: string) {
 
       await tx.goodsReceive.update({ where: { id }, data: { status: "Submitted" } });
       await recomputePoReceiveStatus(tx, gr.purchaseOrderId);
+      // On-hand stock is derived from submitted GRs; make sure every received
+      // material has a stock record so it shows on the inventory pages.
+      await ensureStockItemsForReceipt(tx, id);
     });
 
     revalidateReceiptViews(id);
