@@ -9,7 +9,9 @@ import { WO_STATUS_TONE } from "./wo-status";
 
 export type WorkOrderTab = "details" | "routing" | "timesheets" | "files";
 
-const TABS: { key: WorkOrderTab; label: string; path: string }[] = [
+export type ShellTab = { key: WorkOrderTab; label: string; path: string };
+
+const TABS: ShellTab[] = [
   { key: "details", label: "Order Details", path: "" },
   { key: "routing", label: "In-Process & Routing", path: "/routing" },
   { key: "timesheets", label: "Timesheets & Parameters", path: "/timesheets" },
@@ -35,22 +37,40 @@ export function fmtWoDate(d?: string | Date | null): string {
   return mon ? `${day} ${mon} ${y}` : "—";
 }
 
+/** Where the shell lives. Defaults to the Work Order module; QC Approval passes its own. */
+export type ShellNav = {
+  /** Path prefix the WO number is appended to, e.g. "/dashboard/qc/approval". */
+  basePath: string;
+  backHref: string;
+  backLabel: string;
+  tabs: ShellTab[];
+};
+
+const WO_NAV: ShellNav = {
+  basePath: "/dashboard/production/work-order",
+  backHref: "/dashboard/production/work-order",
+  backLabel: "Work Orders",
+  tabs: TABS,
+};
+
 export default function WorkOrderShell({
   wo,
   active,
   actions,
   notice,
+  nav = WO_NAV,
   children,
 }: {
   wo: WorkOrderSummary;
   active: WorkOrderTab;
+  nav?: ShellNav;
   /** Right side of the header bar (print, label, add buttons...). */
   actions?: React.ReactNode;
   /** Optional banner under the header bar. */
   notice?: React.ReactNode;
   children: React.ReactNode;
 }) {
-  const base = `/dashboard/production/work-order/${encodeURIComponent(wo.workOrderNo)}`;
+  const base = `${nav.basePath}/${encodeURIComponent(wo.workOrderNo)}`;
   const qty = wo.quantity != null && wo.quantity !== "" ? Number(wo.quantity) : null;
 
   return (
@@ -59,8 +79,8 @@ export default function WorkOrderShell({
         <div className="h-0.5 bg-gradient-to-r from-indigo-500 via-indigo-500 to-violet-500" />
         <div className="flex flex-col gap-2.5 px-4 pt-2.5 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0 space-y-1">
-            <Link href="/dashboard/production/work-order" className="inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-indigo-600">
-              <ArrowLeft size={12} /> Work Orders
+            <Link href={nav.backHref} className="inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-indigo-600">
+              <ArrowLeft size={12} /> {nav.backLabel}
             </Link>
             <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
               <h1 className="flex min-w-0 items-baseline gap-2 leading-tight">
@@ -84,7 +104,7 @@ export default function WorkOrderShell({
         </div>
 
         <nav className="mt-2 flex gap-1 overflow-x-auto px-3" aria-label="Work order sections">
-          {TABS.map((t) => {
+          {nav.tabs.map((t) => {
             const on = t.key === active;
             return (
               <Link

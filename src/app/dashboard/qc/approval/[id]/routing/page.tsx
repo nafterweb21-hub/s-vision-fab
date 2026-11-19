@@ -1,24 +1,19 @@
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
-import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { CalendarClock, CheckCircle2, GitBranch, Layers, Link2 } from "lucide-react";
+import { Badge, EmptyState, StatusBadge, type Tone } from "@/components/form-ui";
+import { fmtWoDate } from "@/app/dashboard/production/work-order/components/WorkOrderShell";
+import { QcShell } from "../../qc-shell";
 
-const IP_STATUS_BADGE: Record<string, string> = {
-  New: "bg-slate-100 text-slate-700",
-  WIP: "bg-amber-100 text-amber-700",
-  Completed: "bg-emerald-100 text-emerald-700",
-};
+const STEP_TONE: Record<string, Tone> = { New: "slate", Pending: "slate", WIP: "amber", "Pending for QC": "violet", Completed: "emerald" };
 
-export default async function QcApprovalRoutingPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default async function QcApprovalRoutingPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
-  const workOrder = await prisma.workOrder.findUnique({
+  const wo = await prisma.workOrder.findUnique({
     where: { workOrderNo: id },
     include: {
+      customer: { select: { customerName: true } },
       inProcesses: {
         orderBy: { sn: "asc" },
         include: {
@@ -28,150 +23,119 @@ export default async function QcApprovalRoutingPage({
             include: {
               mainProcess: { select: { process: true } },
               routingProcess: { select: { routingProcess: true } },
+              assignedEmployee: { select: { name: true } },
             },
           },
         },
       },
     },
   });
+  if (!wo) notFound();
 
-  if (!workOrder) notFound();
-
-  // Roll the in-process status from its routing rows
-  const inProcessRows = workOrder.inProcesses.map((ip: any) => {
-    const statuses = ip.routingProcesses.map((r: any) => r.status);
+  // Roll each in-process status up from its routing rows.
+  const inProcesses = wo.inProcesses.map((ip) => {
+    const statuses = ip.routingProcesses.map((r) => r.status);
     let derived = ip.status;
     if (statuses.length > 0) {
-      if (statuses.every((s: string) => s === "Completed")) derived = "Completed";
-      else if (statuses.some((s: string) => s === "WIP" || s === "Completed")) derived = "WIP";
+      if (statuses.every((s) => s === "Completed")) derived = "Completed";
+      else if (statuses.some((s) => s === "WIP" || s === "Completed")) derived = "WIP";
       else derived = "New";
     }
     return { ...ip, derivedStatus: derived };
   });
+  const total = inProcesses.reduce((n, ip) => n + ip.routingProcesses.length, 0);
+  const done = inProcesses.reduce((n, ip) => n + ip.routingProcesses.filter((r) => r.status === "Completed").length, 0);
 
   return (
-    <div className="py-3 space-y-4 w-full">
-      <div className="flex items-center gap-4">
-        <Link
-          href="/dashboard/qc/approval"
-          className="p-2 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors"
-        >
-          <ArrowLeft size={20} />
-        </Link>
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800">QC Approval: {workOrder.workOrderNo}</h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Status: <span className="font-medium">{workOrder.status}</span>
-          </p>
+    <QcShell wo={wo} active="routing">
+      {total > 0 && (
+        <p className="px-1 text-right text-xs text-slate-500">
+          <span className="font-semibold tabular-nums text-slate-800">{done}</span> of{" "}
+          <span className="font-semibold tabular-nums text-slate-800">{total}</span> routing steps completed
+          {done < total && <span className="text-amber-700"> · final QC needs every step Completed</span>}
+        </p>
+      )}
+
+      {inProcesses.length === 0 ? (
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <EmptyState icon={Layers} tone="slate" title="No in-process steps defined" />
         </div>
-      </div>
-
-      <div className="border-b border-slate-200">
-        <nav className="-mb-px flex space-x-8">
-          <Link
-            href={`/dashboard/qc/approval/${id}`}
-            className="border-b-2 border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 py-4 px-1 text-sm font-medium"
-          >
-            Order Details
-          </Link>
-          <div className="border-b-2 border-blue-600 text-blue-600 py-4 px-1 text-sm font-medium">
-            In-Process & Routing
-          </div>
-          <Link
-            href={`/dashboard/qc/approval/${id}/timesheets`}
-            className="border-b-2 border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 py-4 px-1 text-sm font-medium"
-          >
-            Timesheets & Parameters
-          </Link>
-        </nav>
-      </div>
-
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-        <div className="flex justify-between items-center mb-4">
-          <div>
-            <h3 className="text-lg font-semibold text-slate-800">Inprocess Name</h3>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Read-only view of routing parameters.
-            </p>
-          </div>
-        </div>
-
-        {inProcessRows.length === 0 ? (
-          <div className="text-center py-12 text-slate-500 border-2 border-dashed border-slate-200 rounded-lg">
-            <p className="text-sm">No in-process steps defined.</p>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {inProcessRows.map((ip: any) => (
-              <div key={ip.id} className="border border-slate-200 rounded-lg overflow-hidden">
-                <div className="p-4 bg-slate-50 border-b border-slate-200">
-                  <div className="flex justify-between items-start gap-4">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h4 className="font-semibold text-slate-800">
-                          {ip.sn}. {ip.description}
-                        </h4>
-                        <span
-                          className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                            IP_STATUS_BADGE[ip.derivedStatus] ?? "bg-slate-100 text-slate-700"
-                          }`}
-                        >
-                          {ip.derivedStatus}
-                        </span>
-                        {ip.allFlag && (
-                          <span className="px-2 py-0.5 rounded-full text-xs bg-blue-50 text-blue-700">All</span>
-                        )}
-                      </div>
-                      <div className="mt-1 text-xs text-slate-500 space-x-3">
-                        <span>Target: {new Date(ip.targetCompletionDate).toLocaleDateString("en-GB")}</span>
-                        {ip.conditionalSn && (
-                          <span>Precondition: SN {ip.conditionalSn.sn} ({ip.conditionalSn.description})</span>
-                        )}
-                      </div>
-                      {ip.remark && <div className="mt-2 text-xs text-slate-600">{ip.remark}</div>}
+      ) : (
+        <div className="space-y-4">
+          {inProcesses.map((ip) => {
+            const steps = ip.routingProcesses.length;
+            const stepsDone = ip.routingProcesses.filter((r) => r.status === "Completed").length;
+            return (
+              <section key={ip.id} className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+                <header className="flex items-start gap-2.5 border-b border-slate-100 px-4 py-2.5">
+                  <span className="inline-flex h-7 min-w-7 shrink-0 items-center justify-center rounded-lg bg-indigo-50 px-1.5 text-[12px] font-semibold tabular-nums text-indigo-700 ring-1 ring-inset ring-indigo-600/15">
+                    {ip.sn}
+                  </span>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <h2 className="truncate text-[13px] font-semibold leading-tight text-slate-800">{ip.description}</h2>
+                      <StatusBadge status={ip.derivedStatus} tone={STEP_TONE[ip.derivedStatus] ?? "slate"} />
+                      {ip.allFlag && <Badge tone="sky">All</Badge>}
                     </div>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-slate-500">
+                      <span className="inline-flex items-center gap-1">
+                        <CalendarClock size={11} /> Target {fmtWoDate(ip.targetCompletionDate)}
+                      </span>
+                      {ip.conditionalSn && (
+                        <span className="inline-flex items-center gap-1">
+                          <Link2 size={11} /> After SN {ip.conditionalSn.sn} · {ip.conditionalSn.description}
+                        </span>
+                      )}
+                      {steps > 0 && (
+                        <span className="inline-flex items-center gap-1">
+                          <GitBranch size={11} /> {stepsDone}/{steps} steps done
+                        </span>
+                      )}
+                    </div>
+                    {ip.remark && <p className="mt-1 text-xs text-slate-600">{ip.remark}</p>}
                   </div>
-                </div>
+                </header>
 
-                {ip.routingProcesses.length === 0 ? (
-                  <div className="px-4 py-8 text-center text-slate-400 text-xs">
-                    No routing processes yet.
-                  </div>
+                {steps === 0 ? (
+                  <p className="px-4 py-6 text-center text-xs text-slate-400">No routing processes yet.</p>
                 ) : (
                   <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left">
-                      <thead className="text-xs text-slate-500 uppercase bg-white border-b border-slate-100">
-                        <tr>
-                          <th className="px-3 py-2 font-semibold w-12">SN</th>
-                          <th className="px-3 py-2 font-semibold">Main Process</th>
-                          <th className="px-3 py-2 font-semibold">Routing Process</th>
-                          <th className="px-3 py-2 font-semibold">Target Date</th>
-                          <th className="px-3 py-2 font-semibold text-center">Fully Recv?</th>
-                          <th className="px-3 py-2 font-semibold">Status</th>
+                    <table className="w-full min-w-[640px] text-left text-[13px]">
+                      <thead>
+                        <tr className="border-b border-slate-100 bg-slate-50/70 text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                          <th className="w-10 py-2 pl-4 pr-2 font-medium">SN</th>
+                          <th className="px-3 py-2 font-medium">Main · Routing Process</th>
+                          <th className="px-3 py-2 font-medium">Assigned</th>
+                          <th className="px-3 py-2 font-medium">Target</th>
+                          <th className="px-3 py-2 text-center font-medium">Subcon recv.</th>
+                          <th className="px-4 py-2 font-medium">Status</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {ip.routingProcesses.map((rp: any) => (
-                          <tr key={rp.id} className="hover:bg-slate-50">
-                            <td className="px-3 py-2">{rp.sn}</td>
-                            <td className="px-3 py-2">{rp.mainProcess?.process}</td>
-                            <td className="px-3 py-2">{rp.routingProcess?.routingProcess}</td>
-                            <td className="px-3 py-2">{new Date(rp.targetCompletionDate).toLocaleDateString()}</td>
-                            <td className="px-3 py-2 text-center">
-                              {rp.fullyReceived ? (
-                                <span className="text-emerald-600 font-bold">✓</span>
-                              ) : (
-                                <span className="text-slate-300">-</span>
-                              )}
+                        {ip.routingProcesses.map((rp) => (
+                          <tr key={rp.id} className="align-top hover:bg-slate-50/60">
+                            <td className="py-2 pl-4 pr-2">
+                              <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-slate-100 px-1 text-[11px] font-semibold tabular-nums text-slate-600">
+                                {rp.sequence}
+                              </span>
                             </td>
                             <td className="px-3 py-2">
-                              <span
-                                className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                                  IP_STATUS_BADGE[rp.status] ?? "bg-slate-100 text-slate-700"
-                                }`}
-                              >
-                                {rp.status}
-                              </span>
+                              <p className="font-medium text-slate-800">{rp.routingProcess?.routingProcess ?? "—"}</p>
+                              <p className="text-[11px] text-slate-400">{rp.mainProcess?.process ?? "—"}</p>
+                            </td>
+                            <td className="px-3 py-2 text-slate-600">{rp.assignedEmployee?.name ?? <span className="text-slate-400">Anyone</span>}</td>
+                            <td className="whitespace-nowrap px-3 py-2 text-xs text-slate-600">{fmtWoDate(rp.targetCompletionDate)}</td>
+                            <td className="px-3 py-2 text-center">
+                              {rp.fullyReceived ? (
+                                <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700">
+                                  <CheckCircle2 size={12} /> Yes
+                                </span>
+                              ) : (
+                                <span className="text-xs text-slate-300">—</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-2">
+                              <StatusBadge status={rp.status} tone={STEP_TONE[rp.status] ?? "slate"} />
                             </td>
                           </tr>
                         ))}
@@ -179,11 +143,11 @@ export default async function QcApprovalRoutingPage({
                     </table>
                   </div>
                 )}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
+              </section>
+            );
+          })}
+        </div>
+      )}
+    </QcShell>
   );
 }
