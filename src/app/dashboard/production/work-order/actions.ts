@@ -141,10 +141,12 @@ export async function updateWorkOrderEditable(
         ...(date ? { date } : {}),
         remark: data.remark ?? null,
         ...(data.partName !== undefined ? { partName: data.partName.trim() || null } : {}),
-        labelExpiryDate: data.labelExpiryDate ? new Date(data.labelExpiryDate) : null,
-        labelQty: data.labelQty != null && data.labelQty !== "" ? Number(data.labelQty) : null,
-        labelUomId: data.labelUomId || null,
-        uploadUrl: data.uploadUrl || null,
+        // Label fields are print-only per spec (work-order.md "Label printing") and the form no
+        // longer sends them; only write them when a caller explicitly does, so a save can't blank them.
+        ...(data.labelExpiryDate !== undefined ? { labelExpiryDate: data.labelExpiryDate ? new Date(data.labelExpiryDate) : null } : {}),
+        ...(data.labelQty !== undefined ? { labelQty: data.labelQty != null && data.labelQty !== "" ? Number(data.labelQty) : null } : {}),
+        ...(data.labelUomId !== undefined ? { labelUomId: data.labelUomId || null } : {}),
+        ...(data.uploadUrl !== undefined ? { uploadUrl: data.uploadUrl || null } : {}),
         ...(typeof data.stageQc === "boolean" ? { stageQc: data.stageQc } : {}),
       },
     });

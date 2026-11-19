@@ -1,13 +1,16 @@
 "use client";
 import { SearchableSelect } from "@/components/SearchableSelect";
 import { useState } from "react";
-import { X, Printer } from "lucide-react";
-export default function DeliveryLabelModal({ 
-  workOrderNo, 
-  defaultQty, 
+import { X, Tag, Printer } from "lucide-react";
+import { Field, buttonClass, inputClass, selectTriggerClass } from "@/components/form-ui";
+
+/** Delivery label: print-only fields, never saved (spec: work-order.md "Label printing"). */
+export default function DeliveryLabelModal({
+  workOrderNo,
+  defaultQty,
   defaultUom,
-  uoms
-}: { 
+  uoms,
+}: {
   workOrderNo: string;
   defaultQty: string;
   defaultUom: string;
@@ -18,83 +21,73 @@ export default function DeliveryLabelModal({
   const [qty, setQty] = useState(defaultQty || "1");
   const [uom, setUom] = useState(defaultUom || "");
 
+  const valid = Number(qty) > 0 && !!uom;
+
   const handlePrint = () => {
+    if (!valid) return;
     const params = new URLSearchParams();
     if (expiryDate) params.set("expiryDate", expiryDate);
-    if (qty) params.set("qty", qty);
-    if (uom) params.set("uom", uom);
+    params.set("qty", qty);
+    params.set("uom", uom);
     window.open(`/print/delivery-label/${encodeURIComponent(workOrderNo)}?${params.toString()}`, "_blank");
     setIsOpen(false);
   };
 
   return (
     <>
-      <button
-        onClick={() => setIsOpen(true)}
-        className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1 px-2 py-1 sm:px-4 sm:py-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded sm:rounded-lg text-[10px] sm:text-sm font-semibold transition-colors border border-indigo-200"
-      >
-        <Printer size={12} className="sm:w-4 sm:h-4" />
-        Print Label
+      <button type="button" onClick={() => setIsOpen(true)} className={buttonClass("secondary", "md")}>
+        <Tag size={14} /> Print Label
       </button>
 
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
-              <h2 className="text-lg font-bold text-slate-800">Print Delivery Label</h2>
-              <button onClick={() => setIsOpen(false)} className="text-slate-400 hover:text-slate-600 transition-colors">
-                <X size={20} />
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 py-6">
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setIsOpen(false)} />
+          <div className="relative w-full max-w-md overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
+            <div className="h-0.5 bg-gradient-to-r from-indigo-500 via-indigo-500 to-violet-500" />
+            <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2.5">
+              <div className="flex min-w-0 items-center gap-2.5">
+                <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600 ring-1 ring-inset ring-indigo-600/15">
+                  <Tag size={15} />
+                </span>
+                <div className="min-w-0">
+                  <h2 className="text-[13px] font-semibold leading-tight text-slate-800">Print Delivery Label</h2>
+                  <p className="truncate font-mono text-[11px] leading-tight text-slate-500">{workOrderNo}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsOpen(false)}
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                aria-label="Close"
+              >
+                <X size={16} />
               </button>
             </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Expiry Date</label>
-                <input
-                  type="date"
-                  value={expiryDate}
-                  onChange={(e) => setExpiryDate(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                />
-                <p className="text-xs text-slate-500 mt-1">Date does not save into the system</p>
-              </div>
-              <div className="flex flex-col sm:grid sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Quantity</label>
-                  <input
-                    type="number"
-                    value={qty}
-                    onChange={(e) => setQty(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">UOM</label>
-                  <SearchableSelect
-                    value={uom}
-                    onChange={(e) => setUom(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors bg-white"
-                  >
+            <div className="space-y-3 p-4">
+              <Field label="Expiry Date">
+                <input type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} className={inputClass} />
+              </Field>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <Field label="Quantity" required>
+                  <input type="number" min={0} value={qty} onChange={(e) => setQty(e.target.value)} className={`${inputClass} text-right tabular-nums`} />
+                </Field>
+                <Field label="UOM" required>
+                  <SearchableSelect value={uom} onChange={(e) => setUom(e.target.value)} className={selectTriggerClass}>
                     <option value="">Select UOM</option>
-                    {uoms.map(u => (
+                    {uoms.map((u) => (
                       <option key={u.id} value={u.uomName}>{u.uomName}</option>
                     ))}
                   </SearchableSelect>
-                </div>
+                </Field>
               </div>
+              <p className="text-[11px] text-slate-500">Quantity and UOM default from the work order. Nothing here is saved.</p>
             </div>
-            <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-3">
-              <button
-                onClick={() => setIsOpen(false)}
-                className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
-              >
+            <div className="flex items-center justify-end gap-2 border-t border-slate-100 bg-slate-50/60 px-4 py-2.5">
+              <button type="button" onClick={() => setIsOpen(false)} className={buttonClass("ghost", "md")}>
                 Cancel
               </button>
-              <button
-                onClick={handlePrint}
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-              >
-                <Printer size={16} />
-                Generate Label
+              <button type="button" onClick={handlePrint} disabled={!valid} className={buttonClass("primary", "md")}>
+                <Printer size={14} /> Generate Label
               </button>
             </div>
           </div>

@@ -1,16 +1,15 @@
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
-import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { Printer, ShieldCheck, RotateCcw } from "lucide-react";
+import { Card, EmptyState, StatusBadge, buttonClass, type Tone } from "@/components/form-ui";
 import WorkOrderHeader from "../components/WorkOrderHeader";
+import WorkOrderShell, { fmtWoDate } from "../components/WorkOrderShell";
 import { getUomList } from "../actions";
 import DeliveryLabelModal from "./DeliveryLabelModal";
 
-export default async function WorkOrderDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+const QC_TONE: Record<string, Tone> = { Approved: "emerald", Rejected: "rose" };
+
+export default async function WorkOrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
   const workOrder = await prisma.workOrder.findUnique({
@@ -20,182 +19,154 @@ export default async function WorkOrderDetailPage({
       labelUom: true,
       qcBy: true,
       reworks: {
-        orderBy: { createdAt: 'desc' },
-        include: {
-          rejectedBy: true,
-          reInspectedBy: true
-        }
+        orderBy: { createdAt: "desc" },
+        include: { rejectedBy: true, reInspectedBy: true },
       },
-      inProcesses: {
-        include: {
-          routingProcesses: true
-        }
-      }
+      inProcesses: { include: { routingProcesses: true } },
     },
   });
 
   if (!workOrder) notFound();
 
-  console.log("Work Order QC Data:", { qcAcceptance: workOrder?.qcAcceptance, qcBy: workOrder?.qcBy?.name, qcDate: workOrder?.qcDate });
-
   const uoms = await getUomList();
 
-  let derivedStatus = workOrder.status || "Unknown";
-  if (derivedStatus === "Completed" && workOrder.inProcesses && workOrder.inProcesses.length > 0) {
-    const allCompleted = workOrder.inProcesses.every((ip: any) => 
-      ip.routingProcesses.length > 0 && ip.routingProcesses.every((rp: any) => rp.status === "Completed")
-    );
-    if (!allCompleted) {
-      derivedStatus = "WIP";
-    }
-  }
-  
-  const modifiedWorkOrder = { ...workOrder, status: derivedStatus };
+  // The real status drives the workflow buttons. Flag (rather than hide) a WO that is Completed
+  // while some routing steps are still open, so its actions still match what the server allows.
+  const openStepsWhileCompleted =
+    workOrder.status === "Completed" &&
+    workOrder.inProcesses.length > 0 &&
+    !workOrder.inProcesses.every((ip) => ip.routingProcesses.length > 0 && ip.routingProcesses.every((rp) => rp.status === "Completed"));
 
-  // Decimals → strings to keep client serialisable
-  const serialised = JSON.parse(JSON.stringify(modifiedWorkOrder));
+  // Decimals / Dates → plain JSON for the client components.
+  const wo = JSON.parse(JSON.stringify(workOrder));
+  const qty = Number(workOrder.quantity || 0);
+  const qcTiles: { label: string; value: number; tone: string }[] = [
+    { label: "Accepted", value: Number(workOrder.acceptedQty || 0), tone: "text-emerald-700" },
+    { label: "Rejected", value: Number(workOrder.rejectedQty || 0), tone: "text-rose-700" },
+    { label: "Reworked", value: Number(workOrder.reworkedQty || 0), tone: "text-amber-700" },
+    { label: "Final approved", value: Number(workOrder.finalApprovedQty || 0), tone: "text-indigo-700" },
+  ];
 
   return (
-    <div className="p-0 sm:p-4 space-y-1 sm:space-y-6 w-full">
-      <div className="flex flex-col md:flex-row md:items-center gap-1 justify-between px-1 sm:px-0 mt-1 sm:mt-0">
-        <div className="flex items-start md:items-center gap-1 w-full md:w-auto">
-          <Link
-            href="/dashboard/production/work-order"
-            className="p-0.5 sm:p-2 shrink-0 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors mt-0.5 md:mt-0"
-          >
-            <ArrowLeft size={12} className="sm:w-5 sm:h-5" />
-          </Link>
-          <div className="min-w-0">
-            <h1 className="text-sm sm:text-xl md:text-2xl font-bold text-slate-800 break-words leading-tight">
-              Work Order: {workOrder.workOrderNo}
-            </h1>
-            <p className="hidden sm:block text-xs md:text-sm text-slate-500 mt-0.5">
-              Manage work order details, routing, and parameters
-            </p>
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-1 w-full md:w-auto shrink-0">
-          <a
-            href={`/print/work-order/${id}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1 px-1.5 py-0.5 sm:px-4 sm:py-2 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded sm:rounded-lg text-[9px] sm:text-sm font-semibold transition-colors border border-blue-200"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="sm:w-4 sm:h-4"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
-            Print
+    <WorkOrderShell
+      wo={{
+        workOrderNo: workOrder.workOrderNo,
+        status: workOrder.status,
+        customerName: workOrder.customer?.customerName,
+        projectCode: workOrder.projectCode,
+        deliveryDate: wo.deliveryDate,
+        quantity: wo.quantity,
+        uom: workOrder.uom,
+      }}
+      active="details"
+      actions={
+        <>
+          <a href={`/print/work-order/${encodeURIComponent(id)}`} target="_blank" rel="noopener noreferrer" className={buttonClass("secondary", "md")}>
+            <Printer size={14} /> Print
           </a>
-          <DeliveryLabelModal 
-            workOrderNo={workOrder.workOrderNo} 
-            defaultQty={workOrder.quantity?.toString() || "1"} 
-            defaultUom={workOrder.labelUom?.uomName || workOrder.uom || ""} 
-            uoms={uoms} 
+          <DeliveryLabelModal
+            workOrderNo={workOrder.workOrderNo}
+            defaultQty={workOrder.quantity?.toString() || "1"}
+            defaultUom={workOrder.labelUom?.uomName || workOrder.uom || ""}
+            uoms={uoms}
           />
-        </div>
-      </div>
+        </>
+      }
+    >
+      <WorkOrderHeader wo={wo} openStepsWhileCompleted={openStepsWhileCompleted} />
 
-      <div className="border-b border-slate-200 overflow-x-auto no-scrollbar">
-        <nav className="-mb-px flex space-x-1 sm:space-x-8 min-w-max px-1 sm:px-0">
-          <div className="border-b-2 border-blue-600 text-blue-600 whitespace-nowrap py-1.5 sm:py-4 px-1 text-[10px] sm:text-sm font-medium">
-            Order Details
-          </div>
-          <Link
-            href={`/dashboard/production/work-order/${id}/routing`}
-            className="border-b-2 border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 whitespace-nowrap py-1.5 sm:py-4 px-1 text-[10px] sm:text-sm font-medium"
-          >
-            In-Process & Routing
-          </Link>
-          <Link
-            href={`/dashboard/production/work-order/${id}/timesheets`}
-            className="border-b-2 border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 whitespace-nowrap py-1.5 sm:py-4 px-1 text-[10px] sm:text-sm font-medium"
-          >
-            Timesheets & Parameters
-          </Link>
-          <Link
-            href={`/dashboard/production/work-order/${id}/files`}
-            className="border-b-2 border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 whitespace-nowrap py-1.5 sm:py-4 px-1 text-[10px] sm:text-sm font-medium"
-          >
-            Files
-          </Link>
-        </nav>
-      </div>
-
-      <div className="bg-white rounded-md sm:rounded-xl shadow-sm border-y sm:border border-slate-200 p-1.5 sm:p-6">
-        <WorkOrderHeader wo={serialised} uoms={uoms} />
-      </div>
-
-      <div className="bg-white rounded-md sm:rounded-xl shadow-sm border-y sm:border border-slate-200 overflow-hidden">
-        <div className="p-1.5 sm:p-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
-          <h2 className="text-[11px] sm:text-base md:text-lg font-bold text-slate-800">Quality Control & Rework</h2>
-          <div className="px-1 py-0.5 sm:px-2 sm:py-1 bg-white border border-slate-200 rounded text-[8px] sm:text-sm font-bold text-slate-600 shadow-sm shrink-0 ml-2">
-            Total: {Number(workOrder.quantity || 0)}
-          </div>
-        </div>
-        
-        <div className="p-1.5 sm:p-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-1 sm:gap-4 mb-2 sm:mb-8">
-            <div className="bg-emerald-50 border border-emerald-100 p-1 sm:p-4 rounded-md flex flex-col items-center justify-center">
-              <span className="text-[7px] sm:text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-0.5 sm:mb-1 text-center">Accepted</span>
-              <span className="text-sm sm:text-xl md:text-2xl font-black text-emerald-700">{Number(workOrder.acceptedQty || 0)}</span>
-            </div>
-            <div className="bg-rose-50 border border-rose-100 p-1 sm:p-4 rounded-md flex flex-col items-center justify-center">
-              <span className="text-[7px] sm:text-[10px] font-bold text-rose-600 uppercase tracking-widest mb-0.5 sm:mb-1 text-center">Rejected</span>
-              <span className="text-sm sm:text-xl md:text-2xl font-black text-rose-700">{Number(workOrder.rejectedQty || 0)}</span>
-            </div>
-            <div className="bg-amber-50 border border-amber-100 p-1 sm:p-4 rounded-md flex flex-col items-center justify-center">
-              <span className="text-[7px] sm:text-[10px] font-bold text-amber-600 uppercase tracking-widest mb-0.5 sm:mb-1 text-center">Reworked</span>
-              <span className="text-sm sm:text-xl md:text-2xl font-black text-amber-700">{Number(workOrder.reworkedQty || 0)}</span>
-            </div>
-            <div className="bg-blue-50 border border-blue-100 p-1 sm:p-4 rounded-md flex flex-col items-center justify-center">
-              <span className="text-[7px] sm:text-[10px] font-bold text-blue-600 uppercase tracking-widest mb-0.5 sm:mb-1 text-center">Approved</span>
-              <span className="text-sm sm:text-xl md:text-2xl font-black text-blue-700">{Number(workOrder.finalApprovedQty || 0)}</span>
-            </div>
-          </div>
-
-          <h3 className="text-[10px] sm:text-sm font-bold text-slate-700 uppercase tracking-widest mb-1.5 sm:mb-4">Rework History</h3>
-          
-          {serialised.reworks.length === 0 ? (
-            <div className="text-center py-4 sm:py-8 text-slate-400 bg-slate-50 border border-slate-200 border-dashed rounded-lg sm:rounded-xl text-[10px] sm:text-sm font-medium">
-              No rework tasks recorded for this work order.
-            </div>
+      <Card
+        icon={ShieldCheck}
+        tone={QC_TONE[workOrder.qcAcceptance ?? ""] ?? "violet"}
+        title="Quality control & rework"
+        description="Set by QC Approval; rework tasks come from QC rejections"
+        actions={
+          workOrder.qcAcceptance ? (
+            <StatusBadge status={workOrder.qcAcceptance} tone={QC_TONE[workOrder.qcAcceptance] ?? "slate"} />
           ) : (
-            <div className="overflow-x-auto border border-slate-200 rounded sm:rounded-xl w-full">
-              <table className="w-full text-[9px] sm:text-sm text-left">
-                <thead className="text-[8px] sm:text-[10px] text-slate-500 uppercase bg-slate-50 border-b border-slate-200 tracking-widest font-bold">
-                  <tr>
-                    <th className="px-1.5 sm:px-4 py-1.5 sm:py-3 w-16 sm:w-auto break-all sm:break-normal">Rework Task</th>
-                    <th className="px-1.5 sm:px-4 py-1.5 sm:py-3 w-12 sm:w-auto break-words sm:break-normal">Rejected Qty</th>
-                    <th className="px-1.5 sm:px-4 py-1.5 sm:py-3 w-12 sm:w-auto break-words sm:break-normal">Reworked Qty</th>
-                    <th className="px-1.5 sm:px-4 py-1.5 sm:py-3">Status</th>
-                    <th className="px-1.5 sm:px-4 py-1.5 sm:py-3">Reason</th>
-                    <th className="px-1.5 sm:px-4 py-1.5 sm:py-3">Timeline</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200">
-                  {serialised.reworks.map((rwk: any) => (
-                    <tr key={rwk.id} className="hover:bg-slate-50/50">
-                      <td className="px-1.5 sm:px-4 py-1.5 sm:py-4 font-bold text-slate-800 break-all min-w-[50px]">{rwk.reworkNo}</td>
-                      <td className="px-1.5 sm:px-4 py-1.5 sm:py-4 font-bold text-rose-600">{Number(rwk.rejectedQty)}</td>
-                      <td className="px-1.5 sm:px-4 py-1.5 sm:py-4 font-bold text-emerald-600">{Number(rwk.reworkedQty)}</td>
-                      <td className="px-1.5 sm:px-4 py-1.5 sm:py-4">
-                        <span className="px-1 sm:px-2 py-0.5 sm:py-1 bg-slate-100 text-slate-700 text-[8px] sm:text-[10px] uppercase font-bold tracking-widest rounded inline-block whitespace-nowrap">
-                          {rwk.status}
-                        </span>
-                      </td>
-                      <td className="px-1.5 sm:px-4 py-1.5 sm:py-4 text-[9px] sm:text-xs italic text-slate-600 max-w-[80px] sm:max-w-[200px] truncate">"{rwk.rejectionReason}"</td>
-                      <td className="px-1.5 sm:px-4 py-1.5 sm:py-4 text-[9px] sm:text-xs text-slate-500">
-                        <div className="flex flex-col gap-0.5 sm:gap-1 whitespace-nowrap">
-                          <span>Rej: {new Date(rwk.rejectedAt).toLocaleDateString()}</span>
-                          {rwk.reInspectedAt && <span>Insp: {new Date(rwk.reInspectedAt).toLocaleDateString()}</span>}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <span className="text-xs text-slate-400">Not inspected yet</span>
+          )
+        }
+        bodyClassName="p-0"
+      >
+        <div className="grid grid-cols-2 divide-x divide-y divide-slate-100 border-b border-slate-100 sm:grid-cols-4 sm:divide-y-0">
+          {qcTiles.map((t) => (
+            <div key={t.label} className="px-4 py-3">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">{t.label}</p>
+              <p className={`text-xl font-semibold tabular-nums ${t.value ? t.tone : "text-slate-300"}`}>
+                {t.value}
+                <span className="ml-1 text-xs font-normal text-slate-400">/ {qty}</span>
+              </p>
             </div>
-          )}
+          ))}
         </div>
-      </div>
-    </div>
+
+        <dl className="grid grid-cols-1 gap-x-4 gap-y-2 border-b border-slate-100 px-4 py-3 text-[13px] sm:grid-cols-3">
+          <div>
+            <dt className="text-[11px] font-medium text-slate-500">QC Acceptance</dt>
+            <dd className="text-slate-800">{workOrder.qcAcceptance ?? "N/A"}</dd>
+          </div>
+          <div>
+            <dt className="text-[11px] font-medium text-slate-500">QC By</dt>
+            <dd className="text-slate-800">{workOrder.qcBy?.name ?? "—"}</dd>
+          </div>
+          <div>
+            <dt className="text-[11px] font-medium text-slate-500">QC Date</dt>
+            <dd className="text-slate-800">{fmtWoDate(wo.qcDate)}</dd>
+          </div>
+        </dl>
+
+        <div className="px-4 pb-1 pt-3">
+          <p className="inline-flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-slate-500">
+            <RotateCcw size={12} /> Rework history
+          </p>
+        </div>
+        {wo.reworks.length === 0 ? (
+          <div className="px-4 pb-4">
+            <EmptyState boxed icon={RotateCcw} tone="slate" title="No rework tasks" description="Rework tasks are created when QC rejects quantity on this work order." />
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-[13px]">
+              <thead>
+                <tr className="border-y border-slate-100 bg-slate-50/70 text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                  <th className="py-2 pl-4 pr-3 font-medium">Rework Task</th>
+                  <th className="px-3 py-2 text-right font-medium">Rejected</th>
+                  <th className="px-3 py-2 text-right font-medium">Reworked</th>
+                  <th className="px-3 py-2 font-medium">Status</th>
+                  <th className="px-3 py-2 font-medium">Reason</th>
+                  <th className="px-4 py-2 font-medium">Timeline</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {wo.reworks.map((rwk: any) => (
+                  <tr key={rwk.id} className="align-top hover:bg-slate-50/60">
+                    <td className="whitespace-nowrap py-2 pl-4 pr-3 font-mono text-xs font-semibold text-slate-800">{rwk.reworkNo}</td>
+                    <td className="px-3 py-2 text-right font-semibold tabular-nums text-rose-700">{Number(rwk.rejectedQty)}</td>
+                    <td className="px-3 py-2 text-right font-semibold tabular-nums text-emerald-700">{Number(rwk.reworkedQty)}</td>
+                    <td className="px-3 py-2">
+                      <StatusBadge status={rwk.status} />
+                    </td>
+                    <td className="max-w-[260px] px-3 py-2">
+                      <p className="truncate text-slate-600" title={rwk.rejectionReason || ""}>{rwk.rejectionReason || "—"}</p>
+                      {rwk.rejectedBy?.name && <p className="text-[11px] text-slate-400">by {rwk.rejectedBy.name}</p>}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-2 text-xs text-slate-500">
+                      <p>Rejected {fmtWoDate(rwk.rejectedAt)}</p>
+                      {rwk.reInspectedAt && (
+                        <p>
+                          Re-inspected {fmtWoDate(rwk.reInspectedAt)}
+                          {rwk.reInspectedBy?.name ? ` · ${rwk.reInspectedBy.name}` : ""}
+                        </p>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+    </WorkOrderShell>
   );
 }

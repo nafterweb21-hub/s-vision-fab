@@ -99,23 +99,22 @@ export default function RoutingProcessTable({
   }
 
   return (
-    <div className="overflow-x-auto w-full">
-      <table className="w-full text-sm text-left min-w-[600px] lg:min-w-[860px]">
-        <thead className="text-[10px] sm:text-xs text-slate-500 uppercase bg-white border-b border-slate-100">
-          <tr>
-            {dndEnabled && <th className="px-1.5 sm:px-2 py-1.5 sm:py-2 w-6 sm:w-8" aria-label="Reorder" />}
-            <th className="px-1.5 sm:px-3 py-1.5 sm:py-2 font-semibold w-8 sm:w-12">SN</th>
-            <th className="px-1.5 sm:px-3 py-1.5 sm:py-2 font-semibold">Main Process</th>
-            <th className="px-1.5 sm:px-3 py-1.5 sm:py-2 font-semibold">Routing Process</th>
-            <th className="px-1.5 sm:px-3 py-1.5 sm:py-2 font-semibold">Assigned Employee</th>
-            <th className="px-1.5 sm:px-3 py-1.5 sm:py-2 font-semibold">Target Date</th>
-            <th className="px-1.5 sm:px-3 py-1.5 sm:py-2 font-semibold text-center">Fully Recv?</th>
-            <th className="px-1.5 sm:px-3 py-1.5 sm:py-2 font-semibold text-center">Process Parameter</th>
-            <th className="px-1.5 sm:px-3 py-1.5 sm:py-2 font-semibold">Status</th>
-            <th className="px-1.5 sm:px-3 py-1.5 sm:py-2 font-semibold text-right">Actions</th>
+    <div className={`w-full overflow-x-auto transition-opacity ${saving ? "opacity-60" : ""}`}>
+      <table className="w-full min-w-[860px] text-left text-[13px]">
+        <thead>
+          <tr className="border-b border-slate-100 bg-slate-50/70 text-[11px] font-medium uppercase tracking-wide text-slate-500">
+            {dndEnabled && <th className="w-8 py-2 pl-3 pr-1" aria-label="Reorder" />}
+            <th className={`w-10 py-2 pr-2 font-medium ${dndEnabled ? "pl-1" : "pl-4"}`}>SN</th>
+            <th className="px-3 py-2 font-medium">Main · Routing Process</th>
+            <th className="px-3 py-2 font-medium">Assigned</th>
+            <th className="px-3 py-2 font-medium">Target</th>
+            <th className="px-3 py-2 text-center font-medium">Subcon recv.</th>
+            <th className="px-3 py-2 text-center font-medium">Parameters</th>
+            <th className="px-3 py-2 font-medium">Status</th>
+            <th className="px-4 py-2 text-right font-medium">Actions</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-100 text-[10px] sm:text-sm">
+        <tbody className="divide-y divide-slate-100">
           {rows.map((rp) => (
             <RoutingProcessRow
               key={rp.id}

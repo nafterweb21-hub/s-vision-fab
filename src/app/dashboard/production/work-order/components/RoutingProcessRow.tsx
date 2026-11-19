@@ -2,7 +2,9 @@
 
 import { useState, useTransition, type DragEvent } from "react";
 import { useRouter } from "next/navigation";
-import { GripVertical } from "lucide-react";
+import { CheckCircle2, GripVertical, Loader2 } from "lucide-react";
+import { customConfirm } from "@/lib/customConfirm";
+import { StatusBadge, buttonClass, type Tone } from "@/components/form-ui";
 import { markRoutingProcessStatus } from "../actions";
 import ParameterDetailDrawer from "./ParameterDetailDrawer";
 import EditRoutingProcessModal from "./EditRoutingProcessModal";
@@ -38,11 +40,7 @@ function fmtDate(d?: string | Date | null) {
   return `${day}/${m}/${y}`;
 }
 
-const STATUS_BADGE: Record<string, string> = {
-  New: "bg-slate-100 text-slate-700",
-  WIP: "bg-amber-100 text-amber-700",
-  Completed: "bg-emerald-100 text-emerald-700",
-};
+const STATUS_TONE: Record<string, Tone> = { New: "slate", Pending: "slate", WIP: "amber", "Pending for QC": "violet", Completed: "emerald" };
 
 export default function RoutingProcessRow({
   rp,
@@ -63,7 +61,8 @@ export default function RoutingProcessRow({
   const editable = !["Void", "Cancelled", "Completed"].includes(woStatus);
   const canEditDetails = editable && rp?.status === "New";
 
-  function setStatus(next: "WIP" | "Completed") {
+  async function setStatus(next: "WIP" | "Completed") {
+    if (next === "Completed" && !(await customConfirm(`Mark step ${rp?.sequence} (${rp?.routingProcess?.routingProcess ?? "routing process"}) as Completed?`))) return;
     setError("");
     startTransition(async () => {
       const res = await markRoutingProcessStatus(rp.id, next);
@@ -88,73 +87,73 @@ export default function RoutingProcessRow({
 
   return (
     <tr
-      className={`hover:bg-slate-50/60 ${dnd?.dragging ? "opacity-40" : ""} ${
-        dnd?.over ? "bg-blue-50/70 border-t-2 border-blue-400" : ""
+      className={`align-top transition-colors hover:bg-slate-50/60 ${dnd?.dragging ? "opacity-40" : ""} ${
+        dnd?.over ? "bg-indigo-50/70 shadow-[inset_0_2px_0_0_rgb(99_102_241)]" : ""
       }`}
       onDragEnter={dnd ? dnd.onDragEnter : undefined}
       onDragOver={dnd ? dnd.onDragOver : undefined}
       onDrop={dnd ? dnd.onDrop : undefined}
     >
       {dnd && (
-        <td className="px-1.5 py-1.5 sm:px-2 sm:py-2 w-6 sm:w-8 align-middle">
+        <td className="w-8 py-2.5 pl-3 pr-1">
           {dnd.enabled ? (
             <span
               draggable
               onDragStart={dnd.onDragStart}
               onDragEnd={dnd.onDragEnd}
               title="Drag to reorder"
-              className="inline-flex cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-600"
+              className="inline-flex cursor-grab text-slate-400 hover:text-slate-600 active:cursor-grabbing"
             >
-              <GripVertical size={14} className="sm:w-4 sm:h-4" />
+              <GripVertical size={14} />
             </span>
           ) : (
             <span className="inline-flex text-slate-200" title="Completed steps cannot be reordered">
-              <GripVertical size={14} className="sm:w-4 sm:h-4" />
+              <GripVertical size={14} />
             </span>
           )}
         </td>
       )}
-      <td className="px-1.5 py-1.5 sm:px-3 sm:py-2 text-slate-600">{rp?.sequence}</td>
-      <td className="px-1.5 py-1.5 sm:px-3 sm:py-2">{rp?.mainProcess?.process ?? "-"}</td>
-      <td className="px-1.5 py-1.5 sm:px-3 sm:py-2 font-medium text-slate-800">
-        {rp?.routingProcess?.routingProcess ?? "-"}
-      </td>
-      <td className="px-1.5 py-1.5 sm:px-3 sm:py-2 text-slate-600">
-        {rp?.assignedEmployee?.name ?? "-"}
-      </td>
-      <td className="px-1.5 py-1.5 sm:px-3 sm:py-2 text-slate-600">{fmtDate(rp?.targetCompletionDate)}</td>
-      <td className="px-1.5 py-1.5 sm:px-3 sm:py-2 text-center">
-        {rp?.fullyReceived ? (
-          <span className="text-[9px] sm:text-xs text-emerald-700">Yes</span>
-        ) : (
-          <span className="text-[9px] sm:text-xs text-slate-400">-</span>
-        )}
-      </td>
-      <td className="px-1.5 py-1.5 sm:px-3 sm:py-2 text-center">
-        {expectsParams ? (
-          <div className="inline-block m-0.5">
-            <ParameterDetailDrawer
-              welding={paramsTimesheets.length > 0 && paramsTimesheets[0]?.weldingParameter ? JSON.parse(JSON.stringify(paramsTimesheets[0]?.weldingParameter)) : null}
-              spray={paramsTimesheets.length > 0 && paramsTimesheets[0]?.sprayParameter ? JSON.parse(JSON.stringify(paramsTimesheets[0]?.sprayParameter)) : null}
-              machining={paramsTimesheets.length > 0 && paramsTimesheets[0]?.machiningParameter ? JSON.parse(JSON.stringify(paramsTimesheets[0]?.machiningParameter)) : null}
-              expectedType={expectedType}
-              employees={employees}
-              workOrderNo={workOrderNo}
-              editable={editable}
-              supportData={supportData}
-              targetTimesheetId={targetTimesheetId}
-            />
-          </div>
-        ) : (
-          <span className="text-slate-400 text-[9px] sm:text-xs">-</span>
-        )}
-      </td>
-      <td className="px-1.5 py-1.5 sm:px-3 sm:py-2">
-        <span className={`px-1.5 py-0.5 sm:px-2 sm:py-0.5 rounded-full text-[9px] sm:text-xs font-medium ${STATUS_BADGE[rp?.status] ?? "bg-slate-100 text-slate-700"}`}>
-          {rp?.status}
+      <td className={`w-10 py-2 pr-2 ${dnd ? "pl-1" : "pl-4"}`}>
+        <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-slate-100 px-1 text-[11px] font-semibold tabular-nums text-slate-600">
+          {rp?.sequence}
         </span>
       </td>
-      <td className="px-1.5 py-1.5 sm:px-3 sm:py-2 text-right">
+      <td className="px-3 py-2">
+        <p className="font-medium text-slate-800">{rp?.routingProcess?.routingProcess ?? "—"}</p>
+        <p className="text-[11px] text-slate-400">{rp?.mainProcess?.process ?? "—"}</p>
+      </td>
+      <td className="px-3 py-2 text-slate-600">{rp?.assignedEmployee?.name ?? <span className="text-slate-400">Anyone</span>}</td>
+      <td className="whitespace-nowrap px-3 py-2 text-xs text-slate-600">{fmtDate(rp?.targetCompletionDate)}</td>
+      <td className="px-3 py-2 text-center">
+        {rp?.fullyReceived ? (
+          <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700">
+            <CheckCircle2 size={12} /> Yes
+          </span>
+        ) : (
+          <span className="text-xs text-slate-300">—</span>
+        )}
+      </td>
+      <td className="px-3 py-2 text-center">
+        {expectsParams ? (
+          <ParameterDetailDrawer
+            welding={paramsTimesheets.length > 0 && paramsTimesheets[0]?.weldingParameter ? JSON.parse(JSON.stringify(paramsTimesheets[0]?.weldingParameter)) : null}
+            spray={paramsTimesheets.length > 0 && paramsTimesheets[0]?.sprayParameter ? JSON.parse(JSON.stringify(paramsTimesheets[0]?.sprayParameter)) : null}
+            machining={paramsTimesheets.length > 0 && paramsTimesheets[0]?.machiningParameter ? JSON.parse(JSON.stringify(paramsTimesheets[0]?.machiningParameter)) : null}
+            expectedType={expectedType}
+            employees={employees}
+            workOrderNo={workOrderNo}
+            editable={editable}
+            supportData={supportData}
+            targetTimesheetId={targetTimesheetId}
+          />
+        ) : (
+          <span className="text-xs text-slate-300">—</span>
+        )}
+      </td>
+      <td className="px-3 py-2">
+        <StatusBadge status={rp?.status} tone={STATUS_TONE[rp?.status] ?? "slate"} />
+      </td>
+      <td className="px-4 py-2 text-right">
         <div className="flex items-center justify-end gap-1.5">
           {canEditDetails && (
             <EditRoutingProcessModal
@@ -169,18 +168,13 @@ export default function RoutingProcessRow({
               }))}
             />
           )}
-
           {editable && rp?.status !== "Completed" && (
-            <button
-              onClick={() => setStatus("Completed")}
-              disabled={isPending}
-              className="text-[9px] sm:text-xs px-1.5 py-0.5 sm:px-2 sm:py-1 rounded bg-emerald-100 text-emerald-700 hover:bg-emerald-200 disabled:opacity-50"
-            >
-              Complete
+            <button type="button" onClick={() => setStatus("Completed")} disabled={isPending} className={buttonClass("success", "xs")}>
+              {isPending ? <Loader2 size={11} className="animate-spin" /> : <CheckCircle2 size={11} />} Complete
             </button>
           )}
-          {error && <span className="text-xs text-red-600">{error}</span>}
         </div>
+        {error && <p className="mt-1 text-[11px] text-rose-600">{error}</p>}
       </td>
     </tr>
   );

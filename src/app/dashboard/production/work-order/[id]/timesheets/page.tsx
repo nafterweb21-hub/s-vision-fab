@@ -1,7 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
-import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { Clock, Timer } from "lucide-react";
+import { EmptyState, StatusBadge } from "@/components/form-ui";
+import WorkOrderShell from "../../components/WorkOrderShell";
 import AddTimesheetModal from "../../components/AddTimesheetModal";
 import ParameterDetailDrawer from "../../components/ParameterDetailDrawer";
 
@@ -16,6 +17,7 @@ export default async function WorkOrderTimesheetsPage({
   const workOrder = await prisma.workOrder.findUnique({
     where: { workOrderNo: id },
     include: {
+      customer: { select: { customerName: true } },
       inProcesses: {
         orderBy: { sn: "asc" },
         include: {
@@ -94,7 +96,10 @@ export default async function WorkOrderTimesheetsPage({
     }),
   ]);
 
-  console.log("Rendering timesheets. Employee count:", employees?.length);
+  // Built once and shared by every row's parameter drawer.
+  const supportData = JSON.parse(
+    JSON.stringify({ weldingMachines, machiningMachines, elcometers, joints, materialTypes, weldingTypes }),
+  );
 
   const rows = (workOrder?.inProcesses || []).flatMap((ip: any) =>
     (ip?.routingProcesses || []).flatMap((rp: any) => {
@@ -124,191 +129,149 @@ export default async function WorkOrderTimesheetsPage({
 
   const editable = !["Void", "Cancelled", "Completed"].includes(workOrder.status);
 
-  let topDerivedStatus = workOrder.status || "Unknown";
-  if (topDerivedStatus === "Completed" && workOrder.inProcesses && workOrder.inProcesses.length > 0) {
-    const allCompleted = workOrder.inProcesses.every((ip: any) => 
-      ip.routingProcesses.length > 0 && ip.routingProcesses.every((rp: any) => rp.status === "Completed")
-    );
-    if (!allCompleted) topDerivedStatus = "WIP";
-  }
+  const totalMinutes = Math.round(rows.reduce((n: number, ts: any) => n + (Number(ts.totalMinutes) || 0), 0) * 100) / 100;
+  const openSessions = rows.filter((ts: any) => ts.timeIn && !ts.timeOut).length;
 
   return (
-    <div className="p-0 sm:p-4 space-y-1 sm:space-y-6 w-full">
-      <div className="flex flex-col md:flex-row md:items-center gap-1 justify-between px-1 sm:px-0 mt-1 sm:mt-0">
-        <div className="flex items-start md:items-center gap-1 w-full md:w-auto">
-          <Link
-            href="/dashboard/production/work-order"
-            className="p-0.5 sm:p-2 shrink-0 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors mt-0.5 md:mt-0"
-          >
-            <ArrowLeft size={12} className="sm:w-5 sm:h-5" />
-          </Link>
-          <div className="min-w-0">
-            <h1 className="text-sm sm:text-xl md:text-2xl font-bold text-slate-800 break-words leading-tight">Work Order: {workOrder.workOrderNo}</h1>
-            <p className="text-[9px] sm:text-xs md:text-sm text-slate-500 mt-0.5">
-              Status: <span className="font-medium">{topDerivedStatus}</span>
-            </p>
-          </div>
-        </div>
+    <WorkOrderShell
+      wo={{
+        workOrderNo: workOrder.workOrderNo,
+        status: workOrder.status,
+        customerName: workOrder.customer?.customerName,
+        projectCode: workOrder.projectCode,
+        deliveryDate: workOrder.deliveryDate ? workOrder.deliveryDate.toISOString() : null,
+        quantity: workOrder.quantity != null ? Number(workOrder.quantity) : null,
+        uom: workOrder.uom,
+      }}
+      active="timesheets"
+      actions={editable ? <AddTimesheetModal workOrderNo={id} employees={employees} routingProcesses={routingProcesses} /> : undefined}
+    >
+      <div className="flex flex-col gap-1 px-1 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-xs text-slate-500">Scan IN / OUT data from the Production Terminal. Authorised users may override an entry.</p>
+        {rows.length > 0 && (
+          <span className="flex shrink-0 items-center gap-3 text-xs text-slate-500">
+            <span className="inline-flex items-center gap-1">
+              <Timer size={12} /> <span className="font-semibold tabular-nums text-slate-800">{totalMinutes}</span> min logged
+            </span>
+            {openSessions > 0 && (
+              <span className="inline-flex items-center gap-1 text-amber-700">
+                <Clock size={12} /> {openSessions} still scanned in
+              </span>
+            )}
+          </span>
+        )}
       </div>
 
-      <div className="border-b border-slate-200 overflow-x-auto no-scrollbar">
-        <nav className="-mb-px flex space-x-1 sm:space-x-8 min-w-max px-1 sm:px-0">
-          <Link
-            href={`/dashboard/production/work-order/${id}`}
-            className="border-b-2 border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 py-1.5 sm:py-4 px-1 text-[10px] sm:text-sm font-medium whitespace-nowrap"
-          >
-            Order Details
-          </Link>
-          <Link
-            href={`/dashboard/production/work-order/${id}/routing`}
-            className="border-b-2 border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 py-1.5 sm:py-4 px-1 text-[10px] sm:text-sm font-medium whitespace-nowrap"
-          >
-            In-Process & Routing
-          </Link>
-          <div className="border-b-2 border-blue-600 text-blue-600 py-1.5 sm:py-4 px-1 text-[10px] sm:text-sm font-medium whitespace-nowrap">
-            Timesheets & Parameters
-          </div>
-          <Link
-            href={`/dashboard/production/work-order/${id}/files`}
-            className="border-b-2 border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 py-1.5 sm:py-4 px-1 text-[10px] sm:text-sm font-medium whitespace-nowrap"
-          >
-            Files
-          </Link>
-        </nav>
-      </div>
-
-      <div className="bg-white rounded-md sm:rounded-xl shadow-sm border-y sm:border border-slate-200 overflow-hidden">
-        <div className="p-1.5 sm:p-6 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-1.5 sm:gap-4 bg-slate-50">
-          <div>
-            <h3 className="text-[11px] sm:text-lg font-semibold text-slate-800">Production Timesheets</h3>
-            <p className="hidden sm:block text-xs text-slate-500 mt-0.5">
-              Scan IN / OUT data from Production Terminal. Authorized override only.
-            </p>
-          </div>
-          {editable && (
-            <AddTimesheetModal
-              workOrderNo={id}
-              employees={employees}
-              routingProcesses={routingProcesses}
-            />
-          )}
-        </div>
-
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
         {rows.length === 0 ? (
-          <div className="text-center py-12 text-slate-500">
-            <p className="text-sm">No timesheets recorded for this work order yet.</p>
-          </div>
+          <EmptyState icon={Clock} tone="indigo" title="No timesheets yet" description="Entries appear when operators scan in and out at the Production Terminal." />
         ) : (
-          <div className="overflow-x-auto w-full">
-            <table className="w-full text-sm text-left min-w-[600px] lg:min-w-[860px]">
-              <thead className="text-[10px] sm:text-xs text-slate-500 uppercase bg-slate-100 border-b border-slate-200">
-                <tr>
-                  <th className="px-1.5 py-1.5 sm:px-4 sm:py-3 font-semibold">Employee</th>
-                  <th className="px-1.5 py-1.5 sm:px-4 sm:py-3 font-semibold">Process</th>
-                  <th className="px-1.5 py-1.5 sm:px-4 sm:py-3 font-semibold">Time In</th>
-                  <th className="px-1.5 py-1.5 sm:px-4 sm:py-3 font-semibold">Time Out</th>
-                  <th className="px-1.5 py-1.5 sm:px-4 sm:py-3 font-semibold text-right">Total Min</th>
-                  <th className="px-1.5 py-1.5 sm:px-4 sm:py-3 font-semibold text-center">Completed</th>
-                  <th className="px-1.5 py-1.5 sm:px-4 sm:py-3 font-semibold text-right">Qty</th>
-                  <th className="px-1.5 py-1.5 sm:px-4 sm:py-3 font-semibold">Machine</th>
-                  <th className="px-1.5 py-1.5 sm:px-4 sm:py-3 font-semibold text-center">Parameters</th>
-                  <th className="px-1.5 py-1.5 sm:px-4 sm:py-3 font-semibold text-right">Actions</th>
+          <div className="w-full overflow-x-auto">
+            <table className="w-full min-w-[900px] text-left text-[13px]">
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50/70 text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                  <th className="py-2 pl-4 pr-3 font-medium">Employee</th>
+                  <th className="px-3 py-2 font-medium">Process</th>
+                  <th className="px-3 py-2 font-medium">Time In · Out</th>
+                  <th className="px-3 py-2 text-right font-medium">Minutes</th>
+                  <th className="px-3 py-2 font-medium">Completed</th>
+                  <th className="px-3 py-2 text-right font-medium">Qty · Running</th>
+                  <th className="px-3 py-2 font-medium">Machine</th>
+                  <th className="px-3 py-2 text-center font-medium">Parameters</th>
+                  <th className="px-4 py-2 text-right font-medium">
+                    <span className="sr-only">Actions</span>
+                  </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200 text-[10px] sm:text-sm">
-                {rows.map((ts: any) => (
-                  <tr key={ts.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-1.5 py-1.5 sm:px-4 sm:py-3 font-medium text-slate-800">{ts.employee.name}</td>
-                    <td className="px-1.5 py-1.5 sm:px-4 sm:py-3">
-                      <div className="font-medium text-slate-700">{ts.processName}</div>
-                      <div className="text-[9px] sm:text-xs text-slate-500">{ts.inProcessDescription}</div>
-                    </td>
-                    <td className="px-1.5 py-1.5 sm:px-4 sm:py-3 text-slate-600 whitespace-nowrap">
-                      {ts.timeIn ? new Date(ts.timeIn).toLocaleString() : "-"}
-                    </td>
-                    <td className="px-1.5 py-1.5 sm:px-4 sm:py-3 text-slate-600 whitespace-nowrap">
-                      {ts.timeOut ? new Date(ts.timeOut).toLocaleString() : "-"}
-                    </td>
-                    <td className="px-1.5 py-1.5 sm:px-4 sm:py-3 text-right font-medium">
-                      {ts.totalMinutes ? Number(ts.totalMinutes).toString() : "-"}
-                    </td>
-                    <td className="px-1.5 py-1.5 sm:px-4 sm:py-3 text-center">
-                      <span
-                        className={`px-1.5 py-0.5 sm:px-2 sm:py-0.5 rounded-full text-[9px] sm:text-xs font-medium ${
-                          ts.completed ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
-                        }`}
-                      >
-                        {ts.completed ? "Yes" : "No"}
-                      </span>
-                    </td>
-                    <td className="px-1.5 py-1.5 sm:px-4 sm:py-3">
-                      <div className="flex flex-col items-end gap-1">
-                        <span className="font-medium">
-                          {ts.completedQty ? Number(ts.completedQty).toString() : "-"}
-                        </span>
-                        {ts.completedQty != null && totalOrderQty > 0 && (
-                          <div className="w-16 sm:w-24 text-[9px] sm:text-[10px]">
-                            <div className="flex justify-between text-slate-500 mb-0.5">
-                              <span>Rem: {Math.max(0, totalOrderQty - ts.runningSum)}</span>
-                              <span>{Math.min(100, Math.round((ts.runningSum / totalOrderQty) * 100))}%</span>
-                            </div>
-                            <div className="w-full h-1 sm:h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                              <div
-                                className="h-full bg-blue-500 rounded-full"
-                                style={{ width: `${Math.min(100, (ts.runningSum / totalOrderQty) * 100)}%` }}
-                              />
-                            </div>
+              <tbody className="divide-y divide-slate-100">
+                {rows.map((ts: any) => {
+                  const pct = totalOrderQty > 0 ? Math.min(100, (ts.runningSum / totalOrderQty) * 100) : 0;
+                  const open = ts.timeIn && !ts.timeOut;
+                  return (
+                    <tr key={ts.id} className="align-top transition-colors hover:bg-slate-50/60">
+                      <td className="py-2 pl-4 pr-3 font-medium text-slate-800">{ts.employee?.name ?? "—"}</td>
+                      <td className="px-3 py-2">
+                        <p className="font-medium text-slate-700">{ts.processName}</p>
+                        <p className="text-[11px] text-slate-400">{ts.inProcessDescription}</p>
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2 text-xs text-slate-600">
+                        <p>{fmtDateTime(ts.timeIn)}</p>
+                        <p className={open ? "font-medium text-amber-700" : "text-slate-400"}>{open ? "Still scanned in" : fmtDateTime(ts.timeOut)}</p>
+                      </td>
+                      <td className="px-3 py-2 text-right font-medium tabular-nums text-slate-800">
+                        {ts.totalMinutes ? Number(ts.totalMinutes) : <span className="text-slate-300">—</span>}
+                      </td>
+                      <td className="px-3 py-2">
+                        <StatusBadge status={ts.completed ? "Yes" : "No"} tone={ts.completed ? "emerald" : "amber"} />
+                      </td>
+                      <td className="px-3 py-2">
+                        <div className="ml-auto w-28">
+                          <div className="flex items-baseline justify-between gap-2">
+                            <span className="font-semibold tabular-nums text-slate-900">{ts.completedQty ? Number(ts.completedQty) : "—"}</span>
+                            {totalOrderQty > 0 && <span className="text-[11px] tabular-nums text-slate-400">{Math.round(pct)}%</span>}
                           </div>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-1.5 py-1.5 sm:px-4 sm:py-3 text-slate-600">{ts.machineCodes || "-"}</td>
-                    <td className="px-1.5 py-1.5 sm:px-4 sm:py-3 text-center">
-                      <ParameterDetailDrawer
-                        welding={ts.weldingParameter ? JSON.parse(JSON.stringify(ts.weldingParameter)) : null}
-                        spray={ts.sprayParameter ? JSON.parse(JSON.stringify(ts.sprayParameter)) : null}
-                        machining={ts.machiningParameter ? JSON.parse(JSON.stringify(ts.machiningParameter)) : null}
-                        expectedType={ts.processName}
-                        targetTimesheetId={ts.id}
-                        employees={employees}
-                        workOrderNo={id}
-                        editable={editable}
-                        supportData={{
-                          weldingMachines: JSON.parse(JSON.stringify(weldingMachines)),
-                          machiningMachines: JSON.parse(JSON.stringify(machiningMachines)),
-                          elcometers: JSON.parse(JSON.stringify(elcometers)),
-                          joints: JSON.parse(JSON.stringify(joints)),
-                          materialTypes: JSON.parse(JSON.stringify(materialTypes)),
-                          weldingTypes: JSON.parse(JSON.stringify(weldingTypes)),
-                        }}
-                      />
-                    </td>
-                    <td className="px-1.5 py-1.5 sm:px-4 sm:py-3 text-right">
-                      {editable && (
-                        <AddTimesheetModal
-                          workOrderNo={id}
+                          {ts.completedQty != null && totalOrderQty > 0 && (
+                            <>
+                              <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                                <div className={`h-full rounded-full ${pct >= 100 ? "bg-emerald-500" : "bg-indigo-500"}`} style={{ width: `${pct}%` }} />
+                              </div>
+                              <p className="mt-0.5 text-[11px] tabular-nums text-slate-400">{Math.max(0, totalOrderQty - ts.runningSum)} remaining</p>
+                            </>
+                          )}
+                          {Number(ts.rejectedQty) > 0 && <p className="text-[11px] font-medium text-rose-600">{Number(ts.rejectedQty)} rejected</p>}
+                        </div>
+                      </td>
+                      <td className="px-3 py-2 font-mono text-xs text-slate-600">{ts.machineCodes || <span className="font-sans text-slate-300">—</span>}</td>
+                      <td className="px-3 py-2 text-center">
+                        <ParameterDetailDrawer
+                          welding={ts.weldingParameter ? JSON.parse(JSON.stringify(ts.weldingParameter)) : null}
+                          spray={ts.sprayParameter ? JSON.parse(JSON.stringify(ts.sprayParameter)) : null}
+                          machining={ts.machiningParameter ? JSON.parse(JSON.stringify(ts.machiningParameter)) : null}
+                          expectedType={ts.processName}
+                          targetTimesheetId={ts.id}
                           employees={employees}
-                          routingProcesses={routingProcesses}
-                          timesheet={{
-                            id: ts.id,
-                            routingProcessId: ts.routingProcessId,
-                            employeeId: ts.employeeId,
-                            timeIn: ts.timeIn ? ts.timeIn.toISOString() : null,
-                            timeOut: ts.timeOut ? ts.timeOut.toISOString() : null,
-                            completed: ts.completed,
-                            completedQty: ts.completedQty ? Number(ts.completedQty) : "",
-                            machineCodes: ts.machineCodes || "",
-                          }}
+                          workOrderNo={id}
+                          editable={editable}
+                          supportData={supportData}
                         />
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="px-4 py-2 text-right">
+                        {editable && (
+                          <AddTimesheetModal
+                            workOrderNo={id}
+                            employees={employees}
+                            routingProcesses={routingProcesses}
+                            timesheet={{
+                              id: ts.id,
+                              routingProcessId: ts.routingProcessId,
+                              employeeId: ts.employeeId,
+                              timeIn: ts.timeIn ? ts.timeIn.toISOString() : null,
+                              timeOut: ts.timeOut ? ts.timeOut.toISOString() : null,
+                              completed: ts.completed,
+                              completedQty: ts.completedQty ? Number(ts.completedQty) : "",
+                              machineCodes: ts.machineCodes || "",
+                            }}
+                          />
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
       </div>
-    </div>
+    </WorkOrderShell>
   );
+}
+
+/** Deterministic "21 Sep 2026, 14:05" (rendered on the server, so avoid locale-dependent output). */
+function fmtDateTime(d?: Date | string | null): string {
+  if (!d) return "—";
+  const dt = typeof d === "string" ? new Date(d) : d;
+  if (Number.isNaN(dt.getTime())) return "—";
+  const mon = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][dt.getMonth()];
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(dt.getDate())} ${mon} ${dt.getFullYear()}, ${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
 }

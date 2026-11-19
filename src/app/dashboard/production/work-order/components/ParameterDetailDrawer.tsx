@@ -2,7 +2,8 @@
 import { SearchableSelect } from "@/components/SearchableSelect";
 import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { X, Plus, Trash2, Edit, Save } from "lucide-react";
+import { X, Plus, Trash2, Edit, Save, SlidersHorizontal } from "lucide-react";
+import { buttonClass } from "@/components/form-ui";
 import { updateProcessParameters } from "../actions";
 type Props = {
   welding?: any;
@@ -99,29 +100,43 @@ export default function ParameterDetailDrawer({
           setIsEditing(false);
           setError("");
         }}
-        className="px-1.5 py-0.5 sm:px-3 sm:py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded sm:rounded-lg text-[9px] sm:text-xs font-semibold hover:bg-blue-100 transition-colors shadow-sm"
+        className={has ? buttonClass("secondary", "xs") : buttonClass("ghost", "xs", "text-slate-400")}
+        title={has ? `View ${type} parameters` : `No ${type} parameters recorded yet`}
       >
-        View
+        <SlidersHorizontal size={11} /> {has ? "View" : "Not recorded"}
       </button>
 
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex flex-col bg-white animate-in fade-in slide-in-from-bottom-4 duration-200">
-          <div className="w-full h-full flex flex-col">
-            <div className="px-3 py-2 sm:px-6 sm:py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-              <h3 className="text-[11px] sm:text-lg font-semibold text-slate-800">
-                Process Parameter — {type} {isEditing && <span className="text-[9px] sm:text-sm font-normal text-indigo-600">(Editing)</span>}
-              </h3>
+        <div className="fixed inset-0 z-50 flex justify-end text-left">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setOpen(false)} />
+          <div className="relative flex h-full w-full max-w-4xl flex-col bg-white shadow-2xl animate-in slide-in-from-right-8 duration-200">
+            <div className="h-0.5 shrink-0 bg-gradient-to-r from-indigo-500 via-indigo-500 to-violet-500" />
+            <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-4 py-2.5">
+              <div className="flex min-w-0 items-center gap-2.5">
+                <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600 ring-1 ring-inset ring-indigo-600/15">
+                  <SlidersHorizontal size={15} />
+                </span>
+                <div className="min-w-0">
+                  <h3 className="truncate text-[13px] font-semibold leading-tight text-slate-800">
+                    {type} parameters
+                    {isEditing && <span className="ml-1.5 font-normal text-indigo-600">· editing</span>}
+                  </h3>
+                  <p className="truncate font-mono text-[11px] leading-tight text-slate-500">{workOrderNo}</p>
+                </div>
+              </div>
               <button
+                type="button"
                 onClick={() => setOpen(false)}
-                className="p-0.5 sm:p-1 hover:bg-slate-200 rounded-md text-slate-500 transition-colors"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                aria-label="Close"
               >
-                <X size={14} className="sm:w-5 sm:h-5" />
+                <X size={16} />
               </button>
             </div>
 
-            <div className="p-3 sm:p-6 overflow-y-auto flex-1">
+            <div className="flex-1 overflow-y-auto p-4">
               {error && (
-                <div className="mb-3 sm:mb-4 p-2 sm:p-3 bg-red-50 border border-red-200 text-red-700 rounded-md sm:rounded-lg text-[9px] sm:text-sm">
+                <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[13px] text-rose-700">
                   {error}
                 </div>
               )}
@@ -172,7 +187,7 @@ export default function ParameterDetailDrawer({
               )}
             </div>
 
-            <div className="px-3 py-2 sm:px-6 sm:py-3 border-t border-slate-100 bg-slate-50 flex justify-between items-center">
+            <div className="flex shrink-0 items-center justify-between border-t border-slate-100 bg-slate-50/60 px-4 py-2.5">
               <div>
                 {editable && !isEditing && (has || targetTimesheetId) && (
                   <button
@@ -246,38 +261,32 @@ export default function ParameterDetailDrawer({
                         });
                       }
                     }}
-                    className="inline-flex items-center gap-1 sm:gap-1.5 px-2 py-1 sm:px-4 sm:py-2 border border-indigo-200 text-indigo-600 rounded sm:rounded-lg hover:bg-indigo-50 text-[10px] sm:text-sm font-semibold transition-colors"
+                    className={buttonClass("secondary", "md")}
                   >
-                    <Edit size={12} className="sm:w-4 sm:h-4" />
+                    <Edit size={14} />
                     {has ? "Update" : "Add Parameters"}
                   </button>
                 )}
               </div>
 
-              <div className="flex gap-1.5 sm:gap-2">
+              <div className="flex gap-2">
                 {isEditing ? (
                   <>
-                    <button
-                      onClick={() => setIsEditing(false)}
-                      className="px-2 py-1 sm:px-4 sm:py-2 border border-slate-200 text-slate-600 rounded sm:rounded-lg hover:bg-slate-100 text-[10px] sm:text-sm font-medium transition-colors"
-                    >
+                    <button type="button" onClick={() => setIsEditing(false)} className={buttonClass("ghost", "md")}>
                       Cancel
                     </button>
                     <button
                       onClick={handleSave}
                       disabled={isPending}
-                      className="inline-flex items-center gap-1 sm:gap-1.5 px-2 py-1 sm:px-4 sm:py-2 bg-indigo-600 text-white rounded sm:rounded-lg hover:bg-indigo-700 disabled:opacity-50 text-[10px] sm:text-sm font-semibold transition-colors"
+                      className={buttonClass("primary", "md")}
                     >
-                      <Save size={12} className="sm:w-4 sm:h-4" />
+                      <Save size={14} />
                       {isPending ? "Saving..." : "Save"}
                     </button>
                   </>
                 ) : (
-                  <button
-                    onClick={() => setOpen(false)}
-                    className="px-2 py-1 sm:px-4 sm:py-2 border border-slate-200 text-slate-600 rounded sm:rounded-lg hover:bg-slate-100 text-[10px] sm:text-sm font-medium transition-colors"
-                  >
-                    Cancel
+                  <button type="button" onClick={() => setOpen(false)} className={buttonClass("ghost", "md")}>
+                    Close
                   </button>
                 )}
               </div>

@@ -1,71 +1,67 @@
 "use client";
-import { SearchableSelect } from "@/components/SearchableSelect";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { customConfirm } from "@/lib/customConfirm";
+import { AlertCircle, AlertTriangle, Check, FileText, Loader2, Lock, Save, ShoppingCart, Workflow } from "lucide-react";
+import { Card, Field, buttonClass, inputClass, readOnlyClass, textareaClass, type ButtonVariant } from "@/components/form-ui";
 import { transitionWorkOrderStatus, updateWorkOrderEditable } from "../actions";
-type Uom = { id: string; uomName: string };
+import { fmtWoDate } from "./WorkOrderShell";
 
 type Props = {
   wo: any;
-  uoms: Uom[];
+  /** Completed on paper, but some routing steps are still open. */
+  openStepsWhileCompleted?: boolean;
 };
 
-const STATUS_STYLES: Record<string, string> = {
-  Draft: "bg-slate-100 text-slate-700",
-  Proceed: "bg-blue-100 text-blue-700",
-  WIP: "bg-amber-100 text-amber-700",
-  "On Hold": "bg-orange-100 text-orange-700",
-  "Pending for QC": "bg-purple-100 text-purple-700",
-  Completed: "bg-emerald-100 text-emerald-700",
-  Void: "bg-rose-100 text-rose-700",
-  Cancelled: "bg-rose-100 text-rose-700",
-};
-
-const NEXT: Record<string, { label: string; to: string; tone: string }[]> = {
+/** Allowed moves per status (mirrors ALLOWED in ../actions.ts). */
+const NEXT: Record<string, { label: string; to: string; variant: ButtonVariant; confirm?: string }[]> = {
   Draft: [
-    { label: "Proceed", to: "Proceed", tone: "bg-blue-600 hover:bg-blue-700 text-white" },
-    { label: "Void", to: "Void", tone: "bg-rose-100 text-rose-700 hover:bg-rose-200" },
+    { label: "Proceed", to: "Proceed", variant: "primary" },
+    { label: "Void", to: "Void", variant: "danger", confirm: "Void this work order? This can't be undone." },
   ],
   Proceed: [
-    { label: "Mark WIP", to: "WIP", tone: "bg-amber-600 hover:bg-amber-700 text-white" },
-    { label: "Cancel", to: "Cancelled", tone: "bg-rose-100 text-rose-700 hover:bg-rose-200" },
+    { label: "Mark WIP", to: "WIP", variant: "primary" },
+    { label: "Cancel WO", to: "Cancelled", variant: "danger", confirm: "Cancel this work order? This can't be undone." },
   ],
   WIP: [
-    { label: "Hold", to: "On Hold", tone: "bg-orange-100 text-orange-700 hover:bg-orange-200" },
-    { label: "Cancel", to: "Cancelled", tone: "bg-rose-100 text-rose-700 hover:bg-rose-200" },
+    { label: "Put On Hold", to: "On Hold", variant: "warn" },
+    { label: "Cancel WO", to: "Cancelled", variant: "danger", confirm: "Cancel this work order? This can't be undone." },
   ],
   "On Hold": [
-    { label: "Resume", to: "WIP", tone: "bg-amber-600 hover:bg-amber-700 text-white" },
-    { label: "Cancel", to: "Cancelled", tone: "bg-rose-100 text-rose-700 hover:bg-rose-200" },
+    { label: "Resume (WIP)", to: "WIP", variant: "primary" },
+    { label: "Cancel WO", to: "Cancelled", variant: "danger", confirm: "Cancel this work order? This can't be undone." },
   ],
   "Pending for QC": [
-    { label: "QC Approve → Complete", to: "Completed", tone: "bg-emerald-600 hover:bg-emerald-700 text-white" },
-    { label: "Send back On Hold", to: "On Hold", tone: "bg-orange-100 text-orange-700 hover:bg-orange-200" },
+    { label: "QC Approve → Complete", to: "Completed", variant: "success" },
+    { label: "Send back On Hold", to: "On Hold", variant: "warn" },
   ],
-  Completed: [
-    { label: "Revert to WIP", to: "WIP", tone: "bg-amber-600 hover:bg-amber-700 text-white" }
-  ],
+  Completed: [{ label: "Revert to WIP", to: "WIP", variant: "warn", confirm: "Revert this completed work order to WIP?" }],
   Void: [],
   Cancelled: [],
 };
 
-export default function WorkOrderHeader({ wo, uoms }: Props) {
+/** Main path through the statuses, shown as a stepper. */
+const FLOW = ["Draft", "Proceed", "WIP", "Pending for QC", "Completed"] as const;
+
+export default function WorkOrderHeader({ wo, openStepsWhileCompleted }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [pendingTo, setPendingTo] = useState<string | null>(null);
   const [error, setError] = useState("");
 
   const [date, setDate] = useState(() => new Date(wo.date).toISOString().split("T")[0]);
   const [remark, setRemark] = useState<string>(wo.remark ?? "");
   const [partName, setPartName] = useState<string>(wo.partName ?? "");
-  const [labelExpiryDate, setLabelExpiryDate] = useState<string>(
-    wo.labelExpiryDate ? new Date(wo.labelExpiryDate).toISOString().split("T")[0] : "",
-  );
-  const [labelQty, setLabelQty] = useState<string>(wo.labelQty != null ? String(wo.labelQty) : "");
-  const [labelUomId, setLabelUomId] = useState<string>(wo.labelUomId ?? "");
   const [uploadUrl, setUploadUrl] = useState<string>(wo.uploadUrl ?? "");
   const [stageQc, setStageQc] = useState<boolean>(wo.stageQc ?? true);
 
   const editable = !["Void", "Cancelled", "Completed"].includes(wo.status);
+  const dirty =
+    date !== new Date(wo.date).toISOString().split("T")[0] ||
+    remark !== (wo.remark ?? "") ||
+    partName !== (wo.partName ?? "") ||
+    uploadUrl !== (wo.uploadUrl ?? "") ||
+    stageQc !== (wo.stageQc ?? true);
 
   function save() {
     setError("");
@@ -74,9 +70,6 @@ export default function WorkOrderHeader({ wo, uoms }: Props) {
         date,
         remark,
         partName,
-        labelExpiryDate: labelExpiryDate || null,
-        labelQty: labelQty || null,
-        labelUomId: labelUomId || null,
         uploadUrl: uploadUrl || null,
         stageQc,
       });
@@ -85,243 +78,186 @@ export default function WorkOrderHeader({ wo, uoms }: Props) {
     });
   }
 
-  function transition(to: string) {
+  async function transition(to: string, confirm?: string) {
+    if (confirm && !(await customConfirm(confirm))) return;
     setError("");
+    setPendingTo(to);
     startTransition(async () => {
       const res = await transitionWorkOrderStatus(wo.workOrderNo, to);
+      setPendingTo(null);
       if (!res.success) setError(res.error || "Failed to update status");
       else router.refresh();
     });
   }
 
   const actions = NEXT[wo.status] ?? [];
+  const flowIndex = FLOW.indexOf(wo.status as (typeof FLOW)[number]);
+  // On Hold sits between WIP and QC; Void / Cancelled end the flow early.
+  const reached = flowIndex >= 0 ? flowIndex : wo.status === "On Hold" ? 2 : wo.status === "Void" ? 0 : wo.status === "Cancelled" ? 1 : -1;
+  const offPath = flowIndex < 0;
 
   return (
-    <div className="space-y-4 sm:space-y-6">
+    <div className="space-y-4">
       {error && (
-        <div className="bg-red-50 text-red-600 p-2 sm:p-4 rounded-md sm:rounded-lg text-xs sm:text-sm border border-red-200">{error}</div>
+        <div className="flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[13px] text-rose-700">
+          <AlertCircle size={14} className="shrink-0" />
+          {error}
+        </div>
       )}
 
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1 sm:gap-0">
-        <span
-          className={`px-1 py-0.5 sm:px-3 sm:py-1 rounded sm:rounded-full text-[8px] sm:text-xs font-semibold shrink-0 ${
-            STATUS_STYLES[wo.status] ?? "bg-slate-100 text-slate-700"
-          }`}
-        >
-          Status: {wo.status}
-        </span>
-        <div className="flex gap-1 flex-wrap justify-start sm:justify-end w-full sm:w-auto">
-          {actions.map((a) => (
-            <button
-              key={a.to}
-              onClick={() => transition(a.to)}
-              disabled={isPending}
-              className={`px-1.5 py-0.5 sm:px-3 sm:py-1.5 rounded text-[9px] sm:text-sm font-medium disabled:opacity-50 flex-1 sm:flex-none text-center ${a.tone}`}
-            >
-              {a.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* From Sales Order (read-only) */}
-      <Section title="From Sales Order">
-        <ReadOnly label="Work Order No" value={wo.workOrderNo} />
-        <Editable label="Date" required>
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            disabled={!editable}
-            className={inputCls}
-          />
-        </Editable>
-        <ReadOnly label="Customer" value={wo.customer?.customerName} />
-        <ReadOnly label="Internal Quotation No" value={wo.internalQuotationNo} />
-        <ReadOnly label="Customer PO Ref" value={wo.customerPoRef} />
-        <ReadOnly label="Project Code" value={wo.projectCode} />
-        <ReadOnly label="Delivery Date" value={fmtDate(wo.deliveryDate)} />
-        <ReadOnly label="Quantity" value={wo.quantity != null ? String(wo.quantity) : "-"} />
-        <ReadOnly label="UOM" value={wo.uom} />
-        <ReadOnly label="Amount" value={wo.amount != null ? Number(wo.amount).toFixed(2) : "-"} />
-      </Section>
-
-      <div className="flex items-start justify-between gap-3 p-2 sm:p-4 border border-slate-200 rounded-md sm:rounded-lg bg-slate-50">
-        <div>
-          <div className="text-[10px] sm:text-sm font-medium text-slate-700">QC at every stage</div>
-          <p className="text-[9px] sm:text-xs text-slate-500 mt-0.5">
-            {stageQc
-              ? "ON: QC must approve each stage before the next stage can start. Final QC still happens at the end."
-              : "OFF: stages flow one after another; QC checks only once at the end (final QC)."}
+      {/* Workflow */}
+      <Card
+        icon={Workflow}
+        tone="indigo"
+        title="Workflow"
+        description="Draft → Proceed → WIP → Pending for QC → Completed"
+        actions={
+          actions.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-1.5">
+              {actions.map((a) => (
+                <button
+                  key={a.to}
+                  type="button"
+                  onClick={() => transition(a.to, a.confirm)}
+                  disabled={isPending}
+                  className={buttonClass(a.variant, "sm")}
+                >
+                  {pendingTo === a.to && <Loader2 size={12} className="animate-spin" />}
+                  {a.label}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <span className="inline-flex items-center gap-1 text-xs text-slate-400">
+              <Lock size={12} /> No further moves
+            </span>
+          )
+        }
+      >
+        <ol className="grid grid-cols-5 gap-1">
+          {FLOW.map((s, i) => {
+            const done = i < reached || (i === reached && s === "Completed");
+            const current = i === reached && !offPath;
+            return (
+              <li key={s} className="min-w-0">
+                <div
+                  className={`h-1.5 rounded-full ${
+                    done ? "bg-emerald-500" : current ? "bg-indigo-500" : i === reached && offPath ? (wo.status === "On Hold" ? "bg-amber-400" : "bg-rose-400") : "bg-slate-200"
+                  }`}
+                />
+                <p className={`mt-1 flex items-center gap-1 truncate text-[11px] ${current ? "font-semibold text-indigo-700" : done ? "text-emerald-700" : "text-slate-400"}`}>
+                  {done && <Check size={11} className="shrink-0" />}
+                  {s}
+                </p>
+              </li>
+            );
+          })}
+        </ol>
+        {offPath && (
+          <p className="mt-2 text-[11px] text-slate-500">
+            Currently <strong className="font-semibold text-slate-700">{wo.status}</strong>
+            {wo.status === "On Hold" ? ": workers may scan out but not in." : "."}
           </p>
-          {stageQc !== (wo.stageQc ?? true) && editable && (
-            <p className="text-[9px] sm:text-xs text-amber-600 mt-0.5">Click Save to apply.</p>
-          )}
-        </div>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={stageQc}
-          aria-label="QC at every stage"
-          onClick={() => setStageQc((v) => !v)}
-          disabled={!editable}
-          className={`relative inline-flex h-5 w-9 sm:h-6 sm:w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
-            stageQc ? "bg-emerald-600" : "bg-slate-300"
-          }`}
+        )}
+        {openStepsWhileCompleted && (
+          <p className="mt-2 flex items-center gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[12px] text-amber-800">
+            <AlertTriangle size={13} className="shrink-0" />
+            Marked Completed, but some routing processes are not Completed yet.
+          </p>
+        )}
+      </Card>
+
+      <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-2">
+        {/* From Sales Order (read-only) */}
+        <Card icon={ShoppingCart} tone="sky" title="From Sales Order" description="Fixed by the sales order batch — quantity can't change" className="h-full">
+          <dl className="grid grid-cols-1 gap-x-4 gap-y-3 text-[13px] sm:grid-cols-2">
+            <Info label="Work Order No" value={wo.workOrderNo} mono />
+            <Info label="Customer" value={wo.customer?.customerName} />
+            <Info label="Internal Quotation No" value={wo.internalQuotationNo} mono />
+            <Info label="Customer PO Ref" value={wo.customerPoRef} mono />
+            <Info label="Project Code" value={wo.projectCode} mono />
+            <Info label="Delivery Date" value={fmtWoDate(wo.deliveryDate)} />
+            <Info label="Quantity" value={wo.quantity != null ? `${Number(wo.quantity)} ${wo.uom || ""}` : null} />
+            <Info label="Amount" value={wo.amount != null ? Number(wo.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : null} />
+            <Info label="Job Description" value={wo.jobDescription} wide />
+          </dl>
+        </Card>
+
+        {/* Editable */}
+        <Card
+          icon={FileText}
+          tone="indigo"
+          title="Work order details"
+          description={editable ? "Editable until the work order is Completed" : `Read-only while ${wo.status}`}
+          className="h-full"
         >
-          <span
-            className={`inline-block h-4 w-4 sm:h-5 sm:w-5 transform rounded-full bg-white shadow transition-transform ${
-              stageQc ? "translate-x-4 sm:translate-x-5" : "translate-x-0.5"
-            }`}
-          />
-        </button>
-      </div>
+          <div className="space-y-3">
+            <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
+              <Field label="Date" required help={editable ? "Forward dates only" : undefined}>
+                <input type="date" value={date} onChange={(e) => setDate(e.target.value)} disabled={!editable} className={inputClass} />
+              </Field>
+              <Field label="Part Name">
+                <input type="text" value={partName} onChange={(e) => setPartName(e.target.value)} disabled={!editable} className={inputClass} />
+              </Field>
+            </div>
+            <Field label="Remark">
+              <textarea value={remark} onChange={(e) => setRemark(e.target.value)} disabled={!editable} rows={2} className={textareaClass} />
+            </Field>
+            <Field label="Upload (link)" help="Files can also be attached on the Files tab">
+              {editable ? (
+                <input value={uploadUrl} onChange={(e) => setUploadUrl(e.target.value)} placeholder="https://..." className={inputClass} />
+              ) : uploadUrl ? (
+                <a href={uploadUrl} target="_blank" rel="noopener noreferrer" className={`${readOnlyClass} flex items-center text-indigo-600 hover:underline`}>
+                  {uploadUrl}
+                </a>
+              ) : (
+                <div className={`${readOnlyClass} flex items-center`}>—</div>
+              )}
+            </Field>
 
-      <div>
-        <label className="text-sm font-medium text-slate-700">Part Name</label>
-        <input
-          type="text"
-          value={partName}
-          onChange={(e) => setPartName(e.target.value)}
-          disabled={!editable}
-          className={`mt-1.5 ${inputCls}`}
-        />
-      </div>
+            <div className="flex items-start justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2.5">
+              <div className="min-w-0">
+                <p className="text-[13px] font-medium text-slate-800">QC at every stage</p>
+                <p className="text-[11px] text-slate-500">
+                  {stageQc
+                    ? "On: QC approves each stage before the next can start. Final QC still happens at the end."
+                    : "Off: stages flow one after another; QC checks once at the end."}
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={stageQc}
+                aria-label="QC at every stage"
+                onClick={() => setStageQc((v) => !v)}
+                disabled={!editable}
+                className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${stageQc ? "bg-emerald-600" : "bg-slate-300"}`}
+              >
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${stageQc ? "translate-x-4" : "translate-x-0.5"}`} />
+              </button>
+            </div>
 
-      <div>
-        <label className="text-sm font-medium text-slate-700">Job Description</label>
-        <div className="mt-1.5 px-3 py-2 border border-slate-100 rounded-lg text-sm bg-slate-50 text-slate-700">
-          {wo.jobDescription || "-"}
-        </div>
-      </div>
-
-      <div>
-        <label className="text-sm font-medium text-slate-700">Remark</label>
-        <textarea
-          value={remark}
-          onChange={(e) => setRemark(e.target.value)}
-          disabled={!editable}
-          rows={2}
-          className={`mt-1.5 ${inputCls}`}
-        />
-      </div>
-
-      {/* Label printing — not saved into system per spec */}
-      <Section title="Delivery Label (print-only)">
-        <Editable label="Label Expiry Date">
-          <input
-            type="date"
-            value={labelExpiryDate}
-            onChange={(e) => setLabelExpiryDate(e.target.value)}
-            disabled={!editable}
-            className={inputCls}
-          />
-        </Editable>
-        <Editable label="Label Qty" required>
-          <input
-            type="number"
-            step="0.01"
-            value={labelQty}
-            onChange={(e) => setLabelQty(e.target.value)}
-            disabled={!editable}
-            className={inputCls}
-          />
-        </Editable>
-        <Editable label="Label UOM" required>
-          <SearchableSelect
-            value={labelUomId}
-            onChange={(e) => setLabelUomId(e.target.value)}
-            disabled={!editable}
-            className={inputCls}
-          >
-            <option value="">Select UOM</option>
-            {uoms.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.uomName}
-              </option>
-            ))}
-          </SearchableSelect>
-        </Editable>
-      </Section>
-
-      <Section title="Quality Control (from QC Approval)">
-        <ReadOnly label="QC Acceptance" value={wo.qcAcceptance ?? "N/A"} />
-        <ReadOnly label="QC By" value={wo.qcBy?.name ?? "-"} />
-        <ReadOnly label="QC Date" value={fmtDate(wo.qcDate)} />
-      </Section>
-
-      <div>
-        <label className="text-sm font-medium text-slate-700">Upload File (URL)</label>
-        <input
-          value={uploadUrl}
-          onChange={(e) => setUploadUrl(e.target.value)}
-          placeholder="https://..."
-          disabled={!editable}
-          className={`mt-1.5 ${inputCls}`}
-        />
-      </div>
-
-      <div className="pt-2 sm:pt-4 border-t border-slate-200 flex justify-end">
-        <button
-          onClick={save}
-          disabled={!editable || isPending}
-          className="px-3 py-1 sm:px-5 sm:py-2 bg-blue-600 text-white rounded sm:rounded-lg hover:bg-blue-700 disabled:opacity-50 text-[10px] sm:text-sm font-medium shadow-sm shadow-blue-500/20 w-full sm:w-auto"
-        >
-          {isPending ? "Saving..." : "Save Changes"}
-        </button>
+            {editable && (
+              <div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-3">
+                {dirty && <span className="text-[11px] text-amber-700">Unsaved changes</span>}
+                <button type="button" onClick={save} disabled={isPending || !dirty} className={buttonClass("primary", "md")}>
+                  {isPending && !pendingTo ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                  {isPending && !pendingTo ? "Saving…" : "Save Changes"}
+                </button>
+              </div>
+            )}
+          </div>
+        </Card>
       </div>
     </div>
   );
 }
 
-function fmtDate(d?: string | Date | null) {
-  if (!d) return "-";
-  // Deterministic dd/MM/yyyy from ISO string to avoid SSR/client locale mismatch.
-  const iso = typeof d === "string" ? d : d.toISOString();
-  const [y, m, day] = iso.slice(0, 10).split("-");
-  return `${day}/${m}/${y}`;
-}
-
-const inputCls =
-  "w-full px-1 py-0.5 sm:px-3 sm:py-2 border border-slate-200 rounded sm:rounded-lg text-[9px] sm:text-sm bg-white focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition-colors disabled:bg-slate-50 disabled:text-slate-500";
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Info({ label, value, mono, wide }: { label: string; value?: string | null; mono?: boolean; wide?: boolean }) {
   return (
-    <div>
-      <h3 className="text-[9px] sm:text-sm font-semibold text-slate-700 uppercase tracking-wide mb-0.5 sm:mb-2 pb-0.5 sm:pb-2 border-b border-slate-100">
-        {title}
-      </h3>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-1 sm:gap-4">{children}</div>
-    </div>
-  );
-}
-
-function ReadOnly({ label, value }: { label: string; value?: string | null }) {
-  return (
-    <div>
-      <label className="text-[8px] sm:text-xs font-medium text-slate-500">{label}</label>
-      <div className="mt-0 sm:mt-1 px-1 py-0.5 sm:px-3 sm:py-2 border border-slate-100 rounded sm:rounded-lg text-[9px] sm:text-sm bg-slate-50 text-slate-700 min-h-[20px] sm:min-h-[38px] flex items-center">
-        {value || "-"}
-      </div>
-    </div>
-  );
-}
-
-function Editable({
-  label,
-  required,
-  children,
-}: {
-  label: string;
-  required?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <div>
-      <label className="text-[8px] sm:text-xs font-medium text-slate-500">
-        {label} {required && <span className="text-red-500">*</span>}
-      </label>
-      <div className="mt-0 sm:mt-1">{children}</div>
+    <div className={`min-w-0 ${wide ? "sm:col-span-2" : ""}`}>
+      <dt className="text-[11px] font-medium text-slate-500">{label}</dt>
+      <dd className={`mt-0.5 break-words text-slate-800 ${mono ? "font-mono text-xs" : ""}`}>{value || <span className="text-slate-400">—</span>}</dd>
     </div>
   );
 }
