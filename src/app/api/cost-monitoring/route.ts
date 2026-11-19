@@ -2,6 +2,16 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma";
 
+/** POs whose value is a committed cost on the work order. */
+const COMMITTED_PO_STATUSES = new Set(["Approved", "Issued"]);
+/** POs on their way to approval: shown as pending, not counted. */
+const PENDING_PO_STATUSES = new Set([
+  "Draft",
+  "Pending For Approval",
+  "Pending First Tier Approval",
+  "Pending Second Tier Approval",
+]);
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -56,31 +66,32 @@ export async function GET(request: Request) {
       });
 
       // 3. Material & Subcon Costs
+      // Only committed POs count: superseded revisions ("Old Version") would double-count the
+      // same order, and Draft / Pending / Rejected / Void ones aren't a cost yet. Not-yet-approved
+      // value is reported separately. Amounts are converted to base currency with the PO's own
+      // exchange rate (same as base() in src/lib/kpi.ts); item amounts are before tax.
       let materialCost = 0;
       let subconCost = 0;
-      
+      let pendingPoCost = 0;
+      let committedPoCount = 0;
+
       wo.purchaseOrders.forEach(po => {
-        if (po.status !== "Void") {
-          let poAmount = 0;
-          po.items.forEach(item => {
-             poAmount += Number(item.amount) || 0;
-          });
-          
-          // Wait, sometimes PO has taxes, but let's just use items amount or amountBeforeTax
-          // We will use amountAfterTax or just item sum?
-          // Using amountAfterTax is more accurate if tax is considered a cost.
-          // Let's use item amounts for direct material cost.
-          if (po.type === "MATERIAL") {
-            materialCost += poAmount;
-          } else if (po.type === "SUBCON") {
-            subconCost += poAmount;
-          }
+        const rate = Number(po.exchangeRate) || 1;
+        const poAmount = po.items.reduce((sum, item) => sum + (Number(item.amount) || 0), 0) * rate;
+
+        if (COMMITTED_PO_STATUSES.has(po.status)) {
+          committedPoCount += 1;
+          if (po.type === "SUBCON") subconCost += poAmount;
+          else materialCost += poAmount;
+        } else if (PENDING_PO_STATUSES.has(po.status)) {
+          pendingPoCost += poAmount;
         }
       });
 
       const totalCost = laborCost + materialCost + subconCost;
       const profit = revenue - totalCost;
-      const margin = revenue > 0 ? (profit / revenue) * 100 : 0;
+      // No revenue on the WO means there is no meaningful margin.
+      const margin = revenue > 0 ? (profit / revenue) * 100 : null;
 
       return {
         workOrderNo: wo.workOrderNo,
@@ -93,6 +104,8 @@ export async function GET(request: Request) {
         totalCost,
         profit,
         margin,
+        pendingPoCost,
+        committedPoCount,
         status: wo.status,
       };
     });
