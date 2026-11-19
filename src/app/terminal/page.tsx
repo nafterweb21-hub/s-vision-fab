@@ -51,11 +51,11 @@ export default async function TerminalPage() {
     }
   }
 
-  // Always fetch all sessions so the client can filter if localEmployee is used
-  initialSessions = await getTerminalActiveSessions();
-  // A worker sees their own recent completes; only an unlinked (e.g. admin) account sees everyone's.
+  // A worker sees only their own active sessions and recent completes; only an unlinked
+  // (e.g. admin / shared kiosk) account sees everyone's.
   const scopeEmployeeId =
     loggedInEmployee && loggedInEmployee.code !== "UNLINKED_USER" ? loggedInEmployee.id : undefined;
+  initialSessions = await getTerminalActiveSessions(scopeEmployeeId);
   initialRecentCompletes = await getTerminalRecentCompletes(10, scopeEmployeeId);
   const completedTotal = await prisma.productionTimesheet.count({
     where: { timeOut: { not: null }, ...(scopeEmployeeId ? { employeeId: scopeEmployeeId } : {}) },

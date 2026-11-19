@@ -251,25 +251,23 @@ export async function scanIn(input: { workOrderNo: string; inProcessId: string; 
       return { success: false, error: "Employee already has an open scan on this routing process" };
     }
 
-    // Don't let more operators start than there are pieces left: every open session is counted as
-    // working on at least one of the remaining pieces.
+    // One operator per step: nobody else may start while someone is scanned in on it.
+    const sheets = await prisma.productionTimesheet.findMany({
+      where: { routingProcessId: target.id },
+      select: { completedQty: true, timeOut: true, employee: { select: { name: true } } },
+    });
+    const open = sheets.filter((t) => !t.timeOut);
+    if (open.length > 0) {
+      const names = open.map((t) => t.employee?.name).filter(Boolean).join(", ");
+      return {
+        success: false,
+        error: `${names || "Another operator"} is already working on this process.`,
+      };
+    }
     if (wo.quantity != null) {
-      const sheets = await prisma.productionTimesheet.findMany({
-        where: { routingProcessId: target.id },
-        select: { completedQty: true, timeOut: true, employee: { select: { name: true } } },
-      });
       const doneQty = sheets.reduce((sum, t) => sum + (t.completedQty ? Number(t.completedQty) : 0), 0);
-      const remaining = Number(wo.quantity) - doneQty;
-      const open = sheets.filter((t) => !t.timeOut);
-      if (remaining <= 0) {
+      if (Number(wo.quantity) - doneQty <= 0) {
         return { success: false, error: "The full quantity for this process has already been produced." };
-      }
-      if (open.length >= remaining) {
-        const names = open.map((t) => t.employee?.name).filter(Boolean).join(", ");
-        return {
-          success: false,
-          error: `Only ${remaining} piece(s) left on this process and ${open.length} operator(s) already working on it (${names}).`,
-        };
       }
     }
 
@@ -514,9 +512,8 @@ export async function getAvailableSessions() {
         // Full quantity already produced (the step is only waiting on parameter confirmation): nothing left to start.
         const doneQty = rp.productionTimesheets.reduce((sum, t) => sum + (t.completedQty ? Number(t.completedQty) : 0), 0);
         if (wo.quantity != null && doneQty >= Number(wo.quantity)) continue;
-        // Remaining pieces are already covered by operators who are scanned in (same rule as scanIn).
-        const openCount = rp.productionTimesheets.filter((t) => !t.timeOut).length;
-        if (wo.quantity != null && openCount >= Number(wo.quantity) - doneQty) continue;
+        // One operator per step: hide it once anyone is scanned in (same rule as scanIn).
+        if (rp.productionTimesheets.some((t) => !t.timeOut)) continue;
 
         out.push({
           key: rp.id,
