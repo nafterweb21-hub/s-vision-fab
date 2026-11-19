@@ -1,13 +1,14 @@
 "use client";
 import { SearchableSelect } from "@/components/SearchableSelect";
 import React, { useState } from "react";
-import Link from "next/link";
-import { FileText, Download, Loader2, AlertCircle } from "lucide-react";
+import { Factory } from "lucide-react";
+import { Field, inputClass, selectTriggerClass } from "@/components/form-ui";
+import { REPORT_PO_STATUSES, ReportShell } from "@/components/purchasing/ReportShell";
 import * as XLSX from "xlsx";
 export default function SubconPurchasingReportPage() {
   const [company, setCompany] = useState("");
   const [poNo, setPoNo] = useState("");
-  const [poStatus, setPoStatus] = useState("");
+  const [poStatus, setPoStatus] = useState("Issued");
   const [poDateFrom, setPoDateFrom] = useState("");
   const [poDateTo, setPoDateTo] = useState("");
   const [supplier, setSupplier] = useState("");
@@ -17,6 +18,7 @@ export default function SubconPurchasingReportPage() {
 
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [lastExport, setLastExport] = useState<{ lines: number; pos: number; at: Date } | null>(null);
 
   const [companies, setCompanies] = useState<any[]>([]);
   const [suppliers, setSuppliers] = useState<any[]>([]);
@@ -38,6 +40,7 @@ export default function SubconPurchasingReportPage() {
   const handleExport = async () => {
     setLoading(true);
     setErrorMsg("");
+    setLastExport(null);
     try {
       const params = new URLSearchParams();
       if (company) params.append("company", company);
@@ -60,6 +63,7 @@ export default function SubconPurchasingReportPage() {
       }
 
       generateExcel(data);
+      setLastExport({ lines: data.length, pos: new Set(data.map((d: any) => d.poNo)).size, at: new Date() });
     } catch (err: any) {
       setErrorMsg(err.message);
     } finally {
@@ -189,166 +193,125 @@ export default function SubconPurchasingReportPage() {
     XLSX.writeFile(wb, `Subcon_Purchasing_Report_${now.getTime()}.xlsx`);
   };
 
+  // Narrow the routing list to the chosen main process (the filters match by name).
+  const selectedMain = mainProcessesList.find((mp) => mp.process === mainProcess);
+  const visibleRoutingProcesses = selectedMain
+    ? routingProcessesList.filter((rp) => rp.mainProcessId === selectedMain.id)
+    : routingProcessesList;
+
+  const resetFilters = () => {
+    setCompany("");
+    setPoNo("");
+    setPoStatus("Issued");
+    setPoDateFrom("");
+    setPoDateTo("");
+    setSupplier("");
+    setItemDescription("");
+    setMainProcess("");
+    setRoutingProcess("");
+    setErrorMsg("");
+  };
+  // PO Status counts as a filter only when it differs from the default (Issued).
+  const activeFilters = [!!company, !!poNo, !!poDateFrom, !!poDateTo, !!supplier, !!itemDescription, !!mainProcess, !!routingProcess, poStatus !== "Issued"].filter(Boolean).length;
+
   return (
-    <div className="p-6 lg:p-8 space-y-6 relative">
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 pb-6 border-b border-blue-200">
-        <div>
-          <div className="flex items-center gap-2 text-xs text-blue-400 font-semibold tracking-wider uppercase mb-1">
-            <Link href="/dashboard" className="hover:text-blue-600">Dashboard</Link>
-            <span>/</span>
-            <span className="text-blue-500">Purchasing</span>
-            <span>/</span>
-            <span className="text-blue-500">Subcon Purchasing Report</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-600">
-              <FileText size={20} />
-            </div>
-            <div>
-              <h2 className="text-2xl font-bold tracking-tight text-blue-900">Subcon Purchasing Report</h2>
-              <p className="text-sm text-blue-500 mt-0.5">Filter and export subcon purchasing and delivery status records.</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-white border border-blue-200 p-6 rounded-xl shadow-sm">
-        <h3 className="text-sm font-bold text-blue-900 mb-4 uppercase tracking-wide border-b border-blue-100 pb-2">
-          Search Criteria
-        </h3>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-blue-700">Company</label>
-            <SearchableSelect
-              value={company}
-              onChange={(e) => setCompany(e.target.value)}
-              className="w-full px-3 py-2 text-sm bg-blue-50 border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-            >
-              <option value="">All Companies</option>
-              {companies.map((c) => (
-                <option key={c.id} value={c.companyName}>
-                  {c.companyName}
-                </option>
-              ))}
-            </SearchableSelect>
-          </div>
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-blue-700">PO No</label>
-            <input
-              type="text"
-              value={poNo}
-              onChange={(e) => setPoNo(e.target.value)}
-              placeholder="e.g. PO1700001"
-              className="w-full px-3 py-2 text-sm bg-blue-50 border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-            />
-          </div>
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-blue-700">PO Status</label>
-            <SearchableSelect
-              value={poStatus}
-              onChange={(e) => setPoStatus(e.target.value)}
-              className="w-full px-3 py-2 text-sm bg-blue-50 border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-            >
-              <option value="">All</option>
-              <option value="Draft">Draft</option>
-              <option value="Issued">Issued</option>
-              <option value="Confirmed">Confirmed</option>
-            </SearchableSelect>
-          </div>
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-blue-700">PO Date (From)</label>
-            <input
-              type="date"
-              value={poDateFrom}
-              onChange={(e) => setPoDateFrom(e.target.value)}
-              className="w-full px-3 py-2 text-sm bg-blue-50 border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-            />
-          </div>
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-blue-700">PO Date (To)</label>
-            <input
-              type="date"
-              value={poDateTo}
-              onChange={(e) => setPoDateTo(e.target.value)}
-              className="w-full px-3 py-2 text-sm bg-blue-50 border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-            />
-          </div>
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-blue-700">Supplier</label>
-            <SearchableSelect
-              value={supplier}
-              onChange={(e) => setSupplier(e.target.value)}
-              className="w-full px-3 py-2 text-sm bg-blue-50 border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-            >
-              <option value="">All Suppliers</option>
-              {suppliers.map((s) => (
-                <option key={s.id} value={s.supplierName}>
-                  {s.supplierName}
-                </option>
-              ))}
-            </SearchableSelect>
-          </div>
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-blue-700">Item Description</label>
-            <input
-              type="text"
-              value={itemDescription}
-              onChange={(e) => setItemDescription(e.target.value)}
-              placeholder="Description"
-              className="w-full px-3 py-2 text-sm bg-blue-50 border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-            />
-          </div>
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-blue-700">Main Process</label>
-            <SearchableSelect
-              value={mainProcess}
-              onChange={(e) => setMainProcess(e.target.value)}
-              className="w-full px-3 py-2 text-sm bg-blue-50 border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-            >
-              <option value="">All Main Processes</option>
-              {mainProcessesList.map((mp) => (
-                <option key={mp.id} value={mp.process}>
-                  {mp.process}
-                </option>
-              ))}
-            </SearchableSelect>
-          </div>
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-blue-700">Routing Process</label>
-            <SearchableSelect
-              value={routingProcess}
-              onChange={(e) => setRoutingProcess(e.target.value)}
-              className="w-full px-3 py-2 text-sm bg-blue-50 border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-            >
-              <option value="">All Routing Processes</option>
-              {routingProcessesList.map((rp) => (
-                <option key={rp.id} value={rp.routingProcess}>
-                  {rp.routingProcess}
-                </option>
-              ))}
-            </SearchableSelect>
-          </div>
-        </div>
-
-        {errorMsg && (
-          <div className="mt-6 bg-rose-50 border border-rose-200 rounded-xl p-4 flex items-center gap-3 text-rose-700">
-            <AlertCircle size={18} />
-            <p className="text-sm font-medium">{errorMsg}</p>
-          </div>
-        )}
-
-        <div className="mt-8 flex justify-end">
-          <button
-            onClick={handleExport}
-            disabled={loading}
-            className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+    <ReportShell
+      title="Subcon Purchasing Report"
+      subtitle="Subcon purchase orders and what subcontractors have acknowledged and returned, exported to Excel."
+      icon={Factory}
+      activeFilters={activeFilters}
+      loading={loading}
+      error={errorMsg}
+      lastExport={lastExport}
+      onExport={handleExport}
+      onReset={resetFilters}
+      note={"Acknowledged comes from Submitted request forms, returned and rejected from Submitted trackings. A footer row totals the PO amounts."}
+      columnGroups={[
+        { label: "Purchase order", columns: ["Company", "PO No", "PO Date", "PO Status", "Purchaser", "Supplier", "WO No", "PR No", "Currency", "Exch Rate"] },
+        { label: "PO amounts (first line of each PO)", columns: ["Before Tax", "Tax Type", "Tax Rate", "Tax Amt", "Aft Tax"] },
+        {
+          label: "Line",
+          columns: ["In-Process Description", "Main Process", "Routing Process", "Descr", "Hardness", "Thickness", "UOM", "Qty", "Unit Price", "Amt", "Deliver Date"],
+        },
+        {
+          label: "Subcon status",
+          columns: ["Qty Acknowledged", "Qty Returned", "Qty Rejected", "Not Acknowledged", "Not Returned"],
+          highlight: "Not Returned",
+        },
+      ]}
+      fields={
+        <>
+        <Field label="Company">
+          <SearchableSelect value={company} onChange={(e) => setCompany(e.target.value)} className={selectTriggerClass}>
+            <option value="">All Companies</option>
+            {companies.map((c) => (
+              <option key={c.id} value={c.companyName}>
+                {c.companyName}
+              </option>
+            ))}
+          </SearchableSelect>
+        </Field>
+        <Field label="PO No">
+          <input type="text" value={poNo} onChange={(e) => setPoNo(e.target.value)} placeholder="e.g. PO1700001" className={`${inputClass} font-mono`} />
+        </Field>
+        <Field label="PO Status" help="The spec covers Issued POs; pick All to include the rest">
+          <SearchableSelect value={poStatus} onChange={(e) => setPoStatus(e.target.value)} className={selectTriggerClass}>
+            <option value="">All (except Void)</option>
+            {REPORT_PO_STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </SearchableSelect>
+        </Field>
+        <Field label="PO Date (From)">
+          <input type="date" value={poDateFrom} max={poDateTo || undefined} onChange={(e) => setPoDateFrom(e.target.value)} className={inputClass} />
+        </Field>
+        <Field label="PO Date (To)">
+          <input type="date" value={poDateTo} min={poDateFrom || undefined} onChange={(e) => setPoDateTo(e.target.value)} className={inputClass} />
+        </Field>
+        <Field label="Supplier">
+          <SearchableSelect value={supplier} onChange={(e) => setSupplier(e.target.value)} className={selectTriggerClass}>
+            <option value="">All Suppliers</option>
+            {suppliers.map((s) => (
+              <option key={s.id} value={s.supplierName}>
+                {s.supplierName}
+              </option>
+            ))}
+          </SearchableSelect>
+        </Field>
+        <Field label="Item Description">
+          <input type="text" value={itemDescription} onChange={(e) => setItemDescription(e.target.value)} placeholder="Contains..." className={inputClass} />
+        </Field>
+        <Field label="Main Process">
+          <SearchableSelect
+            value={mainProcess}
+            onChange={(e) => {
+              setMainProcess(e.target.value);
+              setRoutingProcess("");
+            }}
+            className={selectTriggerClass}
           >
-            {loading ? <Loader2 className="animate-spin" size={16} /> : <Download size={16} />}
-            {loading ? "Generating..." : "Generate Report (Excel)"}
-          </button>
-        </div>
-      </div>
-    </div>
+            <option value="">All Main Processes</option>
+            {mainProcessesList.map((mp) => (
+              <option key={mp.id} value={mp.process}>
+                {mp.process}
+              </option>
+            ))}
+          </SearchableSelect>
+        </Field>
+        <Field label="Routing Process" help={mainProcess ? `Routing processes under ${mainProcess}` : undefined}>
+          <SearchableSelect value={routingProcess} onChange={(e) => setRoutingProcess(e.target.value)} className={selectTriggerClass}>
+            <option value="">All Routing Processes</option>
+            {visibleRoutingProcesses.map((rp) => (
+              <option key={rp.id} value={rp.routingProcess}>
+                {rp.routingProcess}
+              </option>
+            ))}
+          </SearchableSelect>
+        </Field>
+        </>
+      }
+    />
   );
 }

@@ -19,7 +19,13 @@ export async function GET(req: NextRequest) {
     };
 
     if (poNo) whereClause.poNo = { contains: poNo, mode: "insensitive" };
-    if (poStatus) whereClause.status = poStatus;
+    if (poStatus) {
+      // "Pending For Approval" covers both tier stages, same as the PO list's filter.
+      whereClause.status =
+        poStatus === "Pending For Approval"
+          ? { in: ["Pending For Approval", "Pending First Tier Approval", "Pending Second Tier Approval"] }
+          : poStatus;
+    }
     if (poDateFrom || poDateTo) {
       whereClause.date = {};
       if (poDateFrom) whereClause.date.gte = new Date(poDateFrom);
