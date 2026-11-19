@@ -31,6 +31,12 @@ export async function getGoodsReturnFormData() {
                     internalUom: true,
                   },
                 },
+                // Already returned against this line, so the form can cap the
+                // return qty at what is left (the same rule submit enforces).
+                goodsReturnItems: {
+                  where: { goodsReturn: { status: "Submitted" } },
+                  select: { goodsReturnId: true, returnQty: true },
+                },
               },
             },
           },
